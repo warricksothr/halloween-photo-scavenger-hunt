@@ -118,3 +118,72 @@ Consequences:
 - Build in small, runnable increments, each leaving the app working.
 - Comment the *why*, not the what; the docs carry the design, the code
   carries the mechanism.
+
+## Stretch goal: teams & shared evidence drawer
+
+Post-MVP. Solo play must remain the default; teams are a grouping layer on
+top. Model every player as belonging to a team from the start (a solo
+player is a team of one) so the game logic never branches on "is this a
+team."
+
+### Team formation
+
+- On joining an event, a player gets a unique session (secure cookie /
+  bearer token). The session id never appears in the URL — URLs stay
+  shareable-safe.
+- To form a team, a player opens their **team invite**: a QR code shown on
+  their own screen, encoding a **single-use invite token** (not their
+  session). A teammate scans it, gets their own fresh session, and lands on
+  the inviting player's team.
+- **Why invite tokens instead of sharing the session**: a shared session
+  means impersonation and painful revocation. A single-use token redeems
+  into an independent session bound to the team — clean identity, clean
+  revocation.
+- **Share limits without fingerprinting**: enforcing "max N members" on
+  token *redemption* (one token = one join, team size cap checked at
+  redeem time) removes the need for device fingerprinting entirely.
+  Fingerprinting on the open web is fragile (Safari/ITP, private modes)
+  and privacy-unfriendly for a party app; tokens sidestep it. This is the
+  recommended design. The abuse vector that remains (a player minting many
+  sequential tokens to build an over-cap team) is closed by the team-size
+  cap itself and, if desired, per-team invite rate limits.
+- Invite tokens expire (e.g. 10 minutes) and can be revoked by their
+  creator or a moderator.
+
+### Moderation / administration additions
+
+- Team roster view: members, their sessions (with device label + last-seen
+  time), pending invites.
+- **Clear registered devices** for a player or whole team (revoke sessions)
+  — handles lost phones, accidental joins, or freeing a slot for a new
+  member.
+- **Adjust per-team size limit** (event default + per-team override) when
+  the host wants to allow a bigger group.
+
+### Shared evidence drawer
+
+- Each team has a **drawer**: a pool of uploaded photos shared by all
+  members. Anyone on the team uploads candidate shots to the drawer
+  (optionally tagged with the riddle they were aiming for).
+- Submitting a riddle = picking a photo **from the drawer** (or shooting a
+  new one, which goes through the drawer anyway). The submission records
+  which evidence item was used and which member submitted it.
+- Drawer photos are visible to the whole team as thumbnails; one active
+  submission per riddle per team still applies.
+- Scoring and verdicts become team-scoped: a `VERIFIED` solves the riddle
+  for the team; verdict notifications go to all members. Leaderboard (live
+  or final-reveal) ranks teams. Solo players are unaffected in practice —
+  their team of one behaves like today's individual flow.
+
+### Data model deltas (stretch)
+
+- `Team` (id, event_id, name optional, size_limit override)
+- `Player.team_id` (every player has one; default team of one on join)
+- `Session` (token, player_id, device_label, created_at, last_seen_at,
+  revoked_at) — first-class so moderators can list and revoke devices
+- `TeamInvite` (token, team_id, created_by, expires_at, redeemed_by,
+  revoked_at) — single-use
+- `EvidenceItem` (id, team_id, uploaded_by, riddle_id optional tag,
+  photo_path, created_at)
+- `Submission`: `player_id` → `team_id` + `submitted_by` player, plus
+  `evidence_item_id`
