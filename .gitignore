@@ -1,0 +1,7 @@
+# Reference screenshots are copyrighted (Rocksteady/WB) and must not be
+# committed. Fetch your own copies from the URLs listed in
+# docs/reference/THEME-NOTES.md.
+docs/reference/*.jpg
+docs/reference/*.jpeg
+docs/reference/*.png
+docs/reference/*.webp
