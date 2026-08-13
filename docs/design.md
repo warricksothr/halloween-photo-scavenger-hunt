@@ -100,6 +100,141 @@ submission was removed for violating the event rules.
   strikes (cooldown-until timestamp or banned flag)
 - `EvidenceItem`: `quarantined` flag + quarantine metadata
 
+## Flows & state machines
+
+### The core loop (sequence)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as Player (team)
+    participant A as PWA
+    participant S as Server
+    participant M as Moderator
+
+    P->>A: Open riddle, take/upload photo
+    A->>S: Upload evidence item
+    S->>S: Re-encode, strip EXIF, perceptual hash
+    S-->>A: Evidence in drawer
+    P->>A: Submit evidence for riddle
+    A->>S: Create submission (PENDING)
+    S-->>M: Appears in moderation queue (SSE)
+    M->>S: Verdict (+ optional flavor text)
+    alt VERIFIED
+        S-->>A: SUBJECT VERIFIED — riddle solved for team
+    else soft rejection (OBSCURED / TOO_SMALL / MISALIGNED)
+        S-->>A: Verdict + guidance — free resubmission
+    else NOT_FOUND
+        S-->>A: Verdict — free resubmission
+    else INAPPROPRIATE
+        S->>S: Quarantine evidence, propose strike
+        M->>S: Confirm strike level
+        S-->>A: Conduct notice (no resubmission)
+    end
+```
+
+### Submission state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : submit evidence
+    PENDING --> VERIFIED : moderator approves
+    PENDING --> OBSCURED : soft rejection
+    PENDING --> TOO_SMALL : soft rejection
+    PENDING --> MISALIGNED : soft rejection
+    PENDING --> NOT_FOUND : wrong subject
+    PENDING --> INAPPROPRIATE : conduct violation
+    PENDING --> EXPIRED : round closes while pending
+    OBSCURED --> [*] : resubmit (new submission)
+    TOO_SMALL --> [*] : resubmit (new submission)
+    MISALIGNED --> [*] : resubmit (new submission)
+    NOT_FOUND --> [*] : resubmit (new submission)
+    VERIFIED --> [*]
+    INAPPROPRIATE --> [*]
+    EXPIRED --> [*]
+```
+
+A resubmission is always a **new** `PENDING` submission referencing the
+same riddle — terminal states never reopen. One active (`PENDING`)
+submission per riddle per team.
+
+### Event lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> LOBBY : admin creates event
+    LOBBY --> OPEN : host starts the round
+    OPEN --> CLOSED : host ends the round
+    CLOSED --> [*] : data retained, then purged
+
+    note right of LOBBY
+        Riddles editable, players may join,
+        no submissions accepted
+    end note
+    note right of OPEN
+        Riddle list visible, submissions accepted,
+        moderation queue active
+    end note
+    note right of CLOSED
+        No new submissions; pending ones become
+        EXPIRED; final leaderboard revealed
+    end note
+```
+
+### Team invite flow (stretch)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor A as Inviter
+    actor B as Invitee
+    participant S as Server
+
+    A->>S: Request team invite
+    S-->>A: Single-use token (QR on screen, 10 min TTL)
+    B->>S: Scan QR / open invite link
+    alt B has no session in this event
+        S-->>B: Fresh session, joined to inviter's team
+    else B is on a team-of-one with no evidence
+        S-->>B: Confirm switch → joined to inviter's team
+    else B has evidence / submissions
+        S-->>B: Warning — evidence stays with old team → confirm to switch
+    end
+    Note over S: Token redeemed (or expired/revoked):
+    Note over S: cannot be used again
+```
+
+### Strike ladder (conduct)
+
+```mermaid
+stateDiagram-v2
+    [*] --> CLEAN
+    CLEAN --> WARNED : strike 1 confirmed
+    WARNED --> COOLDOWN : strike 2 confirmed
+    COOLDOWN --> BANNED : strike 3 confirmed
+    COOLDOWN --> WARNED : cooldown expires
+    WARNED --> CLEAN : host reverses
+    COOLDOWN --> CLEAN : host reverses
+    BANNED --> CLEAN : host reverses
+
+    note right of WARNED
+        Interstitial on next app open;
+        uploads still allowed
+    end note
+    note right of COOLDOWN
+        Uploads disabled for a mod-set
+        window (default 15 min)
+    end note
+    note right of BANNED
+        Uploads disabled for the event;
+        read-only access retained
+    end note
+```
+
+Strikes never expire on their own within an event (except cooldown
+timers), and every transition in either direction is recorded on the
+player's history for moderators.
+
 ## Architecture
 
 - **Backend**: Python + **FastAPI**, SQLite store (one file, trivially
