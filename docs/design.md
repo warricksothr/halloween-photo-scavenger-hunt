@@ -97,12 +97,25 @@ and the player photographed the right area from the wrong position.
   implement as an event-level toggle (`live` / `final-reveal`) rather than
   deciding now.
 
-### Data model (draft)
+### Data model (MVP)
 
-- `Event` (id, join_code, mod_code, theme, status: lobby/open/closed)
-- `Riddle` (id, event_id, text, optional hint, sort order)
-- `Player` (id, event_id, display_name)
-- `Submission` (id, riddle_id, player_id, photo_path, status, created_at)
+Team-scoped from day one: the MVP is a "team of one" with no grouping
+functionality. Every player gets a team on join; submissions, evidence,
+and scoring reference teams. This makes the teams stretch goal purely
+additive (invites, roster UI, multi-member drawers) with no migration.
+
+- `Event` (id, join_code, mod_code, theme, status: lobby/open/closed,
+  leaderboard_visibility: live/final-reveal)
+- `Riddle` (id, event_id, text, sort order)
+- `Team` (id, event_id, size_limit) — MVP creates one per player, unnamed
+- `Player` (id, team_id, display_name)
+- `Session` (token, player_id, device_label, created_at, last_seen_at,
+  revoked_at) — first-class from the start so moderation can revoke devices
+- `EvidenceItem` (id, team_id, uploaded_by, riddle_id optional tag,
+  photo_path, created_at) — MVP uploads go straight here; "submit" picks
+  from the drawer even for a team of one
+- `Submission` (id, riddle_id, team_id, submitted_by player_id,
+  evidence_item_id, status, created_at)
 - `Verdict` (id, submission_id, moderator, verdict, flavor_text, created_at)
 
 ## Build approach
@@ -121,10 +134,10 @@ Consequences:
 
 ## Stretch goal: teams & shared evidence drawer
 
-Post-MVP. Solo play must remain the default; teams are a grouping layer on
-top. Model every player as belonging to a team from the start (a solo
-player is a team of one) so the game logic never branches on "is this a
-team."
+Post-MVP. The MVP schema is already team-scoped (team of one, one
+session, drawer-based submission), so this goal adds *grouping
+functionality* on a stable foundation: invites, multi-member teams, and
+the moderation tooling around them.
 
 ### Team formation
 
@@ -177,13 +190,10 @@ team."
 
 ### Data model deltas (stretch)
 
-- `Team` (id, event_id, name optional, size_limit override)
-- `Player.team_id` (every player has one; default team of one on join)
-- `Session` (token, player_id, device_label, created_at, last_seen_at,
-  revoked_at) — first-class so moderators can list and revoke devices
+Only one new table; everything else shipped with the MVP schema.
+
 - `TeamInvite` (token, team_id, created_by, expires_at, redeemed_by,
   revoked_at) — single-use
-- `EvidenceItem` (id, team_id, uploaded_by, riddle_id optional tag,
-  photo_path, created_at)
-- `Submission`: `player_id` → `team_id` + `submitted_by` player, plus
-  `evidence_item_id`
+- `Team`: add optional `name` and per-team `size_limit` override
+- New UI only: invite QR screen, team roster, drawer thumbnails for
+  multi-member teams, moderator team-management screens
