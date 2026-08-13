@@ -38,6 +38,7 @@ Verdicts are the core flavor surface. The Arkham theme ships canned Batcomputer/
 | `NOT_FOUND`  | `SUBJECT NOT FOUND`| Wrong subject; resubmit              |
 | `TOO_SMALL`  | `SUBJECT TOO SMALL`| Subject too distant/cropped to verify; resubmit |
 | `MISALIGNED` | `MISALIGNED`       | Right area, wrong framing/angle; resubmit |
+| `INAPPROPRIATE` | `FLAGGED`       | Conduct violation; no resubmit, strike issued |
 | `EXPIRED`    | `INTEL EXPIRED`    | Round ended before review (optional) |
 
 `TOO_SMALL` and `MISALIGNED` are taken from the game's actual riddle-scan
@@ -55,6 +56,49 @@ and the player photographed the right area from the wrong position.
 - Moderator role assigned at event setup (host creates event, gets a mod link/code).
 - Multiple moderators can work the queue simultaneously; a submission is
   claimed/locked while a mod has it open (or simply: first verdict wins).
+
+### Conduct enforcement: strikes & upload bans
+
+Humans at parties are occasionally... special. The queue gets a one-tap
+`INAPPROPRIATE` verdict for content violations, separate from the game
+verdicts. It is a conduct action, not a game ruling: no playful Arkham
+copy, no resubmission prompt, and the player is told plainly that the
+submission was removed for violating the event rules.
+
+- **One tap from the queue**: the `INAPPROPRIATE` button sits beside the
+  game verdicts but visually separated (danger styling, confirm step
+  optional). It issues the verdict *and* a strike in one action — a
+  moderator under queue load should never need a second screen for this.
+- **Strike ladder** (per player, per event, shown to moderators on the
+  player's history):
+  1. **Strike 1 — warning**: interstitial on the player's next app open:
+     the photo was removed, repeat violations restrict participation.
+  2. **Strike 2 — cooldown**: uploads disabled for a moderator-set
+     window (default 15 min). Riddles and leaderboard still visible.
+  3. **Strike 3 — upload ban**: submissions disabled for the rest of the
+     event. The player keeps read-only access (riddles, leaderboard) —
+     full account deletion is the host's manual call, not the ladder's.
+- **Moderator-driven, never automatic**: the ladder proposes the next
+  step but a moderator confirms it. Party-scale social judgment beats
+  automation here.
+- **Reversible**: the host/admin can reduce or clear strikes (mis-tap,
+  disputed call). Reversals are recorded on the player's history.
+- **Content handling**: the flagged evidence item is quarantined —
+  removed from the team's drawer and the player-facing app immediately,
+  retained in a moderator-only view until the event ends (evidence if
+  there's a dispute), then purged with the event data.
+- **Notifications**: the affected player sees the strike state and its
+  consequence; teammates see only that the photo is gone (the drawer
+  doesn't announce *why* — conduct matters stay between player, mods,
+  and host).
+
+### Data model deltas (conduct)
+
+- `Strike` (id, player_id, event_id, level, submission_id, issued_by,
+  note, created_at, reversed_by, reversed_at)
+- `Player` / `Team`: upload restriction state derived from active
+  strikes (cooldown-until timestamp or banned flag)
+- `EvidenceItem`: `quarantined` flag + quarantine metadata
 
 ## Architecture
 
