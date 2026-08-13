@@ -88,6 +88,69 @@ and the player photographed the right area from the wrong position.
     a session (cookie/token) tied to that event. Moderator access uses a
     separate moderator code/link, generated alongside the join code.
 
+## Trust & abuse baseline
+
+Party scale means social enforcement does most of the work, but the
+following cheap measures close the obvious holes. Ordered roughly by
+value-per-effort.
+
+### Multi-teaming (one device, two teams)
+
+A player can trivially hold two sessions on one device (installed PWA +
+mobile browser use separate storage). Do **not** try to hard-prevent this:
+device fingerprinting is fragile (ITP, private modes) and the whole party
+shares one NAT public IP, so network signals are useless. Instead:
+
+- **Visibility**: moderators see all sessions with device label, UA string,
+  and last-seen time; the UI flags heuristic matches (same UA, interleaved
+  activity across teams).
+- **Remove the payoff**: the goal of multi-teaming is submitting the same
+  photo for two teams. See duplicate-evidence detection below — that is
+  the enforcement, not device detection.
+
+### Duplicate-evidence detection
+
+- Compute a **perceptual hash** (e.g. average/hash via Pillow) on every
+  upload.
+- Identical or near-identical evidence items across different teams raise
+  a flag in the moderator queue ("possible shared evidence"). Moderator
+  decides; no automatic punishment.
+- Also catches re-uploads of a previously rejected photo with a filter
+  slapped on.
+
+### Photo access & download resistance
+
+True download prevention is impossible (screenshots, devtools), so the
+goal is access control + reuse detection, not DRM:
+
+- Photos are served **only** through session-authenticated endpoints:
+  owning team + moderators. No public or guessable photo URLs.
+- Players are served **re-encoded, stripped derivatives** (EXIF/GPS
+  removed, resolution capped). Originals are never served to players.
+  This doubles as upload hygiene and privacy.
+- Screenshot reuse is accepted as unstoppable; the perceptual hash flags
+  it if it comes back as another team's submission.
+
+### General hardening checklist (MVP scope)
+
+- **Rate limits**: join-code attempts (brute force), invite redemption,
+  upload count/size per team (disk exhaustion).
+- **Upload validation**: magic-byte check + server-side re-encode via
+  Pillow (never trust content-type), dimension/size caps, EXIF strip.
+- **Sessions**: httpOnly + Secure + SameSite cookies; session tokens
+  stored hashed at rest; revocation first-class (already in schema).
+- **XSS**: display names and moderator flavor text render to other
+  players — rely on framework auto-escaping, never raw-HTML injection.
+- **CSRF**: SameSite cookies plus a mutation token for state-changing
+  endpoints.
+- **Admin auth**: real password hashing (argon2id); moderator code is
+  separate from the player join code and equally unguessable.
+- **Authorization**: every moderator/admin endpoint checks role
+  server-side; the client role is cosmetic.
+- **Operational durability**: the worst realistic "incident" is losing the
+  SQLite file or photos mid-party. One-command backup (DB + photos dir)
+  before the event; consider a periodic snapshot during the night.
+
 ## Game parameters (decided)
 
 - **Riddles are standalone**: players see the full riddle list when the
@@ -162,6 +225,20 @@ the moderation tooling around them.
   cap itself and, if desired, per-team invite rate limits.
 - Invite tokens expire (e.g. 10 minutes) and can be revoked by their
   creator or a moderator.
+
+### Invite edge cases (decided)
+
+- **Scanning an invite while already joined**: an explicit choice screen,
+  never a silent merge. If your current team is your team-of-one with no
+  evidence or submissions, the switch is seamless. Otherwise the player is
+  warned: joining a new team **leaves your evidence and submission history
+  with your old team**. Evidence belongs to teams, not players — this
+  prevents drawer-poaching (join a team, drain their drawer, leave).
+- **No team merges**: two existing teams never merge through invites. If
+  the host wants that, a moderator moves players manually.
+- **Invites are event-scoped**: an invite only joins the event it was
+  minted in. Scanning an invite for a different event while joined
+  elsewhere is a switch, with the same warning.
 
 ### Moderation / administration additions
 
