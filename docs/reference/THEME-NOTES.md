@@ -22,6 +22,12 @@ writing:
   https://interfaceingame.com/wp-content/uploads/batman-arkham-knight/batman-arkham-knight-waynetech.jpg
 - `arkham-city-detective-mode.jpg`
   https://interfaceingame.com/wp-content/uploads/batman-arkham-city/batman-arkham-city-detective-mode-1920x1080.jpg
+- `arkham-reference-imgur-frvgmZJ.jpg` — Arkham City riddle scan HUD:
+  "ENVIRONMENT ANALYSIS / Solution partially detected"
+  https://i.imgur.com/frvgmZJ.jpeg
+- `arkham-reference-reddit-psq9wh35xtd71.jpg` — Arkham City riddle scan
+  HUD: "ENVIRONMENT ANALYSIS / Subject Out Of View"
+  https://i.redd.it/psq9wh35xtd71.jpg
 
 If a direct link has rotted, browse the per-game screenshot indexes:
 https://interfaceingame.com/games/batman-arkham-knight/ and
@@ -37,6 +43,8 @@ https://interfaceingame.com/games/batman-arkham-city/ .
 | `arkham-knight-searching.jpg` | Loading/pending state: centered emblem + cyan headline + white subtext |
 | `arkham-knight-waynetech.jpg` | WayneTech icon style, upgrade-tree card layout |
 | `arkham-city-detective-mode.jpg` | Detective-mode palette: deep blue/black, cyan wireframes, orange threat highlights, HUD reticle corners |
+| `arkham-reference-imgur-frvgmZJ.jpg` | **The actual riddle-scan feedback HUD**: "Solution partially detected" — banner anatomy (green `!` chip + uppercase headline + cyan rule + white subtext) |
+| `arkham-reference-reddit-psq9wh35xtd71.jpg` | Same HUD showing "Subject Out Of View" — the game's own copy for a failed scan |
 
 ## Palette
 
@@ -64,7 +72,17 @@ https://interfaceingame.com/games/batman-arkham-city/ .
 
 ## UI anatomy to borrow
 
-1. **Notification banner** (from `upgrade-points-earned.jpg`): dark rounded
+1. **Verdict banner** (from the two riddle-scan HUD shots): bright green
+   square chip with a white `!` glyph on the left, uppercase headline
+   ("ENVIRONMENT ANALYSIS") beside it, a thin cyan horizontal rule
+   extending right from the headline, and smaller white subtext beneath
+   ("Solution partially detected"). This is the game's *literal* riddle
+   verdict UI — it is the primary template for our verdict notifications.
+   Map states onto it: headline stays "ENVIRONMENT ANALYSIS" (or
+   "SUBJECT ANALYSIS"), subtext carries the verdict; chip color shifts
+   with severity (green = info/solved, amber = soft rejection, red =
+   not found).
+2. **Notification banner** (from `upgrade-points-earned.jpg`): dark rounded
    panel, hexagonal icon chip on the left, bold uppercase title, thin cyan
    rule, smaller subtext. → Our verdict notifications: `SUBJECT VERIFIED` /
    `SUBJECT OBSCURED` / `SUBJECT NOT FOUND`, icon chip = bat emblem / green `?`.
@@ -99,12 +117,14 @@ https://interfaceingame.com/games/batman-arkham-city/ .
   Riddler underestimates you, detective."
 - `OBSCURED` → "SUBJECT OBSCURED. Detective vision cannot resolve the
   subject — adjust your angle." / "Partial match only. Get a clearer shot."
-- `NOT_FOUND` → "SUBJECT NOT FOUND." / "That is not the answer. The Riddler
-  expected better."
 - `TOO_SMALL` → "SUBJECT TOO SMALL. Move closer, detective." / "The
   Batcomputer cannot resolve a subject at this range."
 - `MISALIGNED` → "MISALIGNED. Adjust your perspective." / "Scan incomplete —
-  reframe the subject and try again."
+  reframe the subject and try again." / **"Solution partially detected"**
+  (verbatim from the game's scan HUD — the most authentic soft-rejection
+  copy we have)
+- `NOT_FOUND` → "SUBJECT NOT FOUND." / **"Subject Out Of View"** (verbatim
+  from the game) / "That is not the answer. The Riddler expected better."
 - `EXPIRED` → "INTEL EXPIRED. This window has closed."
 
 ## Sources for more reference later
