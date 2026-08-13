@@ -5,3 +5,16 @@ docs/reference/*.jpg
 docs/reference/*.jpeg
 docs/reference/*.png
 docs/reference/*.webp
+
+# Runtime data: SQLite database and uploaded player photos.
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node / Vite
+node_modules/
+web/dist/
