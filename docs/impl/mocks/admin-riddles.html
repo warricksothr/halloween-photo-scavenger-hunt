@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Admin: Riddle Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+<style>
+  .frame.wide { max-width: 720px; }
+  /* Riddle rows: green left border = the Riddler's channel, same rule
+     the player app uses for riddle text. */
+  .riddle-row {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 10px 12px; margin-bottom: 8px;
+    background: var(--bg-panel-translucent);
+    border: var(--rule); border-left: 3px solid var(--green);
+    border-radius: var(--radius);
+  }
+  .riddle-row .order {
+    font-family: var(--font-num); color: var(--cyan-dim);
+    width: 26px; padding-top: 2px; font-size: 0.85rem;
+  }
+  .riddle-row .body { flex: 1; font-size: 0.95rem; }
+  .riddle-row .row-actions { display: flex; gap: 6px; flex: none; }
+  .riddle-row .row-actions a {
+    color: var(--cyan-dim); text-decoration: none; font-size: 0.75rem;
+    font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.08em;
+    border: 1px solid var(--border-dim); border-radius: var(--radius); padding: 4px 8px;
+  }
+  .riddle-row .row-actions a.danger { color: var(--alert); border-color: var(--alert); }
+  textarea {
+    width: 100%; min-height: 84px; resize: vertical;
+    padding: 12px; background: var(--bg-panel);
+    border: 1px solid var(--border-lit); border-radius: var(--radius);
+    color: var(--text); font-family: var(--font-body); font-size: 1rem;
+  }
+  textarea:focus { outline: none; border-color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="frame wide">
+
+  <header class="app-header">
+    <span class="event-name" style="color: var(--amber);">Host Console</span>
+    <span class="player-name">Gotham Halloween 2026 · lobby</span>
+  </header>
+
+  <main style="flex: 1; padding: 24px 24px 16px;">
+
+    <!-- GET/POST/PATCH/DELETE /api/admin/events/{id}/riddles
+         Riddles editable while the event is in lobby; design.md targets
+         12–15 per event. Every edit logs riddle.created / edited /
+         deleted with before/after in details (audit-actions.md). -->
+    <h1 class="headline headline-rule" style="font-size: 1.05rem; margin-bottom: 6px;">Riddles</h1>
+    <p class="dim" style="margin-bottom: 16px;">12–15 per event is the sweet spot. Players see the
+    full list the moment the round opens — no unlock chains, order is just presentation.</p>
+
+    <!-- Existing riddles -->
+    <section style="margin-bottom: 20px;">
+      <div class="riddle-row">
+        <span class="order">01</span>
+        <div class="body">I guard the door but have no hands. I keep the cold but feel no chill. What am I?</div>
+        <div class="row-actions"><a href="#">Edit</a><a href="#">↑↓</a><a href="#" class="danger">Delete</a></div>
+      </div>
+      <div class="riddle-row">
+        <span class="order">02</span>
+        <div class="body">Eight legs in the corner, watching the party spin. Find my web and catch me in frame.</div>
+        <div class="row-actions"><a href="#">Edit</a><a href="#">↑↓</a><a href="#" class="danger">Delete</a></div>
+      </div>
+      <div class="riddle-row">
+        <span class="order">03</span>
+        <div class="body">I burn without flame and die without smoke. Photograph me before I gutter out.</div>
+        <div class="row-actions"><a href="#">Edit</a><a href="#">↑↓</a><a href="#" class="danger">Delete</a></div>
+      </div>
+      <div class="riddle-row" style="opacity: 0.65;">
+        <span class="order">…</span>
+        <div class="body dim" style="font-style: italic;">9 more riddles…</div>
+        <div class="row-actions"></div>
+      </div>
+    </section>
+
+    <!-- Add-new form -->
+    <section class="panel" style="margin-bottom: 20px;">
+      <h2 class="headline" style="font-size: 0.9rem; margin-bottom: 10px;">Add a riddle</h2>
+      <div class="field" style="margin-bottom: 12px;">
+        <label for="riddle-text">Riddle text</label>
+        <textarea id="riddle-text" placeholder="The subject should be findable and photographable at the venue — check it in person before the night."></textarea>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button class="btn" style="width: auto; padding: 12px 24px;">Add to board</button>
+        <span class="dim" style="font-size: 0.8rem;">Appends to the end; reorder with ↑↓ after.</span>
+      </div>
+    </section>
+
+    <!-- Lifecycle footer: the round opens from here once content is in.
+         Opening = POST /api/admin/events/{id}/open (lobby → open,
+         logged as event.opened). -->
+    <section style="display: flex; gap: 10px; align-items: center;">
+      <button class="btn" style="flex: 1; background: var(--green);">Open the round</button>
+      <span class="dim" style="font-size: 0.8rem; max-width: 280px;">Players in the lobby see the board
+      appear instantly (SSE). Riddles stay editable after opening — edits are audit-logged.</span>
+    </section>
+
+  </main>
+
+  <div class="mock-note" style="margin: 0 24px 16px;">
+    <b>Mock notes</b> — Delete on a riddle with submissions returns 409
+    (api.md) — in practice that means delete works freely in the lobby and
+    degrades to an error banner mid-round. Reorder buttons are stand-ins for
+    drag-and-drop; MVP can ship buttons and graduate to drag later.
+    "Open the round" is green — it's the one celebratory action in the host
+    console, and the green channel belongs to riddle content.
+  </div>
+
+</div>
+</body>
+</html>

@@ -31,11 +31,14 @@ Mocking conventions:
 | Standings / final recap | `mocks/standings.html` | `GET /api/leaderboard`, `GET /api/recap` | 9 |
 | Strike interstitial | `mocks/strike-interstitial.html` | `/api/state` (`pending_notice`), `POST /api/me/notice-ack` | 8 |
 | Moderator console | `mocks/moderator.html` | `/api/mod/*`, SSE `submission_new` / `queue_resolved` | 7–8 |
+| Admin: new event | `mocks/admin-event-new.html` | `POST /api/admin/events` (+ codes), lifecycle gating | 2 |
+| Admin: riddle editor | `mocks/admin-riddles.html` | `GET/POST/PATCH/DELETE …/riddles`, `POST …/open` | 2 |
 
-Not mocked (deliberately): the admin UI — minimal HTML forms in MVP
-(build plan increment 2 verifies with curl); and a standalone
-moderator audit page, which reuses the moderator console's history
-panel styling against `GET /api/mod/audit`.
+Admin mocks are laptop-first (the host sets up from a desk), so they use
+a wider frame than the phone-first player screens. Not mocked
+(deliberately): admin login (a bare form) and a standalone moderator
+audit page, which reuses the moderator console's history panel styling
+against `GET /api/mod/audit`.
 
 ## Coverage matrix
 
@@ -98,3 +101,6 @@ strike interstitial, and the drawer restricted variant.
   mods under queue load never need a second screen.
 - **The lobby screen exists** — joining before the round opens needs a
   holding state; without it, early joiners hit a dead end.
+- **The round-open action is gated on content** — "open the round" is
+  disabled until at least one riddle exists (admin-event-new.html), so
+  the host can't open an empty board by accident.
