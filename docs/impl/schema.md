@@ -236,9 +236,13 @@ CREATE TABLE IF NOT EXISTS team_invite (
   edits are recorded in the audit log with before/after in `details`.
   Mutable-state timestamps duplicate what the audit log already says better.
 
-## Open question recorded, not decided here
+## Decided at design review
 
 - `photo_path` stores the **derivative** path only; originals are written
   to a quarantined originals dir on disk and never referenced from the DB.
-  If we later want originals purge-on-verify, that's a policy decision for
-  increment 5, not a schema change.
+- **Originals are kept for the life of the event** — there is no
+  purge-on-verify. Disk usage is bounded by the per-team upload rate
+  limits and dimension caps; if size ever becomes an issue, a purge
+  policy can be added later without a schema change (the DB never points
+  at originals, so deleting them is a filesystem-only operation).
+  Originals still die with the event data purge (increment 10).
