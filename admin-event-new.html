@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Admin: New Event</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+<style>
+  /* Admin screens are laptop-first (the host sets up from a desk),
+     so these mocks use a wider frame than the phone-first player UI. */
+  .frame.wide { max-width: 720px; }
+</style>
+</head>
+<body>
+<div class="frame wide">
+
+  <header class="app-header">
+    <span class="event-name" style="color: var(--amber);">Host Console</span>
+    <span class="player-name">admin</span>
+  </header>
+
+  <main style="flex: 1; padding: 24px 24px 16px;">
+
+    <!-- ══ State A: creation form ═══════════════════════════════════
+         POST /api/admin/events { name, theme, leaderboard_visibility }
+         → returns the event plus both codes (api.md). -->
+    <h1 class="headline headline-rule" style="font-size: 1.05rem; margin-bottom: 14px;">New Event</h1>
+
+    <section class="panel" style="margin-bottom: 20px;">
+      <div class="field" style="margin-bottom: 16px;">
+        <label for="ev-name">Event name</label>
+        <input type="text" id="ev-name" placeholder="e.g. Gotham Halloween 2026" value="Gotham Halloween 2026">
+      </div>
+
+      <div class="field" style="margin-bottom: 16px;">
+        <label>Theme pack</label>
+        <!-- Theme = skin over a neutral core (design.md). New packs are
+             config + CSS, not forks — so this is a select, never a repo op. -->
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <span class="btn" style="width: auto; padding: 10px 18px; background: var(--cyan);">Batman: Arkham</span>
+          <span class="btn secondary disabled" style="width: auto; padding: 10px 18px; opacity: 0.5;">+ future packs</span>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom: 20px;">
+        <label>Leaderboard visibility</label>
+        <!-- Event-level toggle left open by design (game parameters);
+             lives on Event.leaderboard_visibility, PATCHable later. -->
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <span class="btn secondary" style="width: auto; padding: 10px 14px; border-color: var(--cyan); color: var(--cyan-bright);">Live during round</span>
+          <span class="btn secondary" style="width: auto; padding: 10px 14px; opacity: 0.55;">Sealed until final reveal</span>
+        </div>
+        <p class="dim" style="margin-top: 8px; font-size: 0.8rem;">Live keeps the standings tab hot all
+        night; sealed hides it until you close the round. Changeable any time.</p>
+      </div>
+
+      <button class="btn" style="max-width: 280px;">Create Event</button>
+    </section>
+
+    <!-- ══ State B: created — the codes panel ════════════════════════
+         This is the payoff moment of setup: two credentials, one for
+         players (QR at the door) and one for moderators (kept quiet). -->
+    <div class="dim" style="text-align: center; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;">— after creation —</div>
+
+    <div class="verdict-banner sev-green" style="margin-bottom: 16px;">
+      <div class="verdict-chip">✓</div>
+      <div style="flex: 1;">
+        <div class="verdict-headline headline-rule">Event Created</div>
+        <p class="subtext" style="margin-top: 6px;">Gotham Halloween 2026 is in the
+        <b>lobby</b>. Share the join link, then open the round when everyone's in.</p>
+      </div>
+    </div>
+
+    <section style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+
+      <!-- Player join code: random, unguessable, QR-ready (design.md
+           hosting & access: 8–10 chars, unambiguous alphabet). -->
+      <div class="panel" style="text-align: center;">
+        <div class="dim" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;">Player join link</div>
+        <div style="width: 132px; height: 132px; margin: 0 auto 10px; border: 1px solid var(--border-lit); border-radius: var(--radius);
+                    background: repeating-conic-gradient(var(--text) 0% 25%, var(--bg-deep) 0% 50%) 0 0 / 22px 22px;"></div>
+        <code style="color: var(--cyan-bright); font-size: 0.85rem;">/j/8XK3Q2MN7P</code>
+        <p class="dim" style="font-size: 0.75rem; margin-top: 8px;">Print or screen-share at the door.
+        Scanning it is the only login players ever do.</p>
+      </div>
+
+      <!-- Moderator code: separate credential, equally unguessable
+           (hardening checklist). Not for public display. -->
+      <div class="panel" style="text-align: center;">
+        <div class="dim" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;">Moderator link</div>
+        <div style="width: 132px; height: 132px; margin: 0 auto 10px; border: 1px dashed var(--amber); border-radius: var(--radius);
+                    background: repeating-conic-gradient(var(--amber) 0% 25%, var(--bg-deep) 0% 50%) 0 0 / 22px 22px; opacity: 0.85;"></div>
+        <code style="color: var(--amber); font-size: 0.85rem;">/mod/H4VX9T2KRM</code>
+        <p class="dim" style="font-size: 0.75rem; margin-top: 8px;">Send privately to whoever runs the
+        review queue. Never project this one.</p>
+      </div>
+
+    </section>
+
+    <div style="display: flex; gap: 10px;">
+      <a class="btn" href="admin-riddles.html" style="flex: 1;">Add riddles →</a>
+      <button class="btn secondary" style="flex: 1;" disabled>Open the round (needs riddles)</button>
+    </div>
+
+  </main>
+
+  <div class="mock-note" style="margin: 0 24px 16px;">
+    <b>Mock notes</b> — Two states stacked: the creation form, then the codes panel
+    the API returns. Lifecycle note: a new event sits in <code>lobby</code> — players
+    can join (and land on the lobby screen) but the round opens only via
+    <code>POST /api/admin/events/{id}/open</code>, which is deliberately disabled
+    here until at least one riddle exists. Codes are plaintext in the DB by design —
+    they're meant to be displayed (schema.md conventions).
+  </div>
+
+</div>
+</body>
+</html>
