@@ -28,3 +28,11 @@ and progress tracker live in [`docs/`](docs/).
 - **Frontend**: Preact + Vite PWA (installable, camera-first)
 - **Access**: QR-scannable join codes for players, admin login for hosts,
   moderator codes for the review queue
+
+## License
+
+[GNU AGPL-3.0](LICENSE). Free to use, self-host, and modify — but if you
+run a modified version as a service (even without distributing it), you
+must offer your source. This is a hobby project that will not be
+productized; the AGPL keeps it free for parties and off-limits to free
+commercial rides.
