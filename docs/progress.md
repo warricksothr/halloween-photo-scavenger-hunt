@@ -57,6 +57,12 @@ when the increment runs and its tests pass.
   helper + enum land in increment 2, each later increment names the
   actions it logs. Player-facing round recap timeline is in scope for
   increment 9, queried from the same audit data.
+- **2026-08-14 — Implementation contracts designed.** `docs/impl/` holds
+  the three artifacts increments 1–4 transcribe: `schema.md` (full DDL,
+  incl. moderator/moderator_session split and AUTOINCREMENT audit ids),
+  `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
+  `audit-actions.md` (closed action enum + recap subset). Next step:
+  increment 1 (backend skeleton).
 - Open follow-up (not blocking): perceptual-hash false-positive threshold
   tuning deferred to increment 5, when real party photos exist — record
   the chosen distance threshold here when tuned.

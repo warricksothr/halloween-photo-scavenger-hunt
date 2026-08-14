@@ -3,6 +3,16 @@
 Companion to `docs/design.md` (the spec) and `docs/progress.md` (the
 tracker). Read the spec first; this file is the *order of construction*.
 
+Implementation contracts (designed on paper before code, terse and
+reviewable separately):
+
+- `docs/impl/schema.md` — the full `0001_init.sql` DDL, conventions,
+  and deliberate omissions. Increment 1 transcribes it.
+- `docs/impl/api.md` — endpoint inventory, the `/api/state` snapshot
+  shape, and the SSE delta event table. Increment 4 builds against it.
+- `docs/impl/audit-actions.md` — the closed audit action enum with
+  per-action `details` payloads. Increment 2 transcribes it.
+
 ## Repo layout (target)
 
 ```
