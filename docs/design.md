@@ -54,8 +54,19 @@ and the player photographed the right area from the wrong position.
 - **One-tap verdicts** with optional flavor-text picker/override.
 - **Per-player history** so moderators stay consistent.
 - Moderator role assigned at event setup (host creates event, gets a mod link/code).
-- Multiple moderators can work the queue simultaneously; a submission is
-  claimed/locked while a mod has it open (or simply: first verdict wins).
+- Multiple moderators can work the queue simultaneously. Opening a
+  submission **soft-claims** it: the server records `claimed_by` +
+  timestamp and the queue shows other moderators that it's being looked
+  at, but the claim never blocks — a second moderator can still open it,
+  and **first committed verdict wins**. A soft claim avoids the common
+  case (two mods deliberating over the same photo) without a locking
+  protocol that can deadlock when a moderator's phone sleeps.
+- **Verdicts are conditional writes**: the verdict endpoint updates the
+  submission only `WHERE status = 'PENDING'`. A verdict that loses the
+  race (another moderator's verdict, or round closure expiring the
+  submission first) gets an explicit "already resolved" response, never
+  a silent overwrite. Verdicts are final once committed — there is no
+  un-verify; a mistaken `VERIFIED` is corrected socially, not in data.
 
 ### Conduct enforcement: strikes & upload bans
 
@@ -69,6 +80,15 @@ submission was removed for violating the event rules.
   game verdicts but visually separated (danger styling, confirm step
   optional). It issues the verdict *and* a strike in one action — a
   moderator under queue load should never need a second screen for this.
+  The riddle itself stays open for the team: the flagged photo is dead,
+  but a *new* photo for the same riddle may be submitted normally.
+- **Strike state is derived, never stored**: a player's restriction is a
+  pure function of their non-reversed strikes — 1 → WARNED, 2 → COOLDOWN
+  (until the strike's `cooldown_until`), 3 → BANNED. There is no
+  restriction column to go stale, and reversal just flips `reversed_by`/
+  `reversed_at` on the strike row; the derived state follows for free.
+  Every question like "what if strike 3 lands during a cooldown" has the
+  same answer: count the non-reversed strikes.
 - **Strike ladder** (per player, per event, shown to moderators on the
   player's history):
   1. **Strike 1 — warning**: interstitial on the player's next app open:
@@ -95,9 +115,12 @@ submission was removed for violating the event rules.
 ### Data model deltas (conduct)
 
 - `Strike` (id, player_id, event_id, level, submission_id, issued_by,
-  note, created_at, reversed_by, reversed_at)
-- `Player` / `Team`: upload restriction state derived from active
-  strikes (cooldown-until timestamp or banned flag)
+  note, cooldown_until, created_at, reversed_by, reversed_at) —
+  `cooldown_until` is set only for level 2
+- `Player` / `Team`: upload restriction **derived** from non-reversed
+  strikes — never a stored flag. 1 strike → warning interstitial,
+  2 → uploads blocked until `cooldown_until`, 3 → uploads blocked for
+  the event.
 - `EvidenceItem`: `quarantined` flag + quarantine metadata
 
 ## Flows & state machines
@@ -181,6 +204,13 @@ stateDiagram-v2
     end note
 ```
 
+Round closure is a single transaction: flip the event to `CLOSED`, then
+mark every still-`PENDING` submission `EXPIRED`. A verdict racing the
+closure loses cleanly, because verdicts are conditional writes
+(`WHERE status = 'PENDING'` — see Moderator experience): the moderator
+gets "already resolved", the submission stays `EXPIRED`, and no point
+can appear after the final standings.
+
 ### Team invite flow (stretch)
 
 ```mermaid
@@ -233,7 +263,14 @@ stateDiagram-v2
 
 Strikes never expire on their own within an event (except cooldown
 timers), and every transition in either direction is recorded on the
-player's history for moderators.
+player's history for moderators. Because restriction state is *derived*
+from non-reversed strikes, the diagram above is a visualization of that
+function, not a stored state: `COOLDOWN → WARNED` happens automatically
+when `cooldown_until` passes, and any reversal simply recomputes the
+player's position from their strike rows. The strike interstitial is not
+a one-shot page: it is part of the player's state snapshot (see
+"Realtime" under Architecture), so it appears on the next poll, app
+open, or SSE reconnect — whichever comes first.
 
 ## Architecture
 
@@ -246,7 +283,20 @@ player's history for moderators.
   `<input type="file" accept="image/*" capture>`.
 - **Realtime**: Server-Sent Events for player verdict notifications and
   moderator queue updates. One-night event, ~30 users — SSE from FastAPI
-  handles this without extra infrastructure.
+  handles this without extra infrastructure. SSE carries **deltas only**;
+  the source of truth for a client that just loaded or reconnected is a
+  single `GET /api/state` snapshot (event status, my team's riddle/submission
+  states, my strike status, leaderboard if visible). Phones sleep
+  constantly at a party, so every SSE reconnect and every cold start
+  re-fetches the snapshot first, then applies deltas. This one rule —
+  *snapshot on connect, deltas over the wire* — is what keeps the UI
+  correct without any client-side reconciliation logic.
+- **Upload pipeline**: photo validation/re-encode/perceptual-hash is
+  blocking CPU work, so it runs **off the event loop** (a worker thread
+  via `anyio.to_thread` / `run_in_threadpool`), never inside the async
+  handler. Re-encoding applies EXIF orientation *before* stripping EXIF
+  (`ImageOps.exif_transpose`), or a third of the party's photos come out
+  sideways.
 - **Theming**: theme pack = config (name, verdict copy, flavor lines) + CSS
   variables/assets. Core UI reads copy from the active theme.
 
@@ -354,11 +404,32 @@ additive (invites, roster UI, multi-member drawers) with no migration.
 - `Session` (token, player_id, device_label, created_at, last_seen_at,
   revoked_at) — first-class from the start so moderation can revoke devices
 - `EvidenceItem` (id, team_id, uploaded_by, riddle_id optional tag,
-  photo_path, created_at) — MVP uploads go straight here; "submit" picks
-  from the drawer even for a team of one
+  photo_path, phash, quarantined, created_at) — MVP uploads go straight
+  here; "submit" picks from the drawer even for a team of one. `phash`
+  is the perceptual hash from the upload pipeline (trust & abuse
+  section); `quarantined` hides the item from the drawer and the app
+  (conduct section), and is a no-op flag until the conduct increment
+  lands.
 - `Submission` (id, riddle_id, team_id, submitted_by player_id,
   evidence_item_id, status, created_at)
 - `Verdict` (id, submission_id, moderator, verdict, flavor_text, created_at)
+
+Schema invariants enforced by SQLite itself, not by application code:
+
+- **One active submission per riddle per team** — a partial unique index:
+  `CREATE UNIQUE INDEX ... ON Submission(riddle_id, team_id) WHERE status = 'PENDING'`.
+  Two devices submitting the same riddle at once (or a double-tap) then
+  lose deterministically at the database: the loser gets a constraint
+  error the API turns into a friendly 409, instead of two `PENDING`
+  rows the UI has to untangle. Invariants live as close to the data as
+  the database allows.
+- **`Session.last_seen_at` throttled** — updated at most once per minute
+  per session, not per request; with WAL mode this keeps the hot read
+  path from generating a write per call.
+- **Score is a query, not a column** — a team's score is the count of its
+  `VERIFIED` submissions; the leaderboard is a `GROUP BY` over the
+  submission table. Combined with verdicts being final, there is nothing
+  to keep in sync.
 
 ## Build approach
 
