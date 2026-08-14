@@ -50,6 +50,13 @@ when the increment runs and its tests pass.
   transaction that races verdicts cleanly; upload pipeline runs off the
   event loop and applies EXIF orientation before stripping. ADRs:
   `docs/adr/0001`–`0003`.
+- **2026-08-14 — Audit log planned.** Every state mutation writes an
+  append-only `AuditEvent` row in the same transaction; closed action
+  enum; reads and soft-claims excluded; event sourcing explicitly
+  rejected (ADR 0004). Table ships in increment 1's schema, `log_action`
+  helper + enum land in increment 2, each later increment names the
+  actions it logs. Player-facing round recap timeline is in scope for
+  increment 9, queried from the same audit data.
 - Open follow-up (not blocking): perceptual-hash false-positive threshold
   tuning deferred to increment 5, when real party photos exist — record
   the chosen distance threshold here when tuned.

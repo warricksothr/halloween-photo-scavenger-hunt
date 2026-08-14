@@ -49,9 +49,10 @@ plain versioned SQL files), pytest configured with one passing test.
 
 The day-one schema must include the invariants the spec names, or they
 become a migration later: the partial unique index on
-`Submission(riddle_id, team_id) WHERE status='PENDING'`, and the
-`phash` + `quarantined` columns on `EvidenceItem` (both no-ops until
-their increments land). Enable WAL mode and foreign keys at bootstrap.
+`Submission(riddle_id, team_id) WHERE status='PENDING'`, the `phash` +
+`quarantined` columns on `EvidenceItem`, and the append-only
+`AuditEvent` table (a no-op until increment 2 starts writing to it).
+Enable WAL mode and foreign keys at bootstrap.
 
 **Verify**: `pytest` passes; a test asserts the partial unique index
 rejects a second `PENDING` submission for the same riddle+team.
@@ -63,14 +64,23 @@ generation, QR-ready join URL. Minimal HTML/JSON only — no real frontend
 yet; verify with pytest + curl. Round closure runs as the single
 transaction the spec describes (flip status, expire pending).
 
+This increment also lands the audit helper (`log_action(conn, ...)`) and
+the closed action enum — it owns the first real mutations (`event.opened`,
+`event.closed`, `riddle.edited`), and its tests assert that each mutation
+and its `AuditEvent` row commit in one transaction. Every later increment
+names the actions it logs, below.
+
+**Verify**: `pytest` covers lifecycle transitions + audit rows; `curl`
+exercises CRUD.
+
 ### 3. Player join & sessions
 Join flow: code → display name → team-of-one + session cookie (httpOnly,
 Secure, SameSite; token hashed at rest). Session revocation. Throttled
 `last_seen_at` (max one write per minute per session). This is the first
 user-visible path.
 
-**Verify**: `pytest` covers join/revoke; `curl -c`/`curl -b` exercises
-the cookie round-trip.
+**Verify**: `pytest` covers join/revoke (logging `player.joined`,
+`session.revoked`); `curl -c`/`curl -b` exercises the cookie round-trip.
 
 ### 4. Frontend shell
 Preact + Vite scaffold, PWA manifest + service worker, routing, theme
@@ -102,7 +112,8 @@ sideways. `phash` is stored on every upload; cross-team comparison is a
 plain scan at party scale — no index needed beyond the column.
 
 **Verify**: `pytest` with fixture images (valid, wrong-magic-bytes,
-EXIF-rotated, oversized); upload → drawer round-trip in the browser.
+EXIF-rotated, oversized — logging `evidence.uploaded`); upload → drawer
+round-trip in the browser.
 
 ### 6. Submissions & player flow
 Submit from drawer, one active submission per riddle per team (enforced
@@ -110,7 +121,10 @@ by the partial unique index from increment 1 — the API translates the
 constraint violation into a friendly 409, it does not re-check in code),
 tile state changes on the riddle grid, `SCANNING...` pending screen,
 duplicate-evidence flag on upload (cross-team phash match → moderator
-flag).
+flag). Logs `submission.created`, `duplicate_flag.raised`.
+
+**Verify**: `pytest` asserts the 409 on a double-submit race and the
+flag row on a phash collision.
 
 ### 7. Moderation queue
 Moderator session (mod code), queue view (photo + player + riddle side by
@@ -119,7 +133,8 @@ per-player history, SSE updates for queue + player verdict
 notifications. Implements the spec's moderation concurrency rules:
 soft-claim on open, **conditional verdict writes**
 (`UPDATE ... WHERE status='PENDING'`) so a lost race returns "already
-resolved" instead of overwriting.
+resolved" instead of overwriting. Logs `verdict.issued`,
+`duplicate_flag.resolved`.
 
 **Verify**: `curl -N` against the SSE endpoint while issuing a verdict
 from a second session shows the delta; a pytest races two verdicts on
@@ -132,11 +147,17 @@ strike interstitials. Restriction state is **derived from non-reversed
 strikes** per the spec — this increment is a pure function over the
 strike table plus UI; there is no status column to keep in sync. The
 interstitial rides the existing `/api/state` snapshot, so it needs no
-new delivery channel.
+new delivery channel. Logs `strike.issued`, `strike.reversed`,
+`evidence.quarantined`.
 
 ### 9. Leaderboard & round end
 Score computation, `live` / `final-reveal` toggle honored, round close
-flow (pending → `EXPIRED`), final standings screen.
+flow (pending → `EXPIRED`), final standings screen with the **round recap
+timeline**: the night's story queried from the audit log (open/close,
+first solves, lead changes, verdict highlights), themed for players.
+
+**Verify**: `pytest` over a scripted audit log asserts the recap query
+returns the expected timeline; browser pass on a closed test event.
 
 ### 10. Deployment & ops
 Production build served by FastAPI, VPS deploy recipe (systemd unit +

@@ -323,6 +323,36 @@ Party scale means social enforcement does most of the work, but the
 following cheap measures close the obvious holes. Ordered roughly by
 value-per-effort.
 
+### Audit log
+
+Every state mutation in the system writes an `AuditEvent` row **in the same
+transaction** as the mutation itself — the log and the state commit
+together or not at all. This is the table that answers "what happened,
+in what order, and who did it" at the end of the night: for conduct
+disputes, for debugging ("why is this tile green?"), and for the
+player-facing round recap (see Game parameters).
+
+- **Append-only**: rows are never updated or deleted (until event data
+  purge). An editable audit log proves nothing.
+- **Closed action enum**, not free text — e.g. `event.opened`,
+  `event.closed`, `riddle.edited`, `player.joined`, `session.revoked`,
+  `evidence.uploaded`, `evidence.quarantined`, `submission.created`,
+  `verdict.issued`, `strike.issued`, `strike.reversed`,
+  `duplicate_flag.raised`, `duplicate_flag.resolved`. Tests enumerate the
+  enum so new mutations can't silently skip logging.
+- **`details` JSON blob** carries before/after values where they matter
+  (old riddle text → new) and stays out of the schema otherwise.
+- **Not event sourcing**: the relational tables remain the source of
+  truth. The audit log is forensics and replay, not state.
+- **Reads are not logged** (SSE connects, state snapshots, photo fetches)
+  — that's surveillance-shaped noise with no forensic value. Advisory,
+  high-churn actions like moderation soft-claims are also excluded; the
+  committed verdict is the record that matters.
+- Some tables already self-record (Verdict rows are immutable with actor
+  + timestamp; Strike rows carry issue/reversal). They *still* get audit
+  events so the replay timeline is one query over one table — the event
+  row references the entity, it doesn't duplicate it.
+
 ### Multi-teaming (one device, two teams)
 
 A player can trivially hold two sessions on one device (installed PWA +
@@ -388,6 +418,10 @@ goal is access control + reuse detection, not DRM:
 - **Leaderboard visibility**: intentionally left open as a build option —
   implement as an event-level toggle (`live` / `final-reveal`) rather than
   deciding now.
+- **Round recap**: the final standings screen includes a timeline of the
+  night rendered from the audit log — round open/close, first solves, lead
+  changes, verdict highlights. Same data as the moderator forensics view,
+  themed for the players.
 
 ### Data model (MVP)
 
@@ -413,6 +447,10 @@ additive (invites, roster UI, multi-member drawers) with no migration.
 - `Submission` (id, riddle_id, team_id, submitted_by player_id,
   evidence_item_id, status, created_at)
 - `Verdict` (id, submission_id, moderator, verdict, flavor_text, created_at)
+- `AuditEvent` (id, event_id, actor_type, actor_id, action, entity_type,
+  entity_id, details JSON, created_at) — append-only; one row per state
+  mutation, written in the same transaction (see Audit log under Trust &
+  abuse). The recap timeline and all forensics read from this table.
 
 Schema invariants enforced by SQLite itself, not by application code:
 
