@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Standings / Final Recap</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <main style="flex: 1; padding-bottom: 16px;">
+
+    <!-- ══ State A: live standings (leaderboard_visibility = 'live') ══
+         GET /api/leaderboard. With 'final-reveal', players get 404 until
+         the event closes — the tab then shows a "sealed until reveal"
+         note instead of this list. -->
+    <div style="padding: 14px 16px 4px;">
+      <h1 class="headline headline-rule" style="font-size: 1rem;">Standings</h1>
+    </div>
+    <section style="padding: 8px 16px;">
+      <div class="panel" style="padding: 4px 16px;">
+        <div class="list-row">
+          <span style="font-family: var(--font-num); color: var(--green-bright); width: 28px;">01</span>
+          <div style="flex: 1;">The Flying Graysons</div>
+          <span style="font-family: var(--font-num); color: var(--green-bright);">9</span>
+        </div>
+        <div class="list-row">
+          <span style="font-family: var(--font-num); color: var(--cyan); width: 28px;">02</span>
+          <div style="flex: 1;">Court of Owls</div>
+          <span style="font-family: var(--font-num); color: var(--cyan);">8</span>
+        </div>
+        <div class="list-row" style="background: rgba(127,212,232,0.06); border-radius: var(--radius);">
+          <span style="font-family: var(--font-num); color: var(--cyan); width: 28px;">03</span>
+          <div style="flex: 1;">Nightwing <span class="dim" style="font-size: 0.75rem;">(you)</span></div>
+          <span style="font-family: var(--font-num); color: var(--cyan);">4</span>
+        </div>
+        <div class="list-row">
+          <span style="font-family: var(--font-num); color: var(--text-dim); width: 28px;">04</span>
+          <div style="flex: 1;">Red Hoods</div>
+          <span style="font-family: var(--font-num); color: var(--text-dim);">3</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ State B: round closed → final standings + RECAP TIMELINE ══
+         GET /api/recap — audit log projected to party-safe events only
+         (docs/impl/audit-actions.md: opens, closes, verified verdicts,
+         joins; conduct rows never surface). -->
+    <section style="padding: 16px; border-top: 1px dashed var(--border-dim); margin-top: 8px;">
+      <div class="dim" style="text-align: center; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;">— closed-round variant —</div>
+
+      <div class="verdict-banner sev-green" style="margin-bottom: 16px;">
+        <div class="verdict-chip">★</div>
+        <div style="flex: 1;">
+          <div class="verdict-headline headline-rule">Case Closed</div>
+          <p class="subtext" style="margin-top: 6px;">The Flying Graysons solved Gotham —
+          9 of 12 riddles. Final standings are in.</p>
+        </div>
+      </div>
+
+      <h2 class="headline headline-rule" style="font-size: 0.85rem; margin-bottom: 6px;">The Night's Intel Trail</h2>
+      <div class="panel" style="padding: 4px 16px;">
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="dim" style="font-family: var(--font-num); width: 44px;">20:02</span>
+          <div style="flex: 1;">The host opened the hunt — 14 operatives linked in</div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="dim" style="font-family: var(--font-num); width: 44px;">20:11</span>
+          <div style="flex: 1;"><b>Court of Owls</b> drew first blood — Riddle #1 verified</div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="dim" style="font-family: var(--font-num); width: 44px;">20:47</span>
+          <div style="flex: 1;"><b>The Flying Graysons</b> took the lead (4 solved)</div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="dim" style="font-family: var(--font-num); width: 44px;">21:33</span>
+          <div style="flex: 1;">Riddle #7 fell to every team — the chimney was no match for Gotham</div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="dim" style="font-family: var(--font-num); width: 44px;">22:58</span>
+          <div style="flex: 1;">The window closed. Intel expired on 3 pending scans</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tab-bar">
+    <a href="riddle-list.html"><span class="tab-icon">?</span>Riddles</a>
+    <a href="drawer.html"><span class="tab-icon">▤</span>Drawer</a>
+    <a href="team.html"><span class="tab-icon">⬡</span>Team</a>
+    <a href="standings.html" class="active"><span class="tab-icon">≡</span>Standings</a>
+  </nav>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — Two variants stacked: live standings during the round
+    (SSE <code>leaderboard</code> deltas, throttled ≥5s) and the closed-round
+    final standings + recap timeline. Recap lines are the audit log projected
+    through theme copy — lead changes and mass-solve moments are derived in
+    the recap query, not stored. With <code>leaderboard_visibility =
+    'final-reveal'</code>, variant A is replaced by a "sealed by the host"
+    note until close.
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Moderator Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <!-- Moderator chrome is deliberately sparser than the player app:
+       no tabs, no flavor — this is a work queue, not the game.
+       Reached via POST /api/mod/join/{mod_code}. -->
+  <header class="app-header">
+    <span class="event-name" style="color: var(--amber);">Moderator Console</span>
+    <span class="player-name">3 in queue</span>
+  </header>
+
+  <main style="flex: 1; padding-bottom: 16px;">
+
+    <!-- ══ Queue list (GET /api/mod/queue — oldest first) ══════════
+         Claim state is advisory (ADR 0002): shown so two mods don't
+         deliberate over the same photo, but never blocks. -->
+    <section style="padding: 12px 16px 4px;">
+      <h1 class="headline headline-rule" style="font-size: 1rem;">Analysis Queue</h1>
+    </section>
+    <section style="padding: 8px 16px;">
+      <div class="panel" style="padding: 4px 16px;">
+        <div class="list-row">
+          <div class="photo-ph" style="width: 44px; height: 44px; flex: none;">img</div>
+          <div style="flex: 1;">
+            <div>Nightwing · <span style="color: var(--green);">Riddle #5</span></div>
+            <div class="dim" style="font-size: 0.75rem;">2 min ago · oldest</div>
+          </div>
+          <span class="dim" style="font-size: 0.7rem; font-family: var(--font-head); letter-spacing: 0.1em;">REVIEWING ▸</span>
+        </div>
+        <div class="list-row">
+          <div class="photo-ph" style="width: 44px; height: 44px; flex: none;">img</div>
+          <div style="flex: 1;">
+            <div>Barbara · <span style="color: var(--green);">Riddle #2</span></div>
+            <div class="dim" style="font-size: 0.75rem;">4 min ago</div>
+          </div>
+          <!-- Soft claim indicator: another moderator has this open. -->
+          <span class="dim" style="font-size: 0.7rem; font-family: var(--font-head); letter-spacing: 0.1em; color: var(--amber);">ORACLE IS VIEWING</span>
+        </div>
+        <div class="list-row">
+          <div class="photo-ph" style="width: 44px; height: 44px; flex: none;">img</div>
+          <div style="flex: 1;">
+            <div>Robin · <span style="color: var(--green);">Riddle #9</span></div>
+            <div class="dim" style="font-size: 0.75rem;">6 min ago</div>
+          </div>
+          <!-- Cross-team phash collision (duplicate_flag.raised) -->
+          <span class="dim" style="font-size: 0.7rem; font-family: var(--font-head); letter-spacing: 0.1em; color: var(--alert);">⚠ SHARED?</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Active review: photo + player + riddle side by side ═════
+         (design.md moderator experience). Photo framed in reticle
+         brackets — moderators get detective mode too. -->
+    <section style="padding: 8px 16px;">
+      <div class="reticle" style="margin: 6px 4px 12px;">
+        <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+        <div class="photo-ph" style="height: 240px;">submission photo (tap to zoom)</div>
+      </div>
+      <div class="panel" style="border-left: 3px solid var(--green); margin-bottom: 12px;">
+        <div class="dim" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--green);">Riddle #5 — Nightwing submitted</div>
+        <p style="margin-top: 6px; color: var(--green-bright);">“I guard the door but have no hands.
+        I keep the cold but feel no chill. What am I?”</p>
+      </div>
+    </section>
+
+    <!-- ══ One-tap verdicts ═════════════════════════════════════════
+         POST /api/mod/queue/{id}/verdict — conditional write; a lost
+         race returns 409 "already resolved" (ADR 0002). -->
+    <section style="padding: 0 16px;">
+      <button class="btn" style="background: var(--green); margin-bottom: 8px;">✓ Subject Verified</button>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+        <button class="btn secondary" style="color: var(--amber); border-color: var(--amber); padding: 10px 4px; font-size: 0.7rem;">Obscured</button>
+        <button class="btn secondary" style="color: var(--amber); border-color: var(--amber); padding: 10px 4px; font-size: 0.7rem;">Too Small</button>
+        <button class="btn secondary" style="color: var(--amber); border-color: var(--amber); padding: 10px 4px; font-size: 0.7rem;">Misaligned</button>
+      </div>
+      <button class="btn secondary" style="color: var(--alert); border-color: var(--alert); margin-bottom: 14px;">Subject Not Found</button>
+
+      <!-- Flavor-text picker: canned theme lines (THEME-NOTES copy bank)
+           or custom text. Attached to the verdict when tapped. -->
+      <div class="field">
+        <label for="flavor">Flavor text <span class="dim">(optional — canned line or custom)</span></label>
+        <input type="text" id="flavor" list="canned" placeholder="Pick a line or write your own…">
+        <datalist id="canned">
+          <option value="Riddle solved. The Riddler underestimates you, detective.">
+          <option value="Move closer, detective.">
+          <option value="Solution partially detected — reframe and try again.">
+          <option value="That is not the answer. The Riddler expected better.">
+        </datalist>
+      </div>
+    </section>
+
+    <!-- ══ Conduct: INAPPROPRIATE — visually separated, one tap ════
+         design.md: beside the game verdicts but danger-styled, confirm
+         step optional; issues verdict + strike in one action. -->
+    <section style="padding: 14px 16px 0; border-top: 1px dashed var(--border-dim); margin-top: 14px;">
+      <button class="btn danger">⚠ Flag Inappropriate — issue strike</button>
+      <p class="dim" style="font-size: 0.75rem; margin-top: 6px; text-align: center;">
+        Removes the photo, proposes the next strike level. Plain notice to the
+        player — no game flavor.
+      </p>
+    </section>
+
+    <!-- ══ Per-player history panel (coverage review assigned it here)
+         GET /api/mod/players/{id}: consistency for verdicts, strike
+         state (derived, ADR 0001), sessions for multi-teaming
+         heuristics (design.md trust & abuse). ═══════════════════════ -->
+    <section style="padding: 16px;">
+      <h2 class="headline headline-rule" style="font-size: 0.85rem; margin-bottom: 6px;">Nightwing — History</h2>
+      <div class="panel" style="padding: 4px 16px;">
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span style="color: var(--green);">✓</span>
+          <div style="flex: 1;">Riddle #3 — verified <span class="dim">· 21:14</span></div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span style="color: var(--amber);">!</span>
+          <div style="flex: 1;">Riddle #5 — obscured <span class="dim">· 21:31</span></div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span style="color: var(--green);">✓</span>
+          <div style="flex: 1;">Riddle #1 — verified <span class="dim">· 21:47</span></div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="icon-chip" style="width: 24px; height: 24px; font-size: 0.7rem;">⛨</span>
+          <div style="flex: 1;">Strikes: <b>none</b> <span class="dim">— clean record</span></div>
+        </div>
+        <div class="list-row" style="font-size: 0.85rem;">
+          <span class="icon-chip" style="width: 24px; height: 24px; font-size: 0.7rem;">▣</span>
+          <div style="flex: 1;">
+            Sessions: Sam's phone · Safari iOS <span class="dim">· active now</span><br>
+            <span class="dim" style="font-size: 0.75rem;">⚠ Same UA + interleaved activity as
+            <b>Barbara</b> — possible shared device. Visibility only; phash flags
+            do the enforcing (design.md).</span>
+          </div>
+        </div>
+      </div>
+      <a class="btn secondary" href="#" style="margin-top: 10px;">Full audit trail →</a>
+    </section>
+
+  </main>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — One screen, four jobs: queue (oldest first, claim
+    indicators, phash flags), active review (photo + riddle + player together),
+    one-tap verdicts with the flavor picker, and the separated
+    <b>Flag Inappropriate</b> conduct action. Player history is a panel here
+    rather than its own route — moderators under queue load should never need a
+    second screen (design.md). SSE deltas: <code>submission_new</code> adds rows,
+    <code>queue_resolved</code> greys one out if another mod's verdict landed
+    first.
+  </div>
+
+</div>
+</body>
+</html>

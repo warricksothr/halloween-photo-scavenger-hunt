@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Riddle List</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <main style="flex: 1; padding-bottom: 16px;">
+
+    <!-- Solved-count strip: spec's progress bar; one segment per riddle. -->
+    <div style="padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: baseline;">
+      <h1 class="headline headline-rule" style="font-size: 1rem; flex: 1;">Riddle Board</h1>
+      <span class="dim" style="font-family: var(--font-num); font-size: 0.8rem;">4 / 12</span>
+    </div>
+    <div class="progress-strip">
+      <div class="seg done"></div><div class="seg done"></div><div class="seg done"></div>
+      <div class="seg done"></div><div class="seg pending"></div><div class="seg"></div>
+      <div class="seg"></div><div class="seg"></div><div class="seg"></div>
+      <div class="seg"></div><div class="seg"></div><div class="seg"></div>
+    </div>
+
+    <!-- Tile grid from batcomputer.jpg: unknown = "?" glyph tile;
+         solved tiles would show the team's verified photo with a green
+         "?" stamp (mocks use placeholders — no photos in git). -->
+    <div class="tile-grid">
+
+      <!-- Solved: thumbnail of the verified evidence, green stamp. -->
+      <a class="tile solved" href="submission.html" style="display: block; padding: 0;">
+        <div class="photo-ph" style="width: 100%; height: 100%; border: none;">photo</div>
+        <span style="position: absolute; bottom: 4px; right: 6px; color: var(--green); font-family: var(--font-num); font-size: 1rem;">?</span>
+      </a>
+      <a class="tile solved" href="submission.html" style="display: block; padding: 0;">
+        <div class="photo-ph" style="width: 100%; height: 100%; border: none;">photo</div>
+        <span style="position: absolute; bottom: 4px; right: 6px; color: var(--green); font-family: var(--font-num); font-size: 1rem;">?</span>
+      </a>
+
+      <!-- Scanning: one active PENDING submission; pulsing cyan. -->
+      <a class="tile scanning" href="submission.html"><span class="glyph-q">?</span><span class="corner-tab">Scanning</span></a>
+
+      <!-- Unsolved: plain "?" tiles. -->
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span><span class="corner-tab">New</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+      <a class="tile" href="submission.html"><span class="glyph-q">?</span></a>
+
+    </div>
+
+    <!-- Latest verdict rides in as an SSE 'verdict' delta and appears
+         here as a dismissible banner (also visible on the submission
+         detail). Banner anatomy: chip + headline + cyan rule + subtext. -->
+    <div style="padding: 0 16px;">
+      <div class="verdict-banner sev-amber">
+        <div class="verdict-chip">!</div>
+        <div style="flex: 1;">
+          <div class="verdict-headline headline-rule">Subject Obscured</div>
+          <p class="subtext" style="margin-top: 6px;">Partial match only. Get a clearer shot.</p>
+          <p class="dim" style="margin-top: 4px; font-size: 0.75rem;">Riddle #5 — free resubmission</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <nav class="tab-bar">
+    <a href="riddle-list.html" class="active"><span class="tab-icon">?</span>Riddles</a>
+    <a href="drawer.html"><span class="tab-icon">▤</span>Drawer</a>
+    <a href="team.html"><span class="tab-icon">⬡</span>Team</a>
+    <a href="standings.html"><span class="tab-icon">≡</span>Standings</a>
+  </nav>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — Tile states come from <code>GET /api/state</code>
+    (<code>riddles[].state</code>: unsolved / pending / verified). The verdict
+    banner mirrors SSE <code>verdict</code> deltas. "New" corner tab marks
+    riddles never opened. Solved tiles reveal the verified photo — placeholders
+    here per the no-photos-in-git policy.
+  </div>
+
+</div>
+</body>
+</html>
