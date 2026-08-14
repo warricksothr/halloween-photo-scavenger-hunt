@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arkham Scavenger Hunt — UI Mocks</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <!-- Index page for the mock set. Lives in docs/impl/mocks/ on main and
+       is mirrored to the gh-pages branch as the Pages site root. -->
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">UI mocks</span>
+  </header>
+
+  <main style="flex: 1; padding: 24px 16px;">
+
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div class="icon-chip" style="margin: 0 auto 14px; width: 52px; height: 52px; font-size: 1.4rem;">?</div>
+      <h1 class="headline" style="font-size: 1.3rem;">Interface Mock Archive</h1>
+      <p class="dim" style="margin-top: 8px;">Static HTML mockups of every screen in the
+      scavenger-hunt PWA. Design notes and the coverage matrix live in
+      <code>docs/impl/ui.md</code> in the repository.</p>
+    </div>
+
+    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Player flow</h2>
+    <div class="panel" style="padding: 4px 16px; margin-bottom: 20px;">
+      <div class="list-row">
+        <span class="icon-chip">1</span>
+        <div style="flex: 1;">
+          <a href="landing.html" style="color: var(--cyan-bright); text-decoration: none;">Landing / Join</a>
+          <div class="dim" style="font-size: 0.8rem;">Callsign + device label; bad-code error variant</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">2</span>
+        <div style="flex: 1;">
+          <a href="lobby.html" style="color: var(--cyan-bright); text-decoration: none;">Lobby</a>
+          <div class="dim" style="font-size: 0.8rem;">Pre-round holding screen</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">3</span>
+        <div style="flex: 1;">
+          <a href="riddle-list.html" style="color: var(--cyan-bright); text-decoration: none;">Riddle Board</a>
+          <div class="dim" style="font-size: 0.8rem;">Batcomputer tile grid; solved / scanning / new states</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">4</span>
+        <div style="flex: 1;">
+          <a href="drawer.html" style="color: var(--cyan-bright); text-decoration: none;">Evidence Drawer</a>
+          <div class="dim" style="font-size: 0.8rem;">Team photo pool + upload-restricted variant</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">5</span>
+        <div style="flex: 1;">
+          <a href="submission.html" style="color: var(--cyan-bright); text-decoration: none;">Submission</a>
+          <div class="dim" style="font-size: 0.8rem;">Open / SCANNING… / verdict states of one route</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">6</span>
+        <div style="flex: 1;">
+          <a href="standings.html" style="color: var(--cyan-bright); text-decoration: none;">Standings &amp; Recap</a>
+          <div class="dim" style="font-size: 0.8rem;">Live board + closed-round intel trail</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Team &amp; conduct</h2>
+    <div class="panel" style="padding: 4px 16px; margin-bottom: 20px;">
+      <div class="list-row">
+        <span class="icon-chip">⬡</span>
+        <div style="flex: 1;">
+          <a href="team.html" style="color: var(--cyan-bright); text-decoration: none;">Team (stretch)</a>
+          <div class="dim" style="font-size: 0.8rem;">Roster, invite QR, switch-team warning</div>
+        </div>
+      </div>
+      <div class="list-row">
+        <span class="icon-chip">!</span>
+        <div style="flex: 1;">
+          <a href="strike-interstitial.html" style="color: var(--cyan-bright); text-decoration: none;">Strike Interstitial</a>
+          <div class="dim" style="font-size: 0.8rem;">Strike-1 warning — deliberately un-themed copy</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Moderator</h2>
+    <div class="panel" style="padding: 4px 16px;">
+      <div class="list-row">
+        <span class="icon-chip">▸</span>
+        <div style="flex: 1;">
+          <a href="moderator.html" style="color: var(--cyan-bright); text-decoration: none;">Moderator Console</a>
+          <div class="dim" style="font-size: 0.8rem;">Queue, one-tap verdicts, conduct action, player history</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="dim" style="margin-top: 24px; font-size: 0.75rem; text-align: center;">
+      Photo areas are placeholders — real player photos never enter the repository.<br>
+      Palette &amp; anatomy: <code>docs/reference/THEME-NOTES.md</code>.
+    </p>
+
+  </main>
+
+</div>
+</body>
+</html>
