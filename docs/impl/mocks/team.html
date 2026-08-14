@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Team (stretch)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <main style="flex: 1; padding-bottom: 16px;">
+
+    <!-- STRETCH GOAL screen (design.md: teams & shared drawer).
+         In MVP this route exists but shows a team-of-one: a single
+         member row and the invite panel. Mock shows the full version. -->
+
+    <div style="padding: 14px 16px 4px;">
+      <h1 class="headline headline-rule" style="font-size: 1rem;">Strike Team</h1>
+    </div>
+
+    <!-- Team identity: name is optional and player-settable (stretch
+         adds team.name + team.renamed audit action). -->
+    <section style="padding: 8px 16px;">
+      <div class="panel" style="display: flex; align-items: center; gap: 12px;">
+        <div class="icon-chip" style="width: 44px; height: 44px; font-size: 1.2rem; color: var(--green);">⬡</div>
+        <div style="flex: 1;">
+          <div style="font-family: var(--font-head); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">The Flying Graysons</div>
+          <div class="dim" style="font-size: 0.8rem;">3 / 4 operatives · 4 riddles solved</div>
+        </div>
+        <a href="#" style="color: var(--cyan-dim); text-decoration: none; font-size: 0.8rem; font-family: var(--font-head); letter-spacing: 0.1em;">EDIT</a>
+      </div>
+    </section>
+
+    <!-- Roster: members + their devices. Device label + last-seen come
+         from Session (schema.md). Session revocation is moderator-only
+         in MVP; stretch adds self "remove my old device". -->
+    <section style="padding: 8px 16px;">
+      <h2 class="headline headline-rule" style="font-size: 0.85rem; margin-bottom: 4px;">Roster</h2>
+      <div class="panel" style="padding: 4px 16px;">
+        <div class="list-row">
+          <div class="icon-chip">N</div>
+          <div style="flex: 1;">
+            <div>Nightwing <span class="dim" style="font-size: 0.75rem;">(you)</span></div>
+            <div class="dim" style="font-size: 0.75rem;">Sam's phone · active now</div>
+          </div>
+          <span style="color: var(--green); font-size: 0.75rem; font-family: var(--font-head); letter-spacing: 0.1em;">ONLINE</span>
+        </div>
+        <div class="list-row">
+          <div class="icon-chip">B</div>
+          <div style="flex: 1;">
+            <div>Barbara</div>
+            <div class="dim" style="font-size: 0.75rem;">Babs' iPhone · 2 min ago</div>
+          </div>
+          <span style="color: var(--green); font-size: 0.75rem; font-family: var(--font-head); letter-spacing: 0.1em;">ONLINE</span>
+        </div>
+        <div class="list-row">
+          <div class="icon-chip">R</div>
+          <div style="flex: 1;">
+            <div>Robin</div>
+            <div class="dim" style="font-size: 0.75rem;">Tim's Pixel · 26 min ago</div>
+          </div>
+          <span class="dim" style="font-size: 0.75rem; font-family: var(--font-head); letter-spacing: 0.1em;">AWAY</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Invite: QR of a single-use token (10 min TTL), revocable
+         (design.md invite flow). The token is NOT the session — scanning
+         mints a fresh session for the invitee on this team. -->
+    <section style="padding: 8px 16px;">
+      <h2 class="headline headline-rule" style="font-size: 0.85rem; margin-bottom: 4px;">Recruit an Operative</h2>
+      <div class="panel" style="text-align: center;">
+        <!-- Placeholder QR: a real build renders the token URL as QR.
+             Mock paints a suggestive block. -->
+        <div style="width: 168px; height: 168px; margin: 8px auto 12px; border: 1px solid var(--border-lit); border-radius: var(--radius);
+                    background:
+                      repeating-conic-gradient(var(--text) 0% 25%, var(--bg-deep) 0% 50%) 0 0 / 24px 24px;
+                    opacity: 0.9;"></div>
+        <p class="subtext">Have your teammate scan this code.</p>
+        <p class="dim" style="font-size: 0.75rem; margin-top: 6px;">
+          Single-use · expires in <span style="font-family: var(--font-num);">07:41</span> ·
+          team cap enforced at redemption
+        </p>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <a class="btn secondary" href="#" style="flex: 1;">New code</a>
+          <a class="btn secondary" href="#" style="flex: 1; color: var(--alert); border-color: var(--alert);">Revoke</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Switch-team warning state (invite edge case, design.md):
+         shown when THIS device scanned someone else's invite while
+         holding evidence on the current team. -->
+    <section style="padding: 8px 16px;">
+      <div class="dim" style="text-align: center; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px;">— switch-team warning variant —</div>
+      <div class="verdict-banner sev-amber">
+        <div class="verdict-chip">!</div>
+        <div style="flex: 1;">
+          <div class="verdict-headline headline-rule">Changing Teams?</div>
+          <p class="subtext" style="margin-top: 6px;">Your evidence and submission history
+          stay with your current team. This cannot be undone.</p>
+          <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <a class="btn secondary" href="#" style="flex: 1;">Stay</a>
+            <a class="btn danger" href="#" style="flex: 1;">Switch team</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tab-bar">
+    <a href="riddle-list.html"><span class="tab-icon">?</span>Riddles</a>
+    <a href="drawer.html"><span class="tab-icon">▤</span>Drawer</a>
+    <a href="team.html" class="active"><span class="tab-icon">⬡</span>Team</a>
+    <a href="standings.html"><span class="tab-icon">≡</span>Standings</a>
+  </nav>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — Stretch-depth mock (per planning decision). MVP renders the
+    same route with one roster row and the invite panel — the UI is already the
+    real thing, so stretch is purely additive. QR encodes a single-use invite
+    token (never the session); expiry countdown comes from
+    <code>team_invite.expires_at</code>. Roster device lines are the
+    <code>device_label</code> + <code>last_seen_at</code> the moderator
+    heuristics use. The switch warning is the invite edge case from design.md —
+    shown here as a review variant.
+  </div>
+
+</div>
+</body>
+</html>

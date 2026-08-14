@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Strike Interstitial</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <!-- Strike 1 interstitial (design.md conduct rules):
+       - appears when /api/state reports me.restriction.pending_notice
+       - plain language, NO Arkham flavor — conduct surfaces are not
+         themed ("the player is told plainly")
+       - acknowledging POSTs /api/me/notice-ack (logs notice.acknowledged)
+       - uploads still allowed after a strike-1 warning
+       Mock shows it over a dimmed riddle board, as it would overlay. -->
+  <main style="flex: 1; position: relative; overflow: hidden;">
+
+    <!-- Dimmed app behind the interstitial -->
+    <div style="filter: brightness(0.35); pointer-events: none;">
+      <div class="tile-grid">
+        <div class="tile"><span class="glyph-q">?</span></div>
+        <div class="tile"><span class="glyph-q">?</span></div>
+        <div class="tile"><span class="glyph-q">?</span></div>
+        <div class="tile"><span class="glyph-q">?</span></div>
+        <div class="tile"><span class="glyph-q">?</span></div>
+        <div class="tile"><span class="glyph-q">?</span></div>
+      </div>
+    </div>
+
+    <!-- The interstitial card: centered, red-channel, plain copy. -->
+    <div style="position: absolute; inset: 0; display: grid; place-items: center; padding: 24px;">
+      <div class="panel" style="border: 1px solid var(--alert); max-width: 340px;">
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div class="verdict-chip" style="background: var(--alert); color: var(--text);">!</div>
+          <div>
+            <h1 class="verdict-headline" style="color: var(--alert);">A submission was removed</h1>
+            <p class="subtext" style="margin-top: 10px;">
+              One of your photos violated the event rules and was removed by a
+              moderator. Repeated violations will restrict your ability to
+              participate in this event.
+            </p>
+            <p class="dim" style="margin-top: 10px; font-size: 0.8rem;">
+              This is a warning. You can keep playing — uploads are still enabled.
+            </p>
+          </div>
+        </div>
+        <button class="btn" style="margin-top: 16px; background: var(--alert); color: var(--text);">I understand</button>
+        <p class="dim" style="text-align: center; font-size: 0.7rem; margin-top: 8px;">
+          Questions? Find the host — moderators can review or reverse strikes.
+        </p>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — Strike-1 (warning) interstitial. Level 2/3 restrictions
+    don't use this screen — they surface as the drawer's upload-suspended
+    variant (see drawer.html). The copy is deliberately un-themed per the
+    conduct rules; the "I understand" ack clears <code>pending_notice</code>
+    so it shows exactly once.
+  </div>
+
+</div>
+</body>
+</html>

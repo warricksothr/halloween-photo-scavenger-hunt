@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Submission / Riddle Detail</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <a href="riddle-list.html" style="color: var(--cyan); text-decoration: none; font-family: var(--font-head); letter-spacing: 0.1em; font-size: 0.8rem;">‹ BOARD</a>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <main style="flex: 1; padding-bottom: 16px;">
+
+    <!-- ══ State A: open riddle, ready to submit ══════════════════
+         Riddle text is green-channel: riddle content belongs to the
+         Riddler (THEME-NOTES palette rule). -->
+    <section style="padding: 16px;">
+      <div class="panel" style="border-left: 3px solid var(--green);">
+        <div class="dim" style="font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.65rem; color: var(--green);">Riddle #5</div>
+        <p style="margin-top: 8px; font-size: 1.05rem; color: var(--green-bright);">
+          “I guard the door but have no hands. I keep the cold but feel no chill.
+          What am I?”
+        </p>
+      </div>
+    </section>
+
+    <!-- Evidence picker: choose from the drawer or capture new
+         (capture routes through the drawer per design.md). -->
+    <section style="padding: 0 16px;">
+      <h2 class="headline headline-rule" style="font-size: 0.85rem; margin-bottom: 10px;">Submit Evidence</h2>
+      <div class="reticle" style="margin: 6px 4px 12px;">
+        <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+        <div class="photo-ph" style="height: 220px;">selected evidence preview</div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <a class="btn secondary" href="drawer.html" style="flex: 1;">From drawer</a>
+        <a class="btn secondary" href="#" style="flex: 1;">New capture</a>
+      </div>
+      <!-- POST /api/submissions → 201 pending | 409 already pending -->
+      <button class="btn">Transmit for Analysis</button>
+      <p class="dim" style="margin-top: 8px; font-size: 0.75rem; text-align: center;">
+        One active scan per riddle. Rejections are free — retry as often as needed.
+      </p>
+    </section>
+
+    <!-- ══ State B: SCANNING... (PENDING) ══════════════════════════
+         From arkham-knight-searching.jpg: centered emblem, cyan headline,
+         white subtext. The reticle brackets + sweep line animate over the
+         submitted photo (detective-mode scan). -->
+    <section style="padding: 24px 16px; border-top: 1px dashed var(--border-dim); margin-top: 24px;">
+      <div class="dim" style="text-align: center; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;">— pending variant —</div>
+      <div class="reticle" style="margin: 6px 16px 16px;">
+        <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+        <div class="photo-ph" style="height: 180px; position: relative; overflow: hidden;">
+          submitted photo
+          <div class="scan-sweep"></div>
+        </div>
+      </div>
+      <div style="text-align: center;">
+        <h2 class="headline" style="font-size: 1.2rem;">Scanning Subject…</h2>
+        <p class="subtext" style="margin-top: 6px;">Cross-referencing with Batcomputer database…</p>
+        <p class="dim" style="margin-top: 10px; font-size: 0.75rem;">You'll be notified the moment analysis completes.</p>
+      </div>
+    </section>
+
+    <!-- ══ State C: verdict received (soft rejection shown) ════════ -->
+    <section style="padding: 24px 16px 0;">
+      <div class="dim" style="text-align: center; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;">— verdict variant —</div>
+      <div class="verdict-banner sev-amber">
+        <div class="verdict-chip">!</div>
+        <div style="flex: 1;">
+          <div class="verdict-headline headline-rule">Misaligned</div>
+          <p class="subtext" style="margin-top: 6px;">Solution partially detected —
+          reframe the subject and try again.</p>
+        </div>
+      </div>
+      <button class="btn" style="margin-top: 12px;">Resubmit Evidence</button>
+    </section>
+
+  </main>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — Three states of one route, stacked for review:
+    <b>A</b> open (pick from drawer or capture new, both through the drawer);
+    <b>B</b> pending (scan sweep over the submitted photo — the
+    <code>SCANNING...</code> skin); <b>C</b> verdict landed via SSE
+    <code>verdict</code> delta, free-resubmission CTA. Soft rejections are
+    amber, <code>NOT_FOUND</code> would be red, <code>VERIFIED</code> green
+    with the tile-grid stamp treatment. A second submit while pending hits
+    the partial unique index → 409 → friendly “already scanning” notice.
+  </div>
+
+</div>
+</body>
+</html>

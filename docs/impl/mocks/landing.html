@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Landing / Join</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <!-- No app chrome on this screen: the player hasn't joined yet.
+       First thing they see after scanning the party QR code. -->
+
+  <main style="padding: 48px 24px 24px; display: flex; flex-direction: column; gap: 24px; flex: 1;">
+
+    <!-- Headline + subtext pattern from the 'searching' reference:
+         cyan headline, white subtext, centered. -->
+    <div style="text-align: center;">
+      <div class="icon-chip" style="margin: 0 auto 16px; width: 56px; height: 56px; font-size: 1.6rem;">?</div>
+      <h1 class="headline" style="font-size: 1.4rem;">Gotham City<br>Scavenger Protocol</h1>
+      <p class="dim" style="margin-top: 10px;">The Riddler has hidden subjects across the
+      venue. Find them. Photograph them. Prove it.</p>
+    </div>
+
+    <!-- The join code arrived via the URL (/j/8XK3Q2MN7P) — the player
+         never types it. api.md: POST /api/join/{join_code}. -->
+    <div class="panel">
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="callsign">Detective callsign</label>
+        <input type="text" id="callsign" placeholder="e.g. Nightwing" value="">
+      </div>
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="device">Device label <span class="dim">(optional)</span></label>
+        <input type="text" id="device" placeholder="e.g. Sam's phone">
+        <p class="dim" style="margin-top: 6px; font-size: 0.75rem;">Shown to moderators
+        to tell devices apart. Not visible to other players.</p>
+      </div>
+      <a class="btn" href="riddle-list.html">Link to Batcomputer</a>
+    </div>
+
+    <!-- Error state the same screen must render:
+         404 bad code / 409 event closed (api.md join responses). -->
+    <div class="verdict-banner sev-red" style="opacity: 0.85;">
+      <div class="verdict-chip">✕</div>
+      <div>
+        <div class="verdict-headline">Access Denied</div>
+        <p class="subtext" style="margin-top: 4px;">This link is no longer valid.
+        Ask the host for a fresh code.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — The error banner above is shown here for review only; in the
+    app it replaces the join panel on a failed join (404/409). Callsign is the only
+    required field. "Link to Batcomputer" posts
+    <code>POST /api/join/{join_code}</code> and lands on the riddle list
+    (lobby-wait variant if the event hasn't opened).
+  </div>
+
+</div>
+</body>
+</html>

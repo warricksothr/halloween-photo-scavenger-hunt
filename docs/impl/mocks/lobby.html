@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock — Lobby (pre-round wait)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/arkham-mock.css">
+</head>
+<body>
+<div class="frame">
+
+  <header class="app-header">
+    <span class="event-name">Gotham Scavenger Protocol</span>
+    <span class="player-name">Nightwing</span>
+  </header>
+
+  <!-- Coverage review: event.status = 'lobby' lets players join before
+       the round opens but accepts no submissions. Joining into a lobby
+       with nowhere to land would be a dead end — this is the holding
+       screen. The SSE 'event_status' delta (opened) flips it to the
+       riddle list without a refresh (ADR 0003: on event_status the
+       client refetches the snapshot). -->
+  <main style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px; padding: 24px;">
+
+    <div style="text-align: center;">
+      <div class="icon-chip" style="margin: 0 auto 18px; width: 64px; height: 64px; font-size: 1.8rem; animation: pulse 2.4s ease-in-out infinite;">⬡</div>
+      <h1 class="headline" style="font-size: 1.5rem;">Awaiting Host Signal</h1>
+      <p class="subtext" style="margin-top: 10px;">You're linked in. The round hasn't
+      opened yet — the riddle board activates the moment the host starts the hunt.</p>
+    </div>
+
+    <div class="panel" style="text-align: center;">
+      <div class="dim" style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 8px;">Linked operatives</div>
+      <div style="font-family: var(--font-num); font-size: 2rem; color: var(--cyan-bright);">17</div>
+      <div class="dim" style="font-size: 0.8rem; margin-top: 4px;">so far — no head start, everyone sees the board at once</div>
+    </div>
+
+    <p class="dim" style="text-align: center; font-size: 0.75rem;">
+      You can close this tab; your session is saved on this device.<br>
+      Reopen the same link to rejoin.
+    </p>
+
+  </main>
+
+  <div class="mock-note">
+    <b>Mock notes</b> — The lobby variant of the post-join landing. Distinct from
+    the riddle list because submissions are rejected in lobby status
+    (<code>POST /api/submissions</code> → 409). The operative count is nice-to-have
+    flavor; if it costs an extra endpoint it can be cut — the screen works without it.
+  </div>
+
+</div>
+</body>
+</html>
