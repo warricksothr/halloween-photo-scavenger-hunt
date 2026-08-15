@@ -23,8 +23,8 @@
   <main style="flex: 1; padding: 24px 24px 16px;">
 
     <!-- ══ State A: creation form ═══════════════════════════════════
-         POST /api/admin/events { name, theme, leaderboard_visibility }
-         → returns the event plus both codes (api.md). -->
+         POST /api/admin/events { name, theme, leaderboard_visibility,
+         team_size_limit? } → returns the event plus both codes (api.md). -->
     <h1 class="headline headline-rule" style="font-size: 1.05rem; margin-bottom: 14px;">New Event</h1>
 
     <section class="panel" style="margin-bottom: 20px;">
@@ -53,6 +53,18 @@
         </div>
         <p class="dim" style="margin-top: 8px; font-size: 0.8rem;">Live keeps the standings tab hot all
         night; sealed hides it until you close the round. Changeable any time.</p>
+      </div>
+
+      <div class="field" style="margin-bottom: 20px;">
+        <label for="ev-team-size">Team size limit</label>
+        <!-- Per-game cap (Event.team_size_limit, CHECK >= 1), enforced at
+             invite-token redemption. 1 = solo players only (MVP default);
+             raise it for team play. Individual teams can override later
+             (Team.size_limit NULL = inherit this). -->
+        <input type="number" id="ev-team-size" min="1" max="8" value="1" style="max-width: 120px;">
+        <p class="dim" style="margin-top: 8px; font-size: 0.8rem;">1 = every player flies solo.
+        Higher values unlock team invites and a shared evidence drawer per team.
+        Changeable any time.</p>
       </div>
 
       <button class="btn" style="max-width: 280px;">Create Event</button>
