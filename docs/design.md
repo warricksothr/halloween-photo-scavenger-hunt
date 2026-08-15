@@ -33,7 +33,7 @@ Verdicts are the core flavor surface. The Arkham theme ships canned Batcomputer/
 | Core state   | Arkham skin        | Meaning                              |
 | ------------ | ------------------ | ------------------------------------ |
 | `PENDING`    | `SCANNING...`      | Awaiting moderator review            |
-| `VERIFIED`   | `SUBJECT VERIFIED` | Accepted, point awarded              |
+| `VERIFIED`   | `RIDDLE SOLVED`    | Accepted, point awarded              |
 | `OBSCURED`   | `SUBJECT OBSCURED` | Right subject, bad photo (blocked/blurry); resubmit |
 | `NOT_FOUND`  | `SUBJECT NOT FOUND`| Wrong subject; resubmit              |
 | `TOO_SMALL`  | `SUBJECT TOO SMALL`| Subject too distant/cropped to verify; resubmit |
@@ -144,7 +144,7 @@ sequenceDiagram
     S-->>M: Appears in moderation queue (SSE)
     M->>S: Verdict (+ optional flavor text)
     alt VERIFIED
-        S-->>A: SUBJECT VERIFIED — riddle solved for team
+        S-->>A: RIDDLE SOLVED — riddle solved for team
     else soft rejection (OBSCURED / TOO_SMALL / MISALIGNED)
         S-->>A: Verdict + guidance — free resubmission
     else NOT_FOUND
@@ -431,9 +431,10 @@ and scoring reference teams. This makes the teams stretch goal purely
 additive (invites, roster UI, multi-member drawers) with no migration.
 
 - `Event` (id, join_code, mod_code, theme, status: lobby/open/closed,
-  leaderboard_visibility: live/final-reveal)
+  leaderboard_visibility: live/final-reveal, team_size_limit)
 - `Riddle` (id, event_id, text, sort order)
-- `Team` (id, event_id, size_limit) — MVP creates one per player, unnamed
+- `Team` (id, event_id, size_limit) — MVP creates one per player, unnamed;
+  `size_limit` NULL means "use the event's `team_size_limit`"
 - `Player` (id, team_id, display_name)
 - `Session` (token, player_id, device_label, created_at, last_seen_at,
   revoked_at) — first-class from the start so moderation can revoke devices
@@ -506,6 +507,9 @@ the moderation tooling around them.
 - **Share limits without fingerprinting**: enforcing "max N members" on
   token *redemption* (one token = one join, team size cap checked at
   redeem time) removes the need for device fingerprinting entirely.
+  The cap is per-game: `Event.team_size_limit`, set at creation and
+  changeable from the admin panel; a team may override it with
+  `Team.size_limit` (NULL = inherit the event default).
   Fingerprinting on the open web is fragile (Safari/ITP, private modes)
   and privacy-unfriendly for a party app; tokens sidestep it. This is the
   recommended design. The abuse vector that remains (a player minting many
@@ -535,8 +539,9 @@ the moderation tooling around them.
 - **Clear registered devices** for a player or whole team (revoke sessions)
   — handles lost phones, accidental joins, or freeing a slot for a new
   member.
-- **Adjust per-team size limit** (event default + per-team override) when
-  the host wants to allow a bigger group.
+- **Adjust per-team size limit** (per-game `team_size_limit` default on
+  the event + per-team override) when the host wants to allow a bigger
+  group.
 
 ### Shared evidence drawer
 

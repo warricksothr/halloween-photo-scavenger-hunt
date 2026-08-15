@@ -63,6 +63,14 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-14 — Review feedback applied: verdict copy + per-game team
+  size.** The `VERIFIED` Arkham skin is now `RIDDLE SOLVED` everywhere
+  (design.md verdict table, THEME-NOTES copy bank, mocks). Team size
+  limits are per-game and admin-configurable: `Event.team_size_limit`
+  (NOT NULL DEFAULT 1, CHECK >= 1) set at creation and PATCHable;
+  `Team.size_limit` stays as the per-team override (NULL = inherit).
+  Touched: design.md, schema.md, api.md (POST/PATCH + state snapshot),
+  admin-event-new.html (new form field), ui.md decision note.
 - Open follow-up (not blocking): perceptual-hash false-positive threshold
   tuning deferred to increment 5, when real party photos exist — record
   the chosen distance threshold here when tuned.

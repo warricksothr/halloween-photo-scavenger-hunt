@@ -104,3 +104,7 @@ strike interstitial, and the drawer restricted variant.
 - **The round-open action is gated on content** — "open the round" is
   disabled until at least one riddle exists (admin-event-new.html), so
   the host can't open an empty board by accident.
+- **Team size is a per-game admin setting** — `team_size_limit` sits on
+  the event-creation form next to leaderboard visibility
+  (admin-event-new.html), default 1 (solo), enforced at invite redemption;
+  per-team override remains the stretch escape hatch (schema.md).

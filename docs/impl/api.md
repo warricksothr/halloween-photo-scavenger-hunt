@@ -41,9 +41,9 @@ host (strike reversals, event purge); moderators only work the queue.
 POST   /api/admin/login                 { username, password } → admin cookie
 POST   /api/admin/logout
 GET    /api/admin/events                → [event summary]
-POST   /api/admin/events                { name, theme, leaderboard_visibility }
-                                        → event + join_code + mod_code
-PATCH  /api/admin/events/{id}           { name?, leaderboard_visibility? }
+POST   /api/admin/events                { name, theme, leaderboard_visibility,
+                                          team_size_limit? }        → event + join_code + mod_code
+PATCH  /api/admin/events/{id}           { name?, leaderboard_visibility?, team_size_limit? }
 POST   /api/admin/events/{id}/open      lobby → open (409 unless lobby)
 POST   /api/admin/events/{id}/close     open → closed; single transaction:
                                         flip status, expire pending subs,
@@ -148,7 +148,8 @@ GET    /api/mod/audit                   full forensic timeline, moderator+
 {
   "event": {
     "id": "…", "name": "…", "status": "open",
-    "leaderboard_visibility": "live", "theme": "arkham"
+    "leaderboard_visibility": "live", "theme": "arkham",
+    "team_size_limit": 1           // per-game default; teams may override
   },
   "me": {
     "player_id": "…", "display_name": "…", "team_id": "…",

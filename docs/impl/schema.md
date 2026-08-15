@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS event (
                             CHECK (status IN ('lobby', 'open', 'closed')),
     leaderboard_visibility  TEXT NOT NULL DEFAULT 'live'
                             CHECK (leaderboard_visibility IN ('live', 'final-reveal')),
+    team_size_limit         INTEGER NOT NULL DEFAULT 1
+                            CHECK (team_size_limit >= 1),
     join_code               TEXT NOT NULL UNIQUE,
     mod_code                TEXT NOT NULL UNIQUE,
     created_at              INTEGER NOT NULL,
@@ -66,7 +68,7 @@ CREATE TABLE IF NOT EXISTS team (
     id          TEXT PRIMARY KEY,
     event_id    TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
     name        TEXT,                    -- NULL in MVP (team of one, unnamed)
-    size_limit  INTEGER,                 -- NULL = event default; stretch override
+    size_limit  INTEGER,                 -- NULL = event.team_size_limit; stretch override
     created_at  INTEGER NOT NULL
 );
 

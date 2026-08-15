@@ -84,7 +84,7 @@ https://interfaceingame.com/games/batman-arkham-city/ .
    not found).
 2. **Notification banner** (from `upgrade-points-earned.jpg`): dark rounded
    panel, hexagonal icon chip on the left, bold uppercase title, thin cyan
-   rule, smaller subtext. → Our verdict notifications: `SUBJECT VERIFIED` /
+   rule, smaller subtext. → Our verdict notifications: `RIDDLE SOLVED` /
    `SUBJECT OBSCURED` / `SUBJECT NOT FOUND`, icon chip = bat emblem / green `?`.
 2. **Tile grid** (from `batcomputer.jpg`): uniform square tiles with thin
    borders; unknown entries shown as a large `?` glyph; unlocked entries show
@@ -113,7 +113,7 @@ https://interfaceingame.com/games/batman-arkham-city/ .
 
 - `PENDING` → "SCANNING SUBJECT…" / "Cross-referencing with Batcomputer
   database…"
-- `VERIFIED` → "SUBJECT VERIFIED. Riddle solved." / "Riddle solved. The
+- `VERIFIED` → "RIDDLE SOLVED." / "Riddle solved. The
   Riddler underestimates you, detective."
 - `OBSCURED` → "SUBJECT OBSCURED. Detective vision cannot resolve the
   subject — adjust your angle." / "Partial match only. Get a clearer shot."
