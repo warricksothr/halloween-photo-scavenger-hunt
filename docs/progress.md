@@ -22,7 +22,7 @@ when the increment runs and its tests pass.
 ## Phase 2 — MVP build
 
 - [x] 1. Backend skeleton (FastAPI, SQLite schema, pytest)
-- [ ] 2. Events & admin (auth, event CRUD, lifecycle, codes)
+- [x] 2. Events & admin (auth, event CRUD, lifecycle, codes)
 - [ ] 3. Player join & sessions
 - [ ] 4. Frontend shell (Preact PWA, theme system, arkham stub)
 - [ ] 5. Evidence pipeline (upload, re-encode, phash, drawer)
@@ -63,6 +63,18 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-14 — Increment 2 complete (events & admin).** Admin login
+  (argon2id via `app/security.py`, env-var credentials, in-memory admin
+  sessions, httpOnly/SameSite=Strict cookie, `cookie_secure` flag for
+  tests), event CRUD + open/close lifecycle (open gated on ≥1 riddle;
+  close expires pending submissions in one transaction), riddle CRUD
+  with 409-in-use. `app/audit.py` lands the closed Action enum +
+  `log_action`; a drift test parses `docs/impl/audit-actions.md` and
+  asserts the enum matches the documented tables exactly. 23 tests
+  pass; curl smoke against a live uvicorn exercised login → create →
+  riddle → open → close with audit rows verified. Gotchas recorded:
+  no module-level `app` (uvicorn `--factory`), Secure cookies need the
+  test-only `cookie_secure=False` flag.
 - **2026-08-14 — Increment 1 complete (backend skeleton).** `server/`
   package: FastAPI app factory + `/api/health`, SQLite bootstrap with
   WAL/foreign_keys pragmas per connection, plain versioned SQL

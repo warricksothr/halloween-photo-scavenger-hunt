@@ -48,7 +48,9 @@ in `docs/` — read it before writing any code:
 - Build/test commands (verified working): install with
   `uv venv server/.venv && uv pip install -p server/.venv -e "server[dev]"`,
   run tests with `server/.venv/bin/python -m pytest server -q`, run the
-  dev server with `server/.venv/bin/uvicorn app.main:app --reload` from
-  the repo root.
+  dev server with `ARKHAM_ADMIN_USERNAME=admin
+  ARKHAM_ADMIN_PASSWORD_HASH=$(server/.venv/bin/python -m app.security 'pw')
+  server/.venv/bin/uvicorn app.main:create_app --factory --reload` from
+  `server/`.
 - Git history was squashed once to purge committed screenshots; treat
   history as owned and force-push only with the user's explicit approval.
