@@ -45,7 +45,10 @@ in `docs/` — read it before writing any code:
 
 ## Gotchas
 
-- There are no build/test commands yet — the repo is docs-only. When code
-  lands, add verified commands here (verify by running before recording).
+- Build/test commands (verified working): install with
+  `uv venv server/.venv && uv pip install -p server/.venv -e "server[dev]"`,
+  run tests with `server/.venv/bin/python -m pytest server -q`, run the
+  dev server with `server/.venv/bin/uvicorn app.main:app --reload` from
+  the repo root.
 - Git history was squashed once to purge committed screenshots; treat
   history as owned and force-push only with the user's explicit approval.

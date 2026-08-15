@@ -21,7 +21,7 @@ when the increment runs and its tests pass.
 
 ## Phase 2 — MVP build
 
-- [ ] 1. Backend skeleton (FastAPI, SQLite schema, pytest)
+- [x] 1. Backend skeleton (FastAPI, SQLite schema, pytest)
 - [ ] 2. Events & admin (auth, event CRUD, lifecycle, codes)
 - [ ] 3. Player join & sessions
 - [ ] 4. Frontend shell (Preact PWA, theme system, arkham stub)
@@ -63,6 +63,15 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-14 — Increment 1 complete (backend skeleton).** `server/`
+  package: FastAPI app factory + `/api/health`, SQLite bootstrap with
+  WAL/foreign_keys pragmas per connection, plain versioned SQL
+  migrations (`app/migrations/0001_init.sql`, transcribed verbatim from
+  `docs/impl/schema.md` incl. `team_size_limit`), 6 passing tests
+  covering the partial unique index, verdict uniqueness, FK pragma, and
+  audit id monotonicity. Gotcha recorded in `db.py`: FastAPI runs sync
+  endpoints in a threadpool, so connections need
+  `check_same_thread=False`.
 - **2026-08-14 — Review feedback applied: verdict copy + per-game team
   size.** The `VERIFIED` Arkham skin is now `RIDDLE SOLVED` everywhere
   (design.md verdict table, THEME-NOTES copy bank, mocks). Team size
