@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app import auth, ids
+from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction, now
 
@@ -101,6 +101,11 @@ def submit(body: SubmissionCreate, request: Request,
         return _err(409, "submission_pending",
                     "Your team already has a submission in review for "
                     "this riddle.")
+
+    # After the commit (sse.publish's contract): tell moderators their
+    # queue grew. Thin payload — the queue refetches for detail.
+    sse.publish(request, ctx.event_id, "submission_new",
+                {"submission_id": submission_id}, to="moderators")
 
     row = conn.execute(
         "SELECT * FROM submission WHERE id = ?", (submission_id,)

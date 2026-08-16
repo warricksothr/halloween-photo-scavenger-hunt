@@ -11,6 +11,7 @@ touches real config or the real ``data/`` directory.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sqlite3
 from collections.abc import Iterator
@@ -20,7 +21,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app import events, evidence, players, state, submissions
+from app import events, evidence, mod, players, sse, state, submissions
 
 
 def create_app(
@@ -68,6 +69,10 @@ def create_app(
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
         app.state.cookie_secure = cookie_secure
         app.state.photos_dir = photos_dir
+        # The broker captures the running loop: sync endpoints publish
+        # from the threadpool, and asyncio queues can only be fed from
+        # the loop's thread (see app/sse.py).
+        app.state.sse_broker = sse.SseBroker(asyncio.get_running_loop())
         yield
         conn.close()
 
@@ -77,6 +82,8 @@ def create_app(
     app.include_router(state.router)
     app.include_router(evidence.router)
     app.include_router(submissions.router)
+    app.include_router(mod.router)
+    app.include_router(sse.router)
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:

@@ -46,4 +46,22 @@ export const api = {
     const query = riddleId ? `?riddle_id=${encodeURIComponent(riddleId)}` : '';
     return request(`/api/evidence${query}`, { method: 'POST', body: form });
   },
+  // ── Moderator (increment 7) ──
+  modJoin: (modCode) =>
+    request(`/api/mod/join/${encodeURIComponent(modCode)}`, { method: 'POST' }),
+  modState: () => request('/api/mod/state'),
+  modQueue: () => request('/api/mod/queue'),
+  modClaim: (submissionId) =>
+    request(`/api/mod/queue/${submissionId}/claim`, { method: 'POST' }),
+  modVerdict: (submissionId, verdict, flavorText) =>
+    request(`/api/mod/queue/${submissionId}/verdict`, {
+      method: 'POST',
+      body: { verdict, flavor_text: flavorText },
+    }),
+  modResolveFlag: (evidenceId, resolution) =>
+    request(`/api/mod/flags/${evidenceId}/resolve`, {
+      method: 'POST',
+      body: { resolution },
+    }),
+  modPlayerHistory: (playerId) => request(`/api/mod/players/${playerId}`),
 };

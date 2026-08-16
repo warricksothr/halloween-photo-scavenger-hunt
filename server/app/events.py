@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids
+from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -185,6 +185,9 @@ def open_event(event_id: str, request: Request,
         log_action(conn, event_id=event_id, actor_type=ActorType.ADMIN,
                    actor_id=None, action=Action.EVENT_OPENED,
                    entity_type="event", entity_id=event_id)
+    # After the commit: everyone (lobby screens especially) refetches
+    # the snapshot. This delta is what lets the lobby drop its 5s poll.
+    sse.publish(request, event_id, "event_status", {"status": "open"})
     return _event_json(_get_event(conn, event_id))
 
 
@@ -219,6 +222,7 @@ def close_event(event_id: str, request: Request,
                    actor_id=None, action=Action.EVENT_CLOSED,
                    entity_type="event", entity_id=event_id,
                    details={"expired_pending": cur.rowcount})
+    sse.publish(request, event_id, "event_status", {"status": "closed"})
     return _event_json(_get_event(conn, event_id))
 
 

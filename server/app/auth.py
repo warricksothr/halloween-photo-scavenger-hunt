@@ -32,6 +32,7 @@ from app import ids
 
 COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
+MOD_COOKIE_NAME = "arkham_mod"
 
 # Throttle for session.last_seen_at writes (schema invariant: max one
 # write per minute per session, so the hot read path doesn't generate a
@@ -187,3 +188,80 @@ def revoke_player_session(
         "UPDATE session SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
         (int(time.time()), session_id),
     )
+
+
+# ── Moderator sessions ────────────────────────────────────────────────
+
+
+@dataclass
+class ModeratorContext:
+    """What a moderator route needs: who they are and which event's
+    queue they're working, resolved from the session cookie."""
+
+    session_id: str
+    moderator_id: str
+    event_id: str
+    label: str
+
+
+def issue_moderator_session(
+    conn: sqlite3.Connection,
+    *,
+    moderator_id: str,
+) -> str:
+    """Mint a moderator_session row and return the bearer token. Same
+    at-rest rule as player sessions: only the SHA-256 hash is stored
+    (moderator_session table, schema.md)."""
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    conn.execute(
+        "INSERT INTO moderator_session (id, token_hash, moderator_id,"
+        " created_at, last_seen_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (ids.new_id(), _hash_token(token), moderator_id, now, now),
+    )
+    return token
+
+
+def current_moderator(request: Request) -> ModeratorContext | None:
+    """Resolve the mod cookie to a live moderator context, with the
+    same throttled last_seen_at write as player sessions."""
+    token = request.cookies.get(MOD_COOKIE_NAME)
+    if not token:
+        return None
+    conn: sqlite3.Connection = request.app.state.db
+    row = conn.execute(
+        "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
+        "       m.id AS moderator_id, m.event_id, m.label"
+        " FROM moderator_session s"
+        " JOIN moderator m ON m.id = s.moderator_id"
+        " WHERE s.token_hash = ?",
+        (_hash_token(token),),
+    ).fetchone()
+    if row is None or row["revoked_at"] is not None:
+        return None
+    now = int(time.time())
+    if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
+        conn.execute(
+            "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
+            (now, row["session_id"]))
+        conn.commit()
+    return ModeratorContext(
+        session_id=row["session_id"],
+        moderator_id=row["moderator_id"],
+        event_id=row["event_id"],
+        label=row["label"],
+    )
+
+
+def require_moderator(request: Request) -> ModeratorContext:
+    """FastAPI dependency: 401 unless the request is an authed
+    moderator. Every /api/mod route lists this."""
+    ctx = current_moderator(request)
+    if ctx is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "not_authenticated",
+                    "message": "Moderator login required."},
+        )
+    return ctx

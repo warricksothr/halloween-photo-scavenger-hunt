@@ -27,7 +27,7 @@ when the increment runs and its tests pass.
 - [x] 4. Frontend shell (Preact PWA, theme system, arkham stub)
 - [x] 5. Evidence pipeline (upload, re-encode, phash, drawer)
 - [x] 6. Submissions & player flow
-- [ ] 7. Moderation queue + verdicts + SSE
+- [x] 7. Moderation queue + verdicts + SSE
 - [ ] 8. Conduct system
 - [ ] 9. Leaderboard & round end
 - [ ] 10. Deployment & ops
@@ -38,6 +38,44 @@ when the increment runs and its tests pass.
 - [ ] Moderator team management
 
 ## Notes / blockers
+
+- **2026-08-16 — Increment 7 complete (moderation queue + verdicts +
+  SSE).** Moderator auth mirrors players: `POST /api/mod/join/{mod_code}`
+  mints a `moderator` row + `moderator_session` (hashed token cookie,
+  `arkham_mod`, SameSite=Lax); `require_moderator` dependency with
+  throttled `last_seen_at`. `app/mod.py`: `GET /api/mod/state` (role
+  probe for the client), `GET /api/mod/queue` (pending oldest-first
+  with photo URL, player, riddle, claim state, open duplicate flags),
+  `POST .../claim` (advisory soft-claim per ADR 0002 — recorded,
+  shown, never enforced, never audited), `POST .../verdict`
+  (conditional `UPDATE WHERE status='pending'` → 409
+  `already_resolved` on a lost race; `verdict.issued` audited;
+  INAPPROPRIATE deliberately excluded — it's increment 8's conduct
+  endpoint), `POST /api/mod/flags/{id}/resolve` (cleared/confirmed →
+  `duplicate_flag.resolved` audit pair), `GET /api/mod/players/{id}`
+  (submissions+verdicts, strikes, sessions with UA/last_seen), and
+  mod-scoped photo serving. `app/sse.py`: in-memory broker on
+  `app.state` (single process — no Redis), role/team-scoped
+  subscriptions, 15s heartbeat, publishers in sync endpoints push via
+  `call_soon_threadsafe` onto the loop captured at startup; publish
+  happens only AFTER the transaction commits. Deltas per api.md:
+  `submission_new`/`queue_resolved` → moderators, `verdict` → owning
+  team, `event_status` → everyone (open/close). Frontend: ModJoin
+  (`/m/<code>`), ModConsole (mock layout: queue list with claim/flag
+  badges, open item with photo + one-tap verdicts + canned flavor from
+  the copy bank + flag resolve buttons), store role detection (player
+  snapshot 401 → mod probe), EventSource client in store.js — every
+  player delta routes to `refresh()` (snapshot stays the single
+  resync point, ADR 0003), moderator deltas refetch the queue via
+  `subscribeDeltas`. All three stopgap polls deleted (lobby, pending
+  tiles, queue). 77 pytest pass (18 new in test_mod.py incl. the
+  two-verdict race: one 200, one 409, exactly one verdict row);
+  `npm run build` green; curl smoke: `curl -N` streams received
+  `submission_new`, `queue_resolved`, `verdict` (with flavor), and
+  `event_status: closed` on the correct role-scoped streams; live
+  two-mod verdict race returned 200/409. Note for increment 10: nginx
+  needs `proxy_buffering off` for the SSE location (the app sends
+  `X-Accel-Buffering: no`, but the proxy config should set it too).
 
 - **2026-08-16 — Increment 6 complete (submissions & player flow).**
   `app/conduct.py`: shared derived-restriction helper (`Restriction`

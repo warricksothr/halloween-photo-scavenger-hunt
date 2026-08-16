@@ -1,0 +1,375 @@
+"""Moderator routes (increment 7).
+
+Moderators are per-event roles, not accounts: the host creates an event,
+hands out the mod link/code (event.mod_code), and joining through it
+mints a ``moderator`` row plus a ``moderator_session`` — the same
+bearer-cookie story as players, with the label kept so the queue can
+say "ORACLE IS VIEWING".
+
+The queue itself, verdicts, flags, and player history follow this
+module's conventions:
+
+- Soft claims are advisory (ADR 0002): recorded so other moderators see
+  the claim, never blocking, never audited (audit-actions.md: claims
+  are high-churn; the committed verdict is the record).
+- Verdicts are conditional writes: ``UPDATE submission ... WHERE status
+  = 'pending'`` — a lost race is an explicit 409, never an overwrite.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
+
+from app import auth, ids, sse
+from app.audit import Action, ActorType, log_action
+
+router = APIRouter(prefix="/api/mod", tags=["moderation"])
+
+
+def _err(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status,
+                        content={"error": code, "message": message})
+
+
+@router.post("/join/{mod_code}", status_code=201)
+def join(mod_code: str, request: Request):
+    conn: sqlite3.Connection = request.app.state.db
+    event = conn.execute(
+        "SELECT * FROM event WHERE mod_code = ?", (mod_code,)
+    ).fetchone()
+    if event is None:
+        # Same rule as the player join code: 404, a bad code is a bad
+        # address (api.md).
+        return _err(404, "bad_mod_code",
+                    "That moderator link doesn't match any event.")
+    if event["status"] == "closed":
+        return _err(409, "event_closed", "This event has already ended.")
+
+    now = int(time.time())
+    moderator_id = ids.new_id()
+    with conn:
+        conn.execute(
+            "INSERT INTO moderator (id, event_id, label, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            (moderator_id, event["id"],
+             f"moderator-{moderator_id[:4]}", now),
+        )
+        token = auth.issue_moderator_session(conn, moderator_id=moderator_id)
+        # No audit row for the join itself: audit-actions.md has no
+        # moderator.joined — moderator presence is not a state mutation
+        # the recap or forensics need (the verdicts they issue are).
+
+    resp = JSONResponse(status_code=201, content={
+        "event": {"id": event["id"], "name": event["name"],
+                  "status": event["status"], "theme": event["theme"]},
+        "moderator": {"id": moderator_id},
+    })
+    # SameSite=Lax like the player cookie: moderators also arrive by
+    # following a link from another app.
+    resp.set_cookie(auth.MOD_COOKIE_NAME, token, httponly=True,
+                    secure=request.app.state.cookie_secure, samesite="lax")
+    return resp
+
+
+# ── The queue ─────────────────────────────────────────────────────────
+
+
+@router.get("/state")
+def mod_state(request: Request,
+              ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """The moderator's boot probe: the client learns its role by trying
+    the player snapshot first (401 for a mod-only cookie) and then this
+    — one cheap endpoint rather than an ambiguous 401 on the queue."""
+    conn: sqlite3.Connection = request.app.state.db
+    event = conn.execute(
+        "SELECT id, name, status, theme FROM event WHERE id = ?",
+        (ctx.event_id,),
+    ).fetchone()
+    return {"event": dict(event), "moderator": {"id": ctx.moderator_id,
+                                                "label": ctx.label}}
+
+# Verdicts a moderator may issue here. INAPPROPRIATE is deliberately
+# absent: it is a conduct action with its own endpoint (increment 8)
+# that issues verdict + strike in one transaction — never a plain
+# verdict.
+GAME_VERDICTS = {"verified", "obscured", "not_found", "too_small",
+                 "misaligned"}
+
+
+def _open_flags(conn: sqlite3.Connection, event_id: str) -> dict[str, dict]:
+    """Open duplicate flags for an event, keyed by the flagged evidence
+    id. A flag is an audit pair (Key Decisions, increment 6): open = a
+    duplicate_flag.raised row with no duplicate_flag.resolved for the
+    same entity_id."""
+    rows = conn.execute(
+        "SELECT entity_id, details FROM audit_event"
+        " WHERE event_id = ? AND action = 'duplicate_flag.raised'"
+        "   AND entity_id NOT IN ("
+        "     SELECT entity_id FROM audit_event"
+        "     WHERE event_id = ? AND action = 'duplicate_flag.resolved')",
+        (event_id, event_id),
+    ).fetchall()
+    return {r["entity_id"]: json.loads(r["details"]) for r in rows}
+
+
+@router.get("/queue")
+def queue(request: Request,
+          ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Pending submissions, oldest first (design.md), each with photo
+    URL, player, riddle, claim state, and any open duplicate flag on
+    the submitted evidence."""
+    conn: sqlite3.Connection = request.app.state.db
+    rows = conn.execute(
+        "SELECT s.id, s.created_at, s.claimed_by, s.team_id,"
+        "       r.id AS riddle_id, r.text AS riddle_text,"
+        "       r.sort_order AS riddle_sort,"
+        "       p.id AS player_id, p.display_name,"
+        "       e.id AS evidence_id,"
+        "       m.label AS claimer_label"
+        " FROM submission s"
+        " JOIN riddle r ON r.id = s.riddle_id"
+        " JOIN player p ON p.id = s.submitted_by"
+        " JOIN evidence_item e ON e.id = s.evidence_item_id"
+        " LEFT JOIN moderator m ON m.id = s.claimed_by"
+        " WHERE s.status = 'pending' AND r.event_id = ?"
+        " ORDER BY s.created_at ASC",
+        (ctx.event_id,),
+    ).fetchall()
+    flags = _open_flags(conn, ctx.event_id)
+    return [
+        {
+            "id": r["id"],
+            "created_at": r["created_at"],
+            "riddle": {"id": r["riddle_id"], "text": r["riddle_text"],
+                       "sort_order": r["riddle_sort"]},
+            "player": {"id": r["player_id"],
+                       "display_name": r["display_name"]},
+            "evidence": {
+                "id": r["evidence_id"],
+                # Moderators get a mod-scoped photo URL: the player
+                # endpoint 404s anyone outside the owning team.
+                "photo_url": f"/api/mod/evidence/{r['evidence_id']}/photo",
+            },
+            "claimed_by": (
+                {"id": r["claimed_by"], "label": r["claimer_label"]}
+                if r["claimed_by"] else None),
+            "flag": flags.get(r["evidence_id"]),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/queue/{submission_id}/claim")
+def claim(submission_id: str, request: Request,
+          ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Soft-claim a pending submission (ADR 0002). Advisory only: it
+    never blocks another moderator, is overwritten by the latest viewer,
+    and is never audited (audit-actions.md: high-churn advisory)."""
+    conn: sqlite3.Connection = request.app.state.db
+    with conn:
+        cur = conn.execute(
+            "UPDATE submission SET claimed_by = ?, claimed_at = ?"
+            " WHERE id = ? AND status = 'pending'"
+            "   AND riddle_id IN (SELECT id FROM riddle WHERE event_id = ?)",
+            (ctx.moderator_id, int(time.time()), submission_id,
+             ctx.event_id),
+        )
+    if cur.rowcount == 0:
+        return _err(404, "not_found", "No such pending submission.")
+    return {"ok": True}
+
+
+class VerdictBody(BaseModel):
+    verdict: str
+    flavor_text: str = Field(default="", max_length=280)
+
+
+@router.post("/queue/{submission_id}/verdict")
+def verdict(submission_id: str, body: VerdictBody, request: Request,
+            ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Commit a verdict. The conditional UPDATE is the whole concurrency
+    story (ADR 0002): only a still-pending row can be flipped, so two
+    moderators racing produce one verdict and one explicit 409 — never
+    a silent overwrite."""
+    if body.verdict not in GAME_VERDICTS:
+        return _err(422, "bad_verdict",
+                    f"Verdict must be one of {sorted(GAME_VERDICTS)}.")
+
+    conn: sqlite3.Connection = request.app.state.db
+    sub = conn.execute(
+        "SELECT s.id, s.status, s.team_id, s.riddle_id FROM submission s"
+        " JOIN riddle r ON r.id = s.riddle_id"
+        " WHERE s.id = ? AND r.event_id = ?",
+        (submission_id, ctx.event_id),
+    ).fetchone()
+    if sub is None:
+        return _err(404, "not_found", "No such submission.")
+
+    now = int(time.time())
+    with conn:
+        cur = conn.execute(
+            "UPDATE submission SET status = ?"
+            " WHERE id = ? AND status = 'pending'",
+            (body.verdict, submission_id),
+        )
+        if cur.rowcount == 0:
+            # Lost the race (another verdict, or round closure expired
+            # it first). Explicit, never silent (design.md).
+            return _err(409, "already_resolved",
+                        "That submission was already resolved.")
+        conn.execute(
+            "INSERT INTO verdict (id, submission_id, moderator_id,"
+            " verdict, flavor_text, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (ids.new_id(), submission_id, ctx.moderator_id,
+             body.verdict, body.flavor_text, now),
+        )
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.VERDICT_ISSUED, entity_type="submission",
+                   entity_id=submission_id,
+                   details={"verdict": body.verdict,
+                            "flavor_text": body.flavor_text})
+
+    # After the commit: the owning team gets their verdict, and every
+    # moderator hears the item left the queue (so a second mod's open
+    # view doesn't linger on a resolved photo).
+    sse.publish(request, ctx.event_id, "verdict",
+                {"submission_id": submission_id,
+                 "riddle_id": sub["riddle_id"],
+                 "status": body.verdict,
+                 "flavor": body.flavor_text},
+                to="team", team_id=sub["team_id"])
+    sse.publish(request, ctx.event_id, "queue_resolved",
+                {"submission_id": submission_id, "status": body.verdict},
+                to="moderators")
+
+    return {"id": submission_id, "status": body.verdict}
+
+
+@router.get("/evidence/{evidence_id}/photo")
+def evidence_photo(evidence_id: str, request: Request,
+                   ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Moderator photo access (api.md: derivative only; owner team or
+    moderator). The queue needs to show any team's photo, including
+    quarantined items — moderators are exactly who quarantine is FOR."""
+    conn: sqlite3.Connection = request.app.state.db
+    row = conn.execute(
+        "SELECT e.photo_path FROM evidence_item e"
+        " JOIN team t ON t.id = e.team_id"
+        " WHERE e.id = ? AND t.event_id = ?",
+        (evidence_id, ctx.event_id),
+    ).fetchone()
+    if row is None:
+        # 404, not 403 — same don't-confirm-existence rule as players.
+        return _err(404, "not_found", "No such photo.")
+    path = request.app.state.photos_dir / row["photo_path"]
+    if not path.exists():
+        return _err(404, "not_found", "No such photo.")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+# ── Duplicate flags ───────────────────────────────────────────────────
+
+
+class FlagResolutionBody(BaseModel):
+    resolution: str  # "cleared" | "confirmed" (audit-actions.md)
+
+
+@router.post("/flags/{evidence_id}/resolve")
+def resolve_flag(evidence_id: str, body: FlagResolutionBody,
+                 request: Request,
+                 ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Close an open duplicate-evidence flag by writing its resolution
+    row (flags are audit pairs — increment 6 decision). A resolved flag
+    disappears from the queue's flag banners.
+
+    'confirmed' only records the moderator's judgment here; the actual
+    consequences (quarantine, strike) are increment 8's conduct flow,
+    which reads the same flag history."""
+    if body.resolution not in {"cleared", "confirmed"}:
+        return _err(422, "bad_resolution",
+                    "Resolution must be 'cleared' or 'confirmed'.")
+
+    conn: sqlite3.Connection = request.app.state.db
+    # The flag must exist, belong to this event, and still be open.
+    open_flags = _open_flags(conn, ctx.event_id)
+    if evidence_id not in open_flags:
+        return _err(404, "not_found", "No open flag for that evidence.")
+
+    with conn:
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.DUPLICATE_FLAG_RESOLVED,
+                   entity_type="evidence_item", entity_id=evidence_id,
+                   details={"resolution": body.resolution})
+    return {"ok": True}
+
+
+# ── Per-player history ────────────────────────────────────────────────
+
+
+@router.get("/players/{player_id}")
+def player_history(player_id: str, request: Request,
+                   ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Everything a moderator needs to judge one player consistently
+    (design.md): their submissions with verdicts, their strikes, and
+    their sessions (UA + last_seen — the multi-teaming heuristic from
+    api.md). Read-only; reads are never audited (ADR 0004)."""
+    conn: sqlite3.Connection = request.app.state.db
+    player = conn.execute(
+        "SELECT p.id, p.display_name, p.created_at, p.team_id"
+        " FROM player p JOIN team t ON t.id = p.team_id"
+        " WHERE p.id = ? AND t.event_id = ?",
+        (player_id, ctx.event_id),
+    ).fetchone()
+    if player is None:
+        # 404, not 403: a player id from another event is simply not
+        # here — don't confirm it exists anywhere.
+        return _err(404, "not_found", "No such player on this event.")
+
+    subs = conn.execute(
+        "SELECT s.id, s.status, s.created_at,"
+        "       r.text AS riddle_text, r.sort_order AS riddle_sort,"
+        "       v.verdict, v.flavor_text"
+        " FROM submission s"
+        " JOIN riddle r ON r.id = s.riddle_id"
+        " LEFT JOIN verdict v ON v.submission_id = s.id"
+        " WHERE s.submitted_by = ?"
+        " ORDER BY s.created_at DESC",
+        (player_id,),
+    ).fetchall()
+    strikes = conn.execute(
+        "SELECT id, level, cooldown_until, note, reversed_at, created_at"
+        " FROM strike WHERE player_id = ? ORDER BY created_at ASC",
+        (player_id,),
+    ).fetchall()
+    sessions = conn.execute(
+        "SELECT device_label, user_agent, created_at, last_seen_at,"
+        "       revoked_at FROM session"
+        " WHERE player_id = ? ORDER BY last_seen_at DESC",
+        (player_id,),
+    ).fetchall()
+
+    return {
+        "player": {"id": player["id"],
+                   "display_name": player["display_name"],
+                   "team_id": player["team_id"],
+                   "created_at": player["created_at"]},
+        "submissions": [
+            {"id": s["id"], "status": s["status"],
+             "riddle": {"text": s["riddle_text"],
+                        "sort_order": s["riddle_sort"]},
+             "verdict": s["verdict"], "flavor_text": s["flavor_text"],
+             "created_at": s["created_at"]}
+            for s in subs
+        ],
+        "strikes": [dict(s) for s in strikes],
+        "sessions": [dict(s) for s in sessions],
+    }

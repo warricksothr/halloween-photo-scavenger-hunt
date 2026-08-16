@@ -4,6 +4,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { getState, refresh, subscribe } from './store';
 import { Header } from './components/Header';
 import { JoinScreen } from './screens/Join';
+import { ModJoinScreen } from './screens/ModJoin';
+import { ModConsoleScreen } from './screens/ModConsole';
 import { LobbyScreen } from './screens/Lobby';
 import { RiddleListScreen } from './screens/RiddleList';
 import { RiddleDetailScreen } from './screens/RiddleDetail';
@@ -43,11 +45,26 @@ function App() {
   }
 
   if (state.phase === 'join') {
+    // The mod link is the only other unauthenticated surface; its path
+    // decides which join screen shows before any session exists.
+    if (window.location.pathname.startsWith('/m/')) {
+      return <ModJoinScreen />;
+    }
     return <JoinScreen />;
   }
 
-  // phase === 'ready': the snapshot drives the rest.
-  const { snapshot, copy } = state;
+  // phase === 'ready': the role decides the shell. Moderators get the
+  // work queue — no tabs, no game chrome (mock: "this is a work
+  // queue, not the game").
+  const { snapshot, modEvent, copy } = state;
+  if (state.role === 'moderator') {
+    return (
+      <div class="frame">
+        <Header eventName={`${modEvent.name} — Moderator`} playerName="console" />
+        <ModConsoleScreen modEvent={modEvent} copy={copy} />
+      </div>
+    );
+  }
   if (snapshot.event.status === 'lobby') {
     return (
       <div class="frame">
@@ -64,20 +81,11 @@ function App() {
 // single screen stack at party scale, and preact-router adds nothing
 // until deep links exist.
 //
-// The shell also owns the SCANNING poll: while any riddle tile is
-// pending, the moderator verdict could land at any moment, so the
-// snapshot refreshes on a 5s interval. SSE deltas (increment 7) will
-// replace this; the poll is the honest stopgap.
+// No polling anywhere: the store's SSE stream delivers verdict deltas
+// (SCANNING → verdict) and event_status, each routing to refresh().
 function GameShell({ snapshot, copy }) {
   const [tab, setTab] = useState('riddles');
   const [openRiddle, setOpenRiddle] = useState(null);
-
-  const hasPending = snapshot.riddles.some((r) => r.state === 'pending');
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = setInterval(refresh, 5000);
-    return () => clearInterval(timer);
-  }, [hasPending]);
 
   let screen;
   if (openRiddle) {
