@@ -52,5 +52,9 @@ in `docs/` — read it before writing any code:
   ARKHAM_ADMIN_PASSWORD_HASH=$(server/.venv/bin/python -m app.security 'pw')
   server/.venv/bin/uvicorn app.main:create_app --factory --reload` from
   `server/`.
+- Frontend (web/): `cd web && npm install`, `npm run dev` (proxies /api
+  to uvicorn on :8000), `npm run build`. The Vite Preact plugin is
+  `@preact/preset-vite` — `@preact/preset-preact` is the old preact-cli
+  preset and 404s on npm.
 - Git history was squashed once to purge committed screenshots; treat
   history as owned and force-push only with the user's explicit approval.

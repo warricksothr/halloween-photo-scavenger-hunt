@@ -24,7 +24,7 @@ when the increment runs and its tests pass.
 - [x] 1. Backend skeleton (FastAPI, SQLite schema, pytest)
 - [x] 2. Events & admin (auth, event CRUD, lifecycle, codes)
 - [x] 3. Player join & sessions
-- [ ] 4. Frontend shell (Preact PWA, theme system, arkham stub)
+- [x] 4. Frontend shell (Preact PWA, theme system, arkham stub)
 - [ ] 5. Evidence pipeline (upload, re-encode, phash, drawer)
 - [ ] 6. Submissions & player flow
 - [ ] 7. Moderation queue + verdicts + SSE
@@ -63,6 +63,21 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-16 — Increment 4 complete (frontend shell).** `web/`
+  scaffold: Vite 5 + Preact (plain JSX, no TS — teaching ethos), PWA
+  manifest + service worker (cache-first shell, network-only /api),
+  theme system as CSS tokens + copy config (`web/src/themes/arkham/`
+  lifted from the mock stylesheet; verdict copy bank in `copy.js`;
+  conduct strings deliberately absent). Store mirrors the snapshot only
+  (`store.js`: booting/join/ready/error phases, `refresh()` is the
+  single resync point). Screens: join (with `/j/<code>` path parsing),
+  lobby (5s poll until SSE lands), riddle-list tile grid. Backend grew
+  `GET /api/state` (player snapshot per api.md, derived restriction).
+  Gotcha recorded: the Vite plugin is `@preact/preset-vite`, NOT
+  `preset-preact` (that's the old preact-cli preset — 404s on npm).
+  Verified: `npm run build` green (21.7 kB JS), 37 pytest pass, curl
+  end-to-end through the Vite proxy: login → event → open → join →
+  snapshot with correct shape.
 - **2026-08-14 — Increment 3 complete (player join & sessions).**
   `POST /api/join/{code}` creates team-of-one + player + session in one
   transaction (logs `player.joined`); session cookie is httpOnly,

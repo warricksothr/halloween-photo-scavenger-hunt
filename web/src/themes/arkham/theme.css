@@ -1,0 +1,363 @@
+/* Arkham theme pack — design tokens and component styles.
+ *
+ * Lifted from docs/impl/mocks/assets/arkham-mock.css, which was written
+ * with these names on purpose: the mock stylesheet was the prototype of
+ * this file. Palette + anatomy rationale: docs/reference/THEME-NOTES.md.
+ *
+ * The theme system is CSS variables + a copy config (copy.js) — a new
+ * theme pack is a new directory with its own tokens and strings, never
+ * a fork of the app (design.md: "theme = skin over a neutral core").
+ */
+
+:root {
+  /* Base: near-black blues / gunmetal */
+  --bg-deep: #0a0e14;
+  --bg-panel: #101820;
+  --bg-panel-translucent: rgba(16, 24, 32, 0.88);
+  --border-dim: #1e2c3a;
+  --border-lit: #2f4557;
+
+  /* Primary accent — Batcomputer cyan */
+  --cyan: #7fd4e8;
+  --cyan-bright: #a8e6f5;
+  --cyan-dim: #4a7d8f;
+
+  /* Riddler green — riddle/verdict surfaces ONLY */
+  --green: #3ddc84;
+  --green-bright: #7cfc00;
+
+  /* Alert / warning */
+  --alert: #ff4d3a;
+  --amber: #ffb84d;   /* soft rejections: warmer than "wrong" */
+
+  /* Text */
+  --text: #f2f6f8;
+  --text-dim: #8b98a5;
+
+  /* Type scale — condensed geometric headings, light body.
+   * The Google Fonts <link> lives in index.html. */
+  --font-head: 'Rajdhani', 'Saira Condensed', sans-serif;
+  --font-num: 'Orbitron', monospace;
+  --font-body: 'Rajdhani', sans-serif;
+
+  --radius: 4px;
+  --rule: 1px solid var(--border-dim);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.45;
+  min-height: 100vh;
+  /* Faint hex/tech patterning — Batcomputer panel texture. */
+  background-image:
+    linear-gradient(30deg, rgba(127, 212, 232, 0.025) 12%, transparent 12.5%, transparent 87%, rgba(127, 212, 232, 0.025) 87.5%),
+    linear-gradient(150deg, rgba(127, 212, 232, 0.025) 12%, transparent 12.5%, transparent 87%, rgba(127, 212, 232, 0.025) 87.5%);
+  background-size: 48px 84px;
+}
+
+/* Phone-frame: mobile-first party screens. */
+.frame {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  border-left: var(--rule);
+  border-right: var(--rule);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Chrome ──────────────────────────────────────────────────────── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: var(--rule);
+  background: var(--bg-panel-translucent);
+}
+
+.app-header .event-name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+  color: var(--cyan);
+}
+
+.app-header .player-name {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.tab-bar {
+  margin-top: auto;
+  display: flex;
+  border-top: var(--rule);
+  background: var(--bg-panel-translucent);
+}
+
+.tab-bar a {
+  flex: 1;
+  text-align: center;
+  padding: 12px 4px;
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-top: 2px solid transparent;
+}
+
+.tab-bar a.active {
+  color: var(--cyan-bright);
+  border-top-color: var(--cyan);
+}
+
+.tab-bar .tab-icon { display: block; font-size: 1.1rem; margin-bottom: 2px; }
+
+/* ── Typography primitives ───────────────────────────────────────── */
+
+.headline {
+  font-family: var(--font-head);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--cyan-bright);
+}
+
+.subtext { color: var(--text); font-size: 0.9rem; }
+.dim     { color: var(--text-dim); font-size: 0.85rem; }
+
+/* Headline + cyan rule pattern from the riddle-scan HUD. */
+.headline-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headline-rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+}
+
+/* ── Verdict banner (riddle-scan HUD anatomy) ────────────────────── */
+/* chip + uppercase headline + cyan rule + white subtext.
+ * Severity modifiers: .sev-green / .sev-amber / .sev-red / .sev-cyan */
+
+.verdict-banner {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--bg-panel-translucent);
+  border: var(--rule);
+  border-radius: var(--radius);
+}
+
+.verdict-chip {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--bg-deep);
+  border-radius: var(--radius);
+}
+
+.sev-green .verdict-chip { background: var(--green); }
+.sev-amber .verdict-chip { background: var(--amber); }
+.sev-red   .verdict-chip { background: var(--alert); color: var(--text); }
+.sev-cyan  .verdict-chip { background: var(--cyan); }
+
+.sev-green .verdict-headline { color: var(--green-bright); }
+.sev-amber .verdict-headline { color: var(--amber); }
+.sev-red   .verdict-headline { color: var(--alert); }
+.sev-cyan  .verdict-headline { color: var(--cyan-bright); }
+
+.verdict-headline {
+  font-family: var(--font-head);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 1rem;
+}
+
+/* ── Buttons & chips ─────────────────────────────────────────────── */
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-family: var(--font-head);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.9rem;
+  text-align: center;
+  color: var(--bg-deep);
+  background: var(--cyan);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: var(--cyan);
+  border: 1px solid var(--cyan-dim);
+}
+
+.btn.danger {
+  background: var(--alert);
+  color: var(--text);
+}
+
+.btn:disabled, .btn.disabled {
+  background: var(--border-dim);
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.icon-chip {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius);
+  color: var(--cyan);
+  font-size: 0.95rem;
+}
+
+/* ── Riddle tile grid (Batcomputer) ──────────────────────────────── */
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 16px;
+}
+
+.tile {
+  aspect-ratio: 1;
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  background: var(--bg-panel-translucent);
+  position: relative;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tile .glyph-q {
+  font-family: var(--font-num);
+  font-size: 2rem;
+  color: var(--cyan-dim);
+}
+
+.tile.solved { border-color: var(--green); }
+.tile.solved .glyph-q { color: var(--green); }
+
+.tile.scanning { border-color: var(--cyan); }
+.tile.scanning .glyph-q { color: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── Progress strip (thin bar with segment ticks) ────────────────── */
+
+.progress-strip {
+  display: flex;
+  gap: 3px;
+  padding: 0 16px;
+}
+
+.progress-strip .seg {
+  flex: 1;
+  height: 4px;
+  background: var(--border-dim);
+  border-radius: 2px;
+}
+
+.progress-strip .seg.done { background: var(--green); }
+.progress-strip .seg.pending { background: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
+
+/* ── Scan sweep animation for the SCANNING... state ──────────────── */
+
+@keyframes sweep {
+  0% { top: 0; }
+  50% { top: calc(100% - 2px); }
+  100% { top: 0; }
+}
+
+.scan-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan-bright), transparent);
+  animation: sweep 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Forms ───────────────────────────────────────────────────────── */
+
+.field label {
+  display: block;
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  color: var(--cyan);
+  margin-bottom: 6px;
+}
+
+.field input[type='text'],
+.field input[type='number'] {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+}
+
+.field input:focus { outline: none; border-color: var(--cyan); }
+
+/* ── Lists / panels ──────────────────────────────────────────────── */
+
+.panel {
+  background: var(--bg-panel-translucent);
+  border: var(--rule);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: var(--rule);
+}
+
+.list-row:last-child { border-bottom: none; }
