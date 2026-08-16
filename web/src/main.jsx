@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { JoinScreen } from './screens/Join';
 import { LobbyScreen } from './screens/Lobby';
 import { RiddleListScreen } from './screens/RiddleList';
+import { DrawerScreen } from './screens/Drawer';
 
 // The shell owns phase routing: which top-level screen shows depends on
 // the store's phase and, once ready, the event status. This is the
@@ -46,12 +47,39 @@ function App() {
 
   // phase === 'ready': the snapshot drives the rest.
   const { snapshot, copy } = state;
+  if (snapshot.event.status === 'lobby') {
+    return (
+      <div class="frame">
+        <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
+        <LobbyScreen copy={copy} />
+      </div>
+    );
+  }
+  return <GameShell snapshot={snapshot} copy={copy} />;
+}
+
+// In-game shell: header + active tab screen + tab bar. Tabs are
+// local component state (not the URL) — the PWA is a single screen
+// stack at party scale, and preact-router adds nothing until deep
+// links exist (riddle detail arrives with increment 6).
+function GameShell({ snapshot, copy }) {
+  const [tab, setTab] = useState('riddles');
   return (
     <div class="frame">
       <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
-      {snapshot.event.status === 'lobby'
-        ? <LobbyScreen copy={copy} />
-        : <RiddleListScreen snapshot={snapshot} copy={copy} />}
+      {tab === 'riddles'
+        ? <RiddleListScreen snapshot={snapshot} copy={copy} />
+        : <DrawerScreen copy={copy} />}
+      <nav class="tab-bar">
+        <a href="#" class={tab === 'riddles' ? 'active' : ''}
+           onClick={(e) => { e.preventDefault(); setTab('riddles'); }}>
+          <span class="tab-icon">?</span>{copy.tabs.riddles}
+        </a>
+        <a href="#" class={tab === 'drawer' ? 'active' : ''}
+           onClick={(e) => { e.preventDefault(); setTab('drawer'); }}>
+          <span class="tab-icon">▦</span>{copy.tabs.drawer}
+        </a>
+      </nav>
     </div>
   );
 }

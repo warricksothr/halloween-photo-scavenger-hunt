@@ -62,6 +62,18 @@ export default {
       headline: 'Riddle Board',
       empty: 'No riddles on the board yet.',
     },
+    drawer: {
+      headline: 'Evidence Drawer',
+      capture: 'Take a Photo',
+      uploading: 'Uploading…',
+      loading: 'Opening the drawer…',
+      empty: 'No evidence yet. Take a photo of something suspicious.',
+    },
+  },
+
+  tabs: {
+    riddles: 'Riddles',
+    drawer: 'Drawer',
   },
 
   tiles: {

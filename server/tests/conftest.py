@@ -60,6 +60,7 @@ def client(tmp_path):
         tmp_path / "api.db",
         admin_config=(ADMIN_USER, hash_password(ADMIN_PASSWORD)),
         cookie_secure=False,
+        photos_dir=tmp_path / "photos",
     )
     with TestClient(app) as c:
         yield c

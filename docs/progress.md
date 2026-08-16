@@ -25,7 +25,7 @@ when the increment runs and its tests pass.
 - [x] 2. Events & admin (auth, event CRUD, lifecycle, codes)
 - [x] 3. Player join & sessions
 - [x] 4. Frontend shell (Preact PWA, theme system, arkham stub)
-- [ ] 5. Evidence pipeline (upload, re-encode, phash, drawer)
+- [x] 5. Evidence pipeline (upload, re-encode, phash, drawer)
 - [ ] 6. Submissions & player flow
 - [ ] 7. Moderation queue + verdicts + SSE
 - [ ] 8. Conduct system
@@ -63,6 +63,23 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-16 — Increment 5 complete (evidence pipeline).**
+  `app/images.py`: magic-byte sniffing (JPEG/PNG/WebP), EXIF
+  orientation applied before strip (`ImageOps.exif_transpose`),
+  dimension caps (15 MB wire / 1920px long edge / 50 MP decompressed
+  bomb guard), clean JPEG re-encode (EXIF+GPS stripped implicitly),
+  64-bit aHash perceptual hash. `app/evidence.py`: `POST /api/evidence`
+  runs the pipeline via `run_in_threadpool` (never in async code),
+  rolling team rate limit (30/10min), row+audit in one transaction,
+  original quarantined to disk and never served; `GET /api/evidence`
+  drawer; `GET /api/evidence/{id}/photo` returns 404 (not 403) for
+  other teams/quarantined. Frontend drawer screen with camera capture
+  (`<input type="file" accept="image/*" capture>`), FormData upload,
+  tab bar (Riddles/Drawer) in the shell. 48 pytest pass; curl upload
+  round-trip verified (401 unauthed, derivative served, audit row).
+  Note: flat-color images all hash identically under aHash (algorithm
+  property) — real photos are unaffected; cross-team flag lands in
+  increment 6.
 - **2026-08-16 — Increment 4 complete (frontend shell).** `web/`
   scaffold: Vite 5 + Preact (plain JSX, no TS — teaching ethos), PWA
   manifest + service worker (cache-first shell, network-only /api),

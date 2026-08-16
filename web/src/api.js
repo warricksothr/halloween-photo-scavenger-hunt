@@ -6,10 +6,13 @@
 // docs/impl/api.md: {"error": code, "message": human string}.
 
 async function request(path, options = {}) {
+  // FormData bodies (photo upload) must NOT set Content-Type — the
+  // browser sets it with the multipart boundary.
+  const isForm = options.body instanceof FormData;
   const resp = await fetch(path, {
-    headers: options.body ? { 'Content-Type': 'application/json' } : {},
+    headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
     ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
   });
   if (resp.status === 401) {
     // Not joined (or session revoked) — the store routes to the join
@@ -31,4 +34,11 @@ export const api = {
       body: { display_name: displayName, device_label: deviceLabel },
     }),
   logout: () => request('/api/logout', { method: 'POST' }),
+  drawer: () => request('/api/evidence'),
+  upload: (file, riddleId) => {
+    const form = new FormData();
+    form.append('photo', file);
+    const query = riddleId ? `?riddle_id=${encodeURIComponent(riddleId)}` : '';
+    return request(`/api/evidence${query}`, { method: 'POST', body: form });
+  },
 };

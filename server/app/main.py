@@ -20,13 +20,14 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app import events, players, state
+from app import events, evidence, players, state
 
 
 def create_app(
     db_path: Path | str = db_module.DEFAULT_DB_PATH,
     admin_config: tuple[str, str] | None = None,
     cookie_secure: bool = True,
+    photos_dir: Path | None = None,
 ) -> FastAPI:
     """Build the app around one database and one admin credential pair.
 
@@ -53,6 +54,11 @@ def create_app(
     # behavior in production (the VPS terminates TLS) and a silent 401
     # factory everywhere else.
 
+    # Photos live beside the DB by default (data/photos/ — gitignored);
+    # tests inject their own temp dir so no test writes real files.
+    if photos_dir is None:
+        photos_dir = Path(db_path).parent / "photos"
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Iterator[None]:
         conn = db_module.connect(db_path)
@@ -61,6 +67,7 @@ def create_app(
         app.state.admin_config = admin_config
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
         app.state.cookie_secure = cookie_secure
+        app.state.photos_dir = photos_dir
         yield
         conn.close()
 
@@ -68,6 +75,7 @@ def create_app(
     app.include_router(events.router)
     app.include_router(players.router)
     app.include_router(state.router)
+    app.include_router(evidence.router)
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:
