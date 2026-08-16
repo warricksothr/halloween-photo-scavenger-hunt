@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app import events
+from app import events, players
 
 
 def create_app(
@@ -66,6 +66,7 @@ def create_app(
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
     app.include_router(events.router)
+    app.include_router(players.router)
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:

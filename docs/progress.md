@@ -23,7 +23,7 @@ when the increment runs and its tests pass.
 
 - [x] 1. Backend skeleton (FastAPI, SQLite schema, pytest)
 - [x] 2. Events & admin (auth, event CRUD, lifecycle, codes)
-- [ ] 3. Player join & sessions
+- [x] 3. Player join & sessions
 - [ ] 4. Frontend shell (Preact PWA, theme system, arkham stub)
 - [ ] 5. Evidence pipeline (upload, re-encode, phash, drawer)
 - [ ] 6. Submissions & player flow
@@ -63,6 +63,17 @@ when the increment runs and its tests pass.
   `api.md` (endpoint inventory, state snapshot shape, SSE delta table),
   `audit-actions.md` (closed action enum + recap subset). Next step:
   increment 1 (backend skeleton).
+- **2026-08-14 — Increment 3 complete (player join & sessions).**
+  `POST /api/join/{code}` creates team-of-one + player + session in one
+  transaction (logs `player.joined`); session cookie is httpOnly,
+  SameSite=Lax (players arrive via QR from another app — Strict would
+  drop it), token SHA-256-hashed at rest. `auth.py` gains
+  `require_player`/`current_player` with throttled `last_seen_at` (max
+  one write per 60s, tested by monkeypatching time), and idempotent
+  revocation; `POST /api/logout` logs `session.revoked`.
+  `POST /api/me/notice-ack` deferred to increment 8 with the strike
+  system it serves. 34 tests pass; curl exercised the cookie
+  round-trip: join → logout → replayed revoked token → 401.
 - **2026-08-14 — Increment 2 complete (events & admin).** Admin login
   (argon2id via `app/security.py`, env-var credentials, in-memory admin
   sessions, httpOnly/SameSite=Strict cookie, `cookie_secure` flag for
