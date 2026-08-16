@@ -26,7 +26,7 @@ when the increment runs and its tests pass.
 - [x] 3. Player join & sessions
 - [x] 4. Frontend shell (Preact PWA, theme system, arkham stub)
 - [x] 5. Evidence pipeline (upload, re-encode, phash, drawer)
-- [ ] 6. Submissions & player flow
+- [x] 6. Submissions & player flow
 - [ ] 7. Moderation queue + verdicts + SSE
 - [ ] 8. Conduct system
 - [ ] 9. Leaderboard & round end
@@ -38,6 +38,32 @@ when the increment runs and its tests pass.
 - [ ] Moderator team management
 
 ## Notes / blockers
+
+- **2026-08-16 — Increment 6 complete (submissions & player flow).**
+  `app/conduct.py`: shared derived-restriction helper (`Restriction`
+  dataclass + `derive_restriction`, ADR 0001) used by state.py,
+  evidence.py, submissions.py. `app/submissions.py`:
+  `POST /api/submissions` — 409 `event_not_open`, 404 unknown riddle /
+  foreign-or-quarantined evidence (existence not confirmed across
+  teams), 403 `flagged_no_resubmit` after an `inappropriate` verdict,
+  403 `submission_restricted` at strike 3; the one-pending-per-riddle
+  race is owned by the partial unique index — no pre-check,
+  `IntegrityError` → 409 `submission_pending`. `app/evidence.py` gained
+  the strike gate at upload (403 `upload_restricted`) and the
+  cross-team phash scan (Hamming ≤ 8 of 64 bits) logging
+  `duplicate_flag.raised` as a system audit row — flags are audit
+  pairs, no new table; increment 7 resolves them by writing
+  `duplicate_flag.resolved`. Frontend: riddle detail screen
+  (SCANNING banner + scan-sweep, verdict banners from copy.js, drawer
+  evidence picker, submit → refresh), tile tap-through, and a 5s
+  snapshot poll while any tile is pending (stopgap until SSE in
+  increment 7). Conduct copy (flagged / restricted) is deliberately
+  un-themed at the call site. 59 pytest pass; curl smoke verified
+  submit → 201, double-submit → 409, cross-team evidence → 404,
+  duplicate flag row with distance 0, tile state `pending` in the
+  snapshot. Test gotcha recorded: each `/api/join` overwrites the
+  TestClient's session cookie, so a second team needs its own
+  `TestClient(app)`.
 
 - **2026-08-14 — Adversarial design review applied.** Full pass over game
   logic, data model/concurrency, and the build plan before any code. Key

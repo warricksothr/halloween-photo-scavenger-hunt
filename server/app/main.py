@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app import events, evidence, players, state
+from app import events, evidence, players, state, submissions
 
 
 def create_app(
@@ -76,6 +76,7 @@ def create_app(
     app.include_router(players.router)
     app.include_router(state.router)
     app.include_router(evidence.router)
+    app.include_router(submissions.router)
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:

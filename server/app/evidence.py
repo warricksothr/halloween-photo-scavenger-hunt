@@ -29,6 +29,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
+from app.conduct import derive_restriction, now as conduct_now
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -40,6 +41,19 @@ router = APIRouter(prefix="/api/evidence", tags=["evidence"])
 
 RATE_LIMIT_UPLOADS = 30          # per team …
 RATE_LIMIT_WINDOW_SECONDS = 600  # … per rolling 10 minutes
+
+# Cross-team duplicate-evidence flag (design.md): aHash Hamming distance
+# at or under this threshold raises duplicate_flag.raised for moderators
+# to review — never automatic punishment. Exact re-uploads short-circuit
+# at distance 0. Threshold tuning on real party photos is a recorded
+# follow-up (docs/progress.md); 8 bits of 64 is the conservative start.
+PHASH_FLAG_THRESHOLD = 8
+
+
+def _hamming(a: str, b: str) -> int:
+    """Bit distance between two hex phashes (64-bit values as 16 hex
+    chars, so XOR + popcount)."""
+    return bin(int(a, 16) ^ int(b, 16)).count("1")
 
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
@@ -68,6 +82,13 @@ async def upload(
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
     conn: sqlite3.Connection = request.app.state.db
+
+    # Strike ladder gate (derived state, ADR 0001): level 2 blocks until
+    # cooldown_until; level 3 blocks for the rest of the event.
+    restriction = derive_restriction(conn, ctx.player_id)
+    if restriction.blocks_uploads(conduct_now()):
+        return _err(403, "upload_restricted",
+                    "Uploads are temporarily disabled for your team.")
 
     data = await photo.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
@@ -124,6 +145,29 @@ async def upload(
                    entity_type="evidence_item", entity_id=evidence_id,
                    details={"riddle_tag": riddle_id, "bytes": len(data),
                             "phash": processed.phash})
+
+        # Duplicate-evidence detection: compare the new phash against
+        # every other team's evidence in this event (plain scan — party
+        # scale, spec). A flag is an audit row only; moderators see it
+        # on the queue from increment 7 and resolve it there. The upload
+        # itself always succeeds — the player did nothing actionable.
+        other_rows = conn.execute(
+            "SELECT e.id, e.phash, e.team_id FROM evidence_item e"
+            " JOIN team t ON t.id = e.team_id"
+            " WHERE t.event_id = ? AND e.team_id != ? AND e.id != ?",
+            (ctx.event_id, ctx.team_id, evidence_id),
+        ).fetchall()
+        for other in other_rows:
+            distance = _hamming(processed.phash, other["phash"])
+            if distance <= PHASH_FLAG_THRESHOLD:
+                log_action(conn, event_id=ctx.event_id,
+                           actor_type=ActorType.SYSTEM, actor_id=None,
+                           action=Action.DUPLICATE_FLAG_RAISED,
+                           entity_type="evidence_item", entity_id=evidence_id,
+                           details={"other_team_id": other["team_id"],
+                                    "other_evidence_id": other["id"],
+                                    "distance": distance})
+                break  # one flag per upload is enough to review
 
     # Files written after the row commits: a DB failure leaves no orphan
     # files, and a file-write failure here leaves a row whose 404-on-serve

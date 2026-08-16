@@ -4,7 +4,7 @@
 // Renders entirely from the snapshot: one tile per riddle, with the
 // collapsed tile state (unsolved / pending / verified) driving the
 // glyph and border. The progress strip above mirrors the same states.
-export function RiddleListScreen({ snapshot, copy }) {
+export function RiddleListScreen({ snapshot, copy, onOpenRiddle }) {
   const riddles = snapshot.riddles;
   const solved = riddles.filter((r) => r.state === 'verified').length;
 
@@ -35,6 +35,7 @@ export function RiddleListScreen({ snapshot, copy }) {
               key={r.id}
               class={`tile ${r.state === 'verified' ? 'solved' : r.state === 'pending' ? 'scanning' : ''}`}
               title={r.text}
+              onClick={() => onOpenRiddle(r.id)}
             >
               <span class="glyph-q">{copy.tiles.unsolvedGlyph}</span>
             </div>

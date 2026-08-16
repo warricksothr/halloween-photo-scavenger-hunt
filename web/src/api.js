@@ -35,6 +35,11 @@ export const api = {
     }),
   logout: () => request('/api/logout', { method: 'POST' }),
   drawer: () => request('/api/evidence'),
+  submit: (riddleId, evidenceItemId) =>
+    request('/api/submissions', {
+      method: 'POST',
+      body: { riddle_id: riddleId, evidence_item_id: evidenceItemId },
+    }),
   upload: (file, riddleId) => {
     const form = new FormData();
     form.append('photo', file);

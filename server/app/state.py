@@ -24,29 +24,9 @@ import sqlite3
 from fastapi import APIRouter, Depends, Request
 
 from app import auth
+from app.conduct import derive_restriction
 
 router = APIRouter(prefix="/api", tags=["state"])
-
-
-def _restriction(conn: sqlite3.Connection, player_id: str) -> dict:
-    """Derived strike state (ADR 0001): a pure function of non-reversed
-    strikes. Level = highest active strike level; cooldown_until comes
-    from the level-2 row. pending_notice is increment 8's interstitial
-    flag — always False until strikes exist."""
-    rows = conn.execute(
-        "SELECT level, cooldown_until FROM strike"
-        " WHERE player_id = ? AND reversed_at IS NULL"
-        " ORDER BY level DESC",
-        (player_id,),
-    ).fetchall()
-    level = rows[0]["level"] if rows else 0
-    cooldown_until = next(
-        (r["cooldown_until"] for r in rows
-         if r["level"] == 2 and r["cooldown_until"] is not None),
-        None,
-    )
-    return {"level": level, "cooldown_until": cooldown_until,
-            "pending_notice": False}
 
 
 @router.get("/state")
@@ -107,7 +87,7 @@ def state(request: Request,
             "player_id": ctx.player_id,
             "display_name": ctx.display_name,
             "team_id": ctx.team_id,
-            "restriction": _restriction(conn, ctx.player_id),
+            "restriction": derive_restriction(conn, ctx.player_id).as_dict(),
         },
         "riddles": riddles,
         "submissions": submissions,

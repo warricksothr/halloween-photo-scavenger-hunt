@@ -62,6 +62,17 @@ export default {
       headline: 'Riddle Board',
       empty: 'No riddles on the board yet.',
     },
+    detail: {
+      back: '← Back to the board',
+      pickEvidence: 'Submit evidence',
+      submit: 'Submit to the Batcomputer',
+      submitting: 'Transmitting…',
+      loading: 'Opening the drawer…',
+      emptyDrawer: 'The drawer is empty — take a photo first',
+      // Shown when the double-tap race 409s: the submission the player
+      // wanted already exists, so this is reassurance, not an error.
+      alreadyScanning: 'Already scanning this one — no need to resubmit.',
+    },
     drawer: {
       headline: 'Evidence Drawer',
       capture: 'Take a Photo',
