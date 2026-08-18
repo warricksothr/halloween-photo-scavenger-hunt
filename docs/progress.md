@@ -28,7 +28,7 @@ when the increment runs and its tests pass.
 - [x] 5. Evidence pipeline (upload, re-encode, phash, drawer)
 - [x] 6. Submissions & player flow
 - [x] 7. Moderation queue + verdicts + SSE
-- [ ] 8. Conduct system
+- [x] 8. Conduct system
 - [ ] 9. Leaderboard & round end
 - [ ] 10. Deployment & ops
 
@@ -39,6 +39,33 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-08-18 — Increment 8 complete (conduct system).** One-tap
+  `POST /api/mod/queue/{id}/inappropriate`: verdict + quarantine +
+  strike + three audit rows (`verdict.issued`, `evidence.quarantined`,
+  `strike.issued`) in ONE transaction; the conditional UPDATE guards
+  the race — a lost flag issues **no strike** (a verdict that already
+  cleared the photo must not punish the player). Strike level is
+  derived: `derive_restriction().level + 1`, capped at 3; level 2 sets
+  `cooldown_until` (default 15 min, `cooldown_minutes` override).
+  `pending_notice` is now real: a non-reversed strike with no matching
+  `notice.acknowledged` audit row — ack state is audit data (ADR
+  0004), not a column, so a reversal can never strand a stale flag.
+  `POST /api/me/notice-ack` (idempotent) clears it;
+  `POST /api/admin/strikes/{id}/reverse` is host-only, conditional
+  (409 `already_reversed`), and does NOT un-quarantine — the reversal
+  corrects the ladder, not the evidence. SSE: broker gained
+  `to="player"` routing for the `strike` delta (conduct stays between
+  player, mods, host). Frontend: mod console danger button with
+  confirm step + player-history strike display; `StrikeNotice.jsx`
+  interstitial (plain copy per mock, overlays the whole app); drawer
+  shows the upload-suspended variant at restriction level ≥ 2.
+  **Spec fix:** increment 6's `flagged_no_resubmit` (403 for the whole
+  riddle) was a misread of the verdict table — design.md's conduct
+  section is explicit that the riddle stays open and a NEW photo for
+  it submits normally. Removed the rule, its test, and the dead
+  frontend path. 94 pytest passing; live curl smoke: strike →
+  interstitial → ack → host reversal → clean restriction, all four
+  conduct audit actions in order with correct actors.
 - **2026-08-16 — Increment 7 complete (moderation queue + verdicts +
   SSE).** Moderator auth mirrors players: `POST /api/mod/join/{mod_code}`
   mints a `moderator` row + `moderator_session` (hashed token cookie,

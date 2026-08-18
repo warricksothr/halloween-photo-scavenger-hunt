@@ -34,6 +34,7 @@ export const api = {
       body: { display_name: displayName, device_label: deviceLabel },
     }),
   logout: () => request('/api/logout', { method: 'POST' }),
+  noticeAck: () => request('/api/me/notice-ack', { method: 'POST' }),
   drawer: () => request('/api/evidence'),
   submit: (riddleId, evidenceItemId) =>
     request('/api/submissions', {
@@ -64,4 +65,12 @@ export const api = {
       body: { resolution },
     }),
   modPlayerHistory: (playerId) => request(`/api/mod/players/${playerId}`),
+  // ── Conduct (increment 8) ──
+  // Verdict + strike in one action (design.md): the moderator never
+  // needs a second screen. cooldownMinutes matters only at strike 2.
+  modInappropriate: (submissionId, note, cooldownMinutes) =>
+    request(`/api/mod/queue/${submissionId}/inappropriate`, {
+      method: 'POST',
+      body: { note, cooldown_minutes: cooldownMinutes },
+    }),
 };

@@ -87,18 +87,6 @@ class TestSubmit:
         resp = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         assert resp.status_code == 201
 
-    def test_flagged_riddle_no_resubmit(self, admin, client):
-        """INAPPROPRIATE is a conduct verdict: no resubmission on that
-        riddle for that team (403, not the generic 409)."""
-        p = _party(admin, client)
-        _submit(client, p["riddle_ids"][0], p["evidence_id"])
-        conn = client.app.state.db
-        conn.execute("UPDATE submission SET status = 'inappropriate'")
-        conn.commit()
-        resp = _submit(client, p["riddle_ids"][0], p["evidence_id"])
-        assert resp.status_code == 403
-        assert resp.json()["error"] == "flagged_no_resubmit"
-
     def test_scoping_and_lifecycle_errors(self, admin, client):
         p = _party(admin, client, riddles=("R1",))
         # Other team's evidence: 404, existence not confirmed.

@@ -38,7 +38,6 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [flagged, setFlagged] = useState(false);
 
   useEffect(() => {
     api.drawer().then((result) => {
@@ -59,10 +58,7 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
     setError(null);
     const result = await api.submit(riddleId, selected);
     if (result?.error) {
-      if (result.error === 'flagged_no_resubmit') {
-        // Conduct surface: plain copy, no theme flavor.
-        setFlagged(true);
-      } else if (result.error === 'submission_pending') {
+      if (result.error === 'submission_pending') {
         // Lost the double-tap race — harmless; the refresh below turns
         // the tile pending. Tell the player nothing went wrong.
         setError(copy.screens.detail.alreadyScanning);
@@ -76,8 +72,12 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
 
   const c = copy.screens.detail;
   const pending = riddle.state === 'pending';
+  // The snapshot's restriction is plain JSON — the derived-state
+  // contract is level-based (api.md): 3 bans submissions, 2 gates
+  // uploads only, so the detail screen checks level 3.
+  const submissionsBanned = restriction?.level === 3;
   const canSubmit =
-    !pending && !flagged && !restriction.blocks_submissions && riddle.state !== 'verified';
+    !pending && !submissionsBanned && riddle.state !== 'verified';
 
   // The banner: pending shows SCANNING; otherwise the latest verdict.
   // A soft rejection's banner stays up until the next submission —
@@ -110,22 +110,7 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
         </div>
       )}
 
-      {flagged && (
-        // Conduct verdict (INAPPROPRIATE) → no resubmission on this
-        // riddle. Un-themed by rule; the strike flow (increment 8)
-        // owns the full interstitial.
-        <div class="verdict-banner sev-red">
-          <div class="verdict-chip">!</div>
-          <div>
-            <div class="verdict-headline">Submission locked</div>
-            <p class="subtext" style={{ marginTop: 6 }}>
-              This riddle can no longer be submitted by your team.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {restriction.blocks_submissions && (
+      {submissionsBanned && (
         <div class="verdict-banner sev-red">
           <div class="verdict-chip">!</div>
           <div>

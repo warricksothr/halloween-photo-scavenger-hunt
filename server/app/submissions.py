@@ -8,8 +8,9 @@ Rules recap (docs/impl/api.md + design.md game loop):
 - Riddle must belong to the player's event, and the event must be open.
 - Evidence must belong to the player's team and not be quarantined —
   404, not 403 (existence is not confirmed across teams).
-- A riddle previously judged INAPPROPRIATE for this team cannot be
-  resubmitted (403) — soft rejections are free; conduct is not.
+- An INAPPROPRIATE verdict kills only the flagged photo (quarantine);
+  the riddle itself stays open and a NEW photo for it may be submitted
+  normally (design.md conduct rules).
 - Strike 3 bans submissions entirely (derived restriction, conduct.py).
 """
 
@@ -68,16 +69,6 @@ def submit(body: SubmissionCreate, request: Request,
     if restriction.blocks_submissions(now()):
         return _err(403, "submission_restricted",
                     "Submissions are disabled for the rest of this event.")
-
-    flagged = conn.execute(
-        "SELECT 1 FROM submission WHERE riddle_id = ? AND team_id = ?"
-        " AND status = 'inappropriate'",
-        (body.riddle_id, ctx.team_id),
-    ).fetchone()
-    if flagged:
-        return _err(403, "flagged_no_resubmit",
-                    "This riddle was flagged for your team; a moderator "
-                    "will follow up. No resubmission.")
 
     submission_id = ids.new_id()
     try:

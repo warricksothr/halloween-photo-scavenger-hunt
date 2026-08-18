@@ -37,6 +37,12 @@ export function ModConsoleScreen({ modEvent, copy }) {
   const [flavor, setFlavor] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Conduct UI: the danger button arms a confirm step before firing
+  // (mock: "confirm step optional" — we take it; one-tap + danger is a
+  // mis-tap waiting to happen), and the open item's player history
+  // (strikes included) loads lazily for consistency of judgment.
+  const [confirming, setConfirming] = useState(false);
+  const [history, setHistory] = useState(null);
 
   async function reload() {
     const result = await api.modQueue();
@@ -64,6 +70,11 @@ export function ModConsoleScreen({ modEvent, copy }) {
   function open(item) {
     setOpenId(item.id);
     setError(null);
+    setConfirming(false);
+    setHistory(null);
+    api.modPlayerHistory(item.player.id).then((result) => {
+      if (!result.error) setHistory(result);
+    });
     // Opening soft-claims (ADR 0002): advisory, tells other moderators
     // someone is looking. Fire-and-forget; a lost claim means nothing.
     api.modClaim(item.id).then(() => reload());
@@ -80,6 +91,23 @@ export function ModConsoleScreen({ modEvent, copy }) {
       if (result.error !== 'already_resolved') setError(result.message);
     } else {
       setFlavor('');
+      setOpenId(null);
+    }
+    await reload();
+    setBusy(false);
+  }
+
+  async function sendInappropriate(item) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    // Conduct copy is plain and hardcoded here by rule (design.md):
+    // nothing themed ever touches a conduct surface.
+    const result = await api.modInappropriate(item.id, '', null);
+    if (result?.error) {
+      if (result.error !== 'already_resolved') setError(result.message);
+    } else {
+      setConfirming(false);
       setOpenId(null);
     }
     await reload();
@@ -249,6 +277,87 @@ export function ModConsoleScreen({ modEvent, copy }) {
               ))}
             </div>
           )}
+
+          {/* Player history (mocks/moderator.html): consistency of
+              judgment — verdicts so far, and the derived strike state
+              (ADR 0001: there is no stored level to display, only the
+              non-reversed strike rows). */}
+          {history && (
+            <section style={{ borderTop: '1px dashed var(--border-dim)', marginTop: 14, paddingTop: 10 }}>
+              <h2 class="headline headline-rule" style={{ fontSize: '0.8rem', marginBottom: 6 }}>
+                {openItem.player.display_name} — History
+              </h2>
+              <div class="panel" style={{ padding: '4px 16px' }}>
+                {history.submissions.slice(0, 5).map((s) => (
+                  <div key={s.id} class="list-row" style={{ fontSize: '0.8rem' }}>
+                    <span style={{ color: s.status === 'verified' ? 'var(--green)' : 'var(--amber)' }}>
+                      {s.status === 'verified' ? '✓' : '!'}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      Riddle #{s.riddle.sort_order} — {s.status}{' '}
+                      <span class="dim">· {ago(s.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+                <div class="list-row" style={{ fontSize: '0.8rem' }}>
+                  <span class="icon-chip" style={{ width: 24, height: 24, fontSize: '0.7rem' }}>⛨</span>
+                  <div style={{ flex: 1 }}>
+                    {history.strikes.filter((s) => !s.reversed_at).length === 0 ? (
+                      <>Strikes: <b>none</b> <span class="dim">— clean record</span></>
+                    ) : (
+                      <>
+                        Strikes:{' '}
+                        <b style={{ color: 'var(--alert)' }}>
+                          {history.strikes.filter((s) => !s.reversed_at).length} active
+                        </b>
+                        {history.strikes.map((s) => (
+                          <div key={s.id} class="dim" style={{ fontSize: '0.72rem' }}>
+                            Level {s.level}
+                            {s.cooldown_until ? ` · cooldown to ${new Date(s.cooldown_until * 1000).toLocaleTimeString()}` : ''}
+                            {s.reversed_at ? ' · reversed' : ''}
+                            {s.note ? ` · “${s.note}”` : ''}
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Conduct: INAPPROPRIATE — visually separated, danger-styled
+              (mocks/moderator.html). Issues verdict + strike in one
+              action; copy stays plain by rule. */}
+          <section style={{ borderTop: '1px dashed var(--border-dim)', marginTop: 14, paddingTop: 14 }}>
+            {confirming ? (
+              <>
+                <button
+                  class="btn danger"
+                  disabled={busy}
+                  onClick={() => sendInappropriate(openItem)}
+                >
+                  Confirm: remove photo and issue strike
+                </button>
+                <button
+                  class="btn secondary"
+                  style={{ marginTop: 8 }}
+                  disabled={busy}
+                  onClick={() => setConfirming(false)}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button class="btn danger" onClick={() => setConfirming(true)}>
+                ⚠ Flag Inappropriate — issue strike
+              </button>
+            )}
+            <p class="dim" style={{ fontSize: '0.75rem', marginTop: 6, textAlign: 'center' }}>
+              Removes the photo, issues the next strike level. Plain notice to
+              the player — no game flavor.
+            </p>
+          </section>
         </section>
       )}
     </main>

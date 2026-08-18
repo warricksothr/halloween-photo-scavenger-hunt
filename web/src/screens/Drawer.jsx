@@ -3,14 +3,16 @@
 // Capture is the browser's camera/picker via <input type="file"
 // accept="image/*" capture> — design.md's chosen primitive; no camera
 // API code of ours to break. Uploads POST multipart through api.js;
-// the grid re-reads GET /api/evidence after each upload. Submission of
-// a photo to a riddle is increment 6 — until then the drawer is a
-// camera roll with a shared destination.
+// the grid re-reads GET /api/evidence after each upload.
+//
+// Increment 8: when the snapshot's restriction.level ≥ 2 (cooldown or
+// ban), the capture button is replaced by the upload-suspended variant
+// (mocks/drawer.html). Copy is plain — conduct surfaces are un-themed.
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
 
-export function DrawerScreen({ copy }) {
+export function DrawerScreen({ snapshot, copy }) {
   const [items, setItems] = useState(null); // null = loading
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -40,6 +42,13 @@ export function DrawerScreen({ copy }) {
   }
 
   const c = copy.screens.drawer;
+  const restriction = snapshot?.me?.restriction;
+  const uploadsSuspended = (restriction?.level ?? 0) >= 2;
+  // Strike 2 names its window; strike 3 is for the rest of the event.
+  const suspendedUntil =
+    restriction?.level === 2 && restriction.cooldown_until
+      ? new Date(restriction.cooldown_until * 1000).toLocaleTimeString()
+      : null;
 
   return (
     <main style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
@@ -47,23 +56,41 @@ export function DrawerScreen({ copy }) {
         {c.headline}
       </h1>
 
-      {/* The label styles the button; the input does the work. */}
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        style={{ display: 'none' }}
-        onChange={onFileChosen}
-      />
-      <button
-        class="btn"
-        disabled={busy}
-        onClick={() => fileInput.current?.click()}
-        style={{ marginBottom: 16 }}
-      >
-        {busy ? c.uploading : c.capture}
-      </button>
+      {uploadsSuspended ? (
+        <div class="verdict-banner sev-red" style={{ marginBottom: 16 }}>
+          <div class="verdict-chip" style={{ background: 'var(--alert)', color: 'var(--text)' }}>!</div>
+          <div>
+            <div class="verdict-headline">Uploads Suspended</div>
+            <p class="subtext" style={{ marginTop: 6 }}>
+              A moderator removed one of your photos for violating the event
+              rules. Uploads are disabled{suspendedUntil
+                ? <> until <b>{suspendedUntil}</b></>
+                : <> for the rest of this event</>}.
+              You can still view the board and your existing photos.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* The label styles the button; the input does the work. */}
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            onChange={onFileChosen}
+          />
+          <button
+            class="btn"
+            disabled={busy}
+            onClick={() => fileInput.current?.click()}
+            style={{ marginBottom: 16 }}
+          >
+            {busy ? c.uploading : c.capture}
+          </button>
+        </>
+      )}
 
       {error && (
         <div class="verdict-banner sev-red" style={{ marginBottom: 16 }}>

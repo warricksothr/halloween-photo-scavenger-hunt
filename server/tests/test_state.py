@@ -107,6 +107,13 @@ class TestStateSnapshot:
         )
         conn.commit()
         snap = client.get("/api/state").json()
+        # A strike with no notice.acknowledged row has a pending
+        # interstitial — ack state is audit data, not a column (inc 8).
+        assert snap["me"]["restriction"] == {
+            "level": 2, "cooldown_until": now + 900, "pending_notice": True}
+
+        client.post("/api/me/notice-ack")
+        snap = client.get("/api/state").json()
         assert snap["me"]["restriction"] == {
             "level": 2, "cooldown_until": now + 900, "pending_notice": False}
 

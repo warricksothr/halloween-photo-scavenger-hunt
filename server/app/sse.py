@@ -39,13 +39,16 @@ class _Subscriber:
     """One connected client: its queue plus the routing facts a
     publisher matches against (which event, which role, which team)."""
 
-    __slots__ = ("queue", "event_id", "role", "team_id")
+    __slots__ = ("queue", "event_id", "role", "team_id", "player_id")
 
-    def __init__(self, *, event_id: str, role: str, team_id: str | None):
+    def __init__(self, *, event_id: str, role: str, team_id: str | None,
+                 player_id: str | None):
         self.queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self.event_id = event_id
         self.role = role          # "player" | "moderator"
         self.team_id = team_id    # None for moderators (they see all teams)
+        self.player_id = player_id  # None for moderators; the strike
+                                    # delta targets one player, not a team
 
 
 class SseBroker:
@@ -58,8 +61,10 @@ class SseBroker:
         self._subscribers: set[_Subscriber] = set()
 
     def subscribe(self, *, event_id: str, role: str,
-                  team_id: str | None) -> _Subscriber:
-        sub = _Subscriber(event_id=event_id, role=role, team_id=team_id)
+                  team_id: str | None,
+                  player_id: str | None = None) -> _Subscriber:
+        sub = _Subscriber(event_id=event_id, role=role, team_id=team_id,
+                          player_id=player_id)
         self._subscribers.add(sub)
         return sub
 
@@ -67,16 +72,21 @@ class SseBroker:
         self._subscribers.discard(sub)
 
     def publish(self, event_id: str, name: str, payload: dict, *,
-                to: str = "all", team_id: str | None = None) -> None:
+                to: str = "all", team_id: str | None = None,
+                player_id: str | None = None) -> None:
         """Route one delta. ``to``: "all" (everyone on the event),
-        "moderators" (the queue), or "team" (one team, with
-        ``team_id``). Safe to call from any thread."""
+        "moderators" (the queue), "team" (one team, with ``team_id``),
+        or "player" (one player, with ``player_id`` — conduct deltas
+        stay between the player, mods, and host per design.md).
+        Safe to call from any thread."""
         for sub in list(self._subscribers):
             if sub.event_id != event_id:
                 continue
             if to == "moderators" and sub.role != "moderator":
                 continue
             if to == "team" and sub.team_id != team_id:
+                continue
+            if to == "player" and sub.player_id != player_id:
                 continue
             # put_nowait: queues are unbounded — party scale (≤30
             # players + a few mods) cannot outrun a 15s heartbeat loop.
@@ -125,7 +135,8 @@ async def events_stream(request: Request):
             "message": "Join the event first."})
 
     broker: SseBroker = request.app.state.sse_broker
-    sub = broker.subscribe(event_id=event_id, role=role, team_id=team_id)
+    sub = broker.subscribe(event_id=event_id, role=role, team_id=team_id,
+                           player_id=player.player_id if player else None)
     return StreamingResponse(
         _stream(broker, sub),
         media_type="text/event-stream",
@@ -138,11 +149,13 @@ async def events_stream(request: Request):
 
 
 def publish(request: Request, event_id: str, name: str, payload: dict,
-            *, to: str = "all", team_id: str | None = None) -> None:
+            *, to: str = "all", team_id: str | None = None,
+            player_id: str | None = None) -> None:
     """The publisher's entry point — one import for the sync routers so
     they never touch the broker object themselves. Call AFTER the
     transaction commits: a delta for a rolled-back write would send
     clients chasing a row that doesn't exist."""
     broker: SseBroker | None = getattr(request.app.state, "sse_broker", None)
     if broker is not None:
-        broker.publish(event_id, name, payload, to=to, team_id=team_id)
+        broker.publish(event_id, name, payload, to=to, team_id=team_id,
+                       player_id=player_id)

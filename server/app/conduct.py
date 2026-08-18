@@ -26,6 +26,7 @@ class Restriction:
     level: int                      # 0 clean, 1 warned, 2 cooldown, 3 banned
     cooldown_until: int | None      # epoch seconds when level == 2
     pending_notice: bool            # strike-1 interstitial not yet shown
+    pending_notice_strike_id: str | None  # the strike the ack endpoint clears
 
     def as_dict(self) -> dict:
         # The snapshot shape (docs/impl/api.md).
@@ -50,13 +51,16 @@ class Restriction:
 def derive_restriction(conn: sqlite3.Connection, player_id: str) -> Restriction:
     """Compute the restriction from non-reversed strikes.
 
-    pending_notice is always False until increment 8 lands the strike-1
-    interstitial (nothing sets it before then, and the column doesn't
-    exist — the snapshot field ships from day one so clients never
-    guess).
+    The ladder is "count the non-reversed strikes" (design.md), but the
+    rows themselves tell the level: with moderator confirmation between
+    rungs there is exactly one strike per level, so MAX(level) is the
+    count. The pending interstitial is the earliest non-reversed strike
+    with no ``notice.acknowledged`` row naming it in the audit log —
+    ack state is audit data (ADR 0004), not a stored flag that can go
+    stale when a strike is reversed.
     """
     rows = conn.execute(
-        "SELECT level, cooldown_until FROM strike"
+        "SELECT id, level, cooldown_until FROM strike"
         " WHERE player_id = ? AND reversed_at IS NULL"
         " ORDER BY level DESC",
         (player_id,),
@@ -67,8 +71,29 @@ def derive_restriction(conn: sqlite3.Connection, player_id: str) -> Restriction:
          if r["level"] == 2 and r["cooldown_until"] is not None),
         None,
     )
-    return Restriction(level=level, cooldown_until=cooldown_until,
-                       pending_notice=False)
+    pending_notice_strike_id = _unacknowledged_strike(conn, player_id)
+    return Restriction(
+        level=level, cooldown_until=cooldown_until,
+        pending_notice=pending_notice_strike_id is not None,
+        pending_notice_strike_id=pending_notice_strike_id)
+
+
+def _unacknowledged_strike(conn: sqlite3.Connection,
+                           player_id: str) -> str | None:
+    """The earliest non-reversed strike with no matching
+    ``notice.acknowledged`` audit row, or None."""
+    row = conn.execute(
+        "SELECT s.id FROM strike s"
+        " WHERE s.player_id = ? AND s.reversed_at IS NULL"
+        " AND NOT EXISTS ("
+        "     SELECT 1 FROM audit_event a"
+        "     WHERE a.action = 'notice.acknowledged'"
+        "       AND a.entity_type = 'strike'"
+        "       AND a.entity_id = s.id)"
+        " ORDER BY s.created_at ASC LIMIT 1",
+        (player_id,),
+    ).fetchone()
+    return row["id"] if row else None
 
 
 def now() -> int:

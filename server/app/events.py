@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
+from app.conduct import derive_restriction
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -224,6 +225,62 @@ def close_event(event_id: str, request: Request,
                    details={"expired_pending": cur.rowcount})
     sse.publish(request, event_id, "event_status", {"status": "closed"})
     return _event_json(_get_event(conn, event_id))
+
+
+# ── Conduct: strike reversal ─────────────────────────────────────────
+
+
+class ReverseStrikeBody(BaseModel):
+    reason: str = Field(default="", max_length=280)
+
+
+@router.post("/strikes/{strike_id}/reverse")
+def reverse_strike(strike_id: str, body: ReverseStrikeBody,
+                   request: Request,
+                   _: str = Depends(auth.require_admin)):
+    """Host-only (design.md: "moderators can review" but the ladder is
+    reversible only by the host — a mis-tap or a disputed call). The
+    reversal just stamps reversed_by/reversed_at on the strike row;
+    every derived state (restriction level, pending notice) follows for
+    free because it counts non-reversed strikes (ADR 0001).
+
+    Not un-quarantining the photo: the reversal corrects the ladder,
+    not the evidence. The flagged photo stays out of the drawer — the
+    dispute was about the strike, and a host who also wants the photo
+    back does that socially, not in data."""
+    conn: sqlite3.Connection = request.app.state.db
+    strike = conn.execute(
+        "SELECT id, player_id, event_id, level, reversed_at FROM strike"
+        " WHERE id = ?",
+        (strike_id,),
+    ).fetchone()
+    if strike is None:
+        return _err(404, "not_found", "No such strike.")
+
+    now = int(time.time())
+    with conn:
+        cur = conn.execute(
+            "UPDATE strike SET reversed_at = ? WHERE id = ?"
+            " AND reversed_at IS NULL",
+            (now, strike_id),
+        )
+        if cur.rowcount == 0:
+            return _err(409, "already_reversed",
+                        "That strike was already reversed.")
+        log_action(conn, event_id=strike["event_id"],
+                   actor_type=ActorType.ADMIN, actor_id=None,
+                   action=Action.STRIKE_REVERSED, entity_type="strike",
+                   entity_id=strike_id,
+                   details={"original_level": strike["level"],
+                            "reason": body.reason})
+
+    # The affected player's restriction recomputes on their next
+    # snapshot; the strike delta tells the client to refetch now.
+    restriction = derive_restriction(conn, strike["player_id"])
+    sse.publish(request, strike["event_id"], "strike",
+                restriction.as_dict(),
+                to="player", player_id=strike["player_id"])
+    return {"ok": True, "id": strike_id}
 
 
 # ── Riddles ───────────────────────────────────────────────────────────

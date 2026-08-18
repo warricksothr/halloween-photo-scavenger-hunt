@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
+from app.conduct import derive_restriction
 
 router = APIRouter(prefix="/api", tags=["player"])
 
@@ -97,3 +98,28 @@ def logout(request: Request,
     resp = JSONResponse(content={"ok": True})
     resp.delete_cookie(auth.PLAYER_COOKIE_NAME)
     return resp
+
+
+@router.post("/me/notice-ack")
+def notice_ack(request: Request,
+               ctx: auth.PlayerContext = Depends(auth.require_player)):
+    """Acknowledge the strike interstitial (api.md): the client shows it
+    when the snapshot's ``pending_notice`` is true, and this call is
+    what clears it. Ack state lives in the audit log, not a column
+    (ADR 0001/0004): ``derive_restriction`` treats a strike as
+    acknowledged once a ``notice.acknowledged`` row names it, so a
+    later reversal can never strand a stale flag.
+
+    Idempotent: acking with no pending notice is a no-op 200 — a
+    double-tap must not be an error."""
+    conn: sqlite3.Connection = request.app.state.db
+    restriction = derive_restriction(conn, ctx.player_id)
+    if restriction.pending_notice_strike_id is None:
+        return {"ok": True}
+    with conn:
+        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
+                   actor_id=ctx.player_id, action=Action.NOTICE_ACKNOWLEDGED,
+                   entity_type="strike",
+                   entity_id=restriction.pending_notice_strike_id,
+                   details={"strike_id": restriction.pending_notice_strike_id})
+    return {"ok": True}

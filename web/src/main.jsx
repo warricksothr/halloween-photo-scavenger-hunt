@@ -10,6 +10,7 @@ import { LobbyScreen } from './screens/Lobby';
 import { RiddleListScreen } from './screens/RiddleList';
 import { RiddleDetailScreen } from './screens/RiddleDetail';
 import { DrawerScreen } from './screens/Drawer';
+import { StrikeNoticeScreen } from './screens/StrikeNotice';
 
 // The shell owns phase routing: which top-level screen shows depends on
 // the store's phase and, once ready, the event status. This is the
@@ -75,7 +76,6 @@ function App() {
   }
   return <GameShell snapshot={snapshot} copy={copy} />;
 }
-
 // In-game shell: header + active tab screen + tab bar. Tabs (and the
 // open riddle) are local component state (not the URL) — the PWA is a
 // single screen stack at party scale, and preact-router adds nothing
@@ -101,13 +101,17 @@ function GameShell({ snapshot, copy }) {
   } else if (tab === 'riddles') {
     screen = <RiddleListScreen snapshot={snapshot} copy={copy} onOpenRiddle={setOpenRiddle} />;
   } else {
-    screen = <DrawerScreen copy={copy} />;
+    screen = <DrawerScreen snapshot={snapshot} copy={copy} />;
   }
 
   return (
     <div class="frame">
       <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
       {screen}
+      {/* The strike-1 interstitial overlays the whole app (mock: dimmed
+          board behind). Un-themed by rule — the component carries its
+          own plain copy. */}
+      {snapshot.me.restriction?.pending_notice && <StrikeNoticeScreen />}
       <nav class="tab-bar">
         <a href="#" class={tab === 'riddles' ? 'active' : ''}
            onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('riddles'); }}>

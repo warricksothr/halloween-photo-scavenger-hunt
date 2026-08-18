@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
+from app.conduct import derive_restriction
 
 router = APIRouter(prefix="/api/mod", tags=["moderation"])
 
@@ -251,6 +252,118 @@ def verdict(submission_id: str, body: VerdictBody, request: Request,
                 to="moderators")
 
     return {"id": submission_id, "status": body.verdict}
+
+
+# ── Conduct: the INAPPROPRIATE one-tap ───────────────────────────────
+
+# Strike 2's cooldown defaults to 15 minutes (design.md strike ladder).
+# A moderator may set a different window; strike 1 and 3 ignore it.
+DEFAULT_COOLDOWN_MINUTES = 15
+
+
+class InappropriateBody(BaseModel):
+    note: str = Field(default="", max_length=280)
+    cooldown_minutes: int | None = Field(default=None, ge=1, le=1440)
+
+
+@router.post("/queue/{submission_id}/inappropriate")
+def inappropriate(submission_id: str, body: InappropriateBody,
+                  request: Request,
+                  ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """One-tap conduct action (design.md): the INAPPROPRIATE verdict,
+    the strike, and the quarantine land in ONE transaction — a
+    moderator under queue load never needs a second screen, and a
+    half-applied conduct action can never exist.
+
+    The strike level is derived the same way as everything else in the
+    conduct system (ADR 0001): count the player's non-reversed strikes
+    and add one, capped at 3. No stored state to keep in sync."""
+    conn: sqlite3.Connection = request.app.state.db
+    sub = conn.execute(
+        "SELECT s.id, s.status, s.team_id, s.riddle_id, s.submitted_by,"
+        "       s.evidence_item_id FROM submission s"
+        " JOIN riddle r ON r.id = s.riddle_id"
+        " WHERE s.id = ? AND r.event_id = ?",
+        (submission_id, ctx.event_id),
+    ).fetchone()
+    if sub is None:
+        return _err(404, "not_found", "No such submission.")
+
+    player_id = sub["submitted_by"]
+    level = min(derive_restriction(conn, player_id).level + 1, 3)
+    cooldown_until = None
+    if level == 2:
+        minutes = body.cooldown_minutes or DEFAULT_COOLDOWN_MINUTES
+        cooldown_until = int(time.time()) + minutes * 60
+
+    strike_id = ids.new_id()
+    now = int(time.time())
+    with conn:
+        cur = conn.execute(
+            "UPDATE submission SET status = 'inappropriate'"
+            " WHERE id = ? AND status = 'pending'",
+            (submission_id,),
+        )
+        if cur.rowcount == 0:
+            # Same conditional-write story as game verdicts (ADR 0002):
+            # the photo was already judged (or the round closed) — the
+            # strike must NOT issue, or a lost race would punish a
+            # player for content a moderator already cleared.
+            return _err(409, "already_resolved",
+                        "That submission was already resolved.")
+        conn.execute(
+            "INSERT INTO verdict (id, submission_id, moderator_id,"
+            " verdict, flavor_text, created_at)"
+            " VALUES (?, ?, ?, 'inappropriate', '', ?)",
+            (ids.new_id(), submission_id, ctx.moderator_id, now),
+        )
+        conn.execute(
+            "UPDATE evidence_item SET quarantined = 1 WHERE id = ?",
+            (sub["evidence_item_id"],),
+        )
+        conn.execute(
+            "INSERT INTO strike (id, player_id, event_id, level,"
+            " submission_id, issued_by, note, cooldown_until, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (strike_id, player_id, ctx.event_id, level, submission_id,
+             ctx.moderator_id, body.note, cooldown_until, now),
+        )
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.VERDICT_ISSUED, entity_type="submission",
+                   entity_id=submission_id,
+                   details={"verdict": "inappropriate", "flavor_text": ""})
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.EVIDENCE_QUARANTINED,
+                   entity_type="evidence_item",
+                   entity_id=sub["evidence_item_id"],
+                   details={"submission_id": submission_id})
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.STRIKE_ISSUED, entity_type="strike",
+                   entity_id=strike_id,
+                   details={"level": level, "cooldown_until": cooldown_until,
+                            "note": body.note})
+
+    # After the commit (sse.publish's contract). The strike delta goes
+    # to the affected player only — conduct stays between player, mods,
+    # and host; teammates just see the photo leave the drawer.
+    sse.publish(request, ctx.event_id, "strike",
+                {"level": level, "cooldown_until": cooldown_until},
+                to="player", player_id=player_id)
+    sse.publish(request, ctx.event_id, "verdict",
+                {"submission_id": submission_id,
+                 "riddle_id": sub["riddle_id"],
+                 "status": "inappropriate", "flavor": ""},
+                to="team", team_id=sub["team_id"])
+    sse.publish(request, ctx.event_id, "queue_resolved",
+                {"submission_id": submission_id, "status": "inappropriate"},
+                to="moderators")
+
+    return {"id": submission_id, "status": "inappropriate",
+            "strike": {"id": strike_id, "level": level,
+                       "cooldown_until": cooldown_until}}
 
 
 @router.get("/evidence/{evidence_id}/photo")
