@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
+from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/mod", tags=["moderation"])
 
@@ -250,6 +251,9 @@ def verdict(submission_id: str, body: VerdictBody, request: Request,
     sse.publish(request, ctx.event_id, "queue_resolved",
                 {"submission_id": submission_id, "status": body.verdict},
                 to="moderators")
+    if body.verdict == "verified":
+        # A solve moves the standings — throttled (api.md: ≥5s apart).
+        publish_leaderboard(request, ctx.event_id)
 
     return {"id": submission_id, "status": body.verdict}
 

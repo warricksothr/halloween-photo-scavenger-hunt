@@ -21,7 +21,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 
 from app import db as db_module
-from app import events, evidence, mod, players, sse, state, submissions
+from app import events, evidence, leaderboard, mod, players, sse, state, submissions
 
 
 def create_app(
@@ -73,6 +73,11 @@ def create_app(
         # from the threadpool, and asyncio queues can only be fed from
         # the loop's thread (see app/sse.py).
         app.state.sse_broker = sse.SseBroker(asyncio.get_running_loop())
+        # Leaderboard-delta throttle (api.md: ≥5s apart per event). A
+        # verified-verdict burst during a rush must not fan a standings
+        # re-render per verdict; the snapshot stays the truth on any
+        # reconnect regardless.
+        app.state.leaderboard_last_sent = {}
         yield
         conn.close()
 
@@ -83,6 +88,7 @@ def create_app(
     app.include_router(evidence.router)
     app.include_router(submissions.router)
     app.include_router(mod.router)
+    app.include_router(leaderboard.router)
     app.include_router(sse.router)
 
     @app.get("/api/health")

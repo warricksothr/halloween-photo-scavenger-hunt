@@ -29,7 +29,7 @@ when the increment runs and its tests pass.
 - [x] 6. Submissions & player flow
 - [x] 7. Moderation queue + verdicts + SSE
 - [x] 8. Conduct system
-- [ ] 9. Leaderboard & round end
+- [x] 9. Leaderboard & round end
 - [ ] 10. Deployment & ops
 
 ## Phase 3 — Stretch
@@ -39,6 +39,33 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-08-18 — Increment 9 complete (leaderboard & round end).**
+  `app/leaderboard.py`: `_standings` is a GROUP BY over VERIFIED
+  submissions (design.md "score is a query, not a column") — LEFT JOIN
+  from team keeps scoreless teams visible, ties break on
+  created_at then id (stable), MVP labels fall back to the team's
+  first player display name. `GET /api/leaderboard` honors
+  `final-reveal` (404 `leaderboard_sealed` for players until close;
+  moderators always see it) and flags the caller's row `you`. The
+  snapshot now carries `leaderboard` when live or closed (null while
+  sealed). SSE `leaderboard` delta: throttled ≥5s per event
+  (`app.state.leaderboard_last_sent`, monotonic clock), published on
+  verified verdicts and FORCED at open/close (the final reveal).
+  `GET /api/recap` (players, closed only — 409 `round_not_closed`):
+  final standings + the night's timeline projected from the audit log
+  (ADR 0005 — kinds opened/closed/first_solve/solve/lead_change/
+  mass_solve derived in the query, never stored; a tie for the lead
+  is NOT a lead change; conduct actions excluded at the query,
+  structurally). `GET /api/mod/audit`: the full conduct-inclusive
+  forensic timeline, moderator-only, event-scoped. Frontend:
+  `Standings.jsx` tab (live from snapshot / sealed note / closed
+  "Case Closed" + recap timeline per standings mock); recap kind→copy
+  mapping lives in the theme pack (celebration lines ARE themed;
+  conduct surfaces remain the un-themed exception). 105 pytest
+  passing; live curl smoke on a final-reveal event: sealed mid-round
+  (404 player / 200 mod), post-close recap with correct first_solve,
+  mass_solve, single lead_change, and standings 2–1; mod audit showed
+  all 18 rows in order; player audit attempt 401.
 - **2026-08-18 — Increment 8 complete (conduct system).** One-tap
   `POST /api/mod/queue/{id}/inappropriate`: verdict + quarantine +
   strike + three audit rows (`verdict.issued`, `evidence.quarantined`,

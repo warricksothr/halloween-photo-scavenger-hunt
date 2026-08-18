@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
+from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -189,6 +190,8 @@ def open_event(event_id: str, request: Request,
     # After the commit: everyone (lobby screens especially) refetches
     # the snapshot. This delta is what lets the lobby drop its 5s poll.
     sse.publish(request, event_id, "event_status", {"status": "open"})
+    # Standings appear the moment a live-visibility round opens.
+    publish_leaderboard(request, event_id, force=True)
     return _event_json(_get_event(conn, event_id))
 
 
@@ -224,6 +227,9 @@ def close_event(event_id: str, request: Request,
                    entity_type="event", entity_id=event_id,
                    details={"expired_pending": cur.rowcount})
     sse.publish(request, event_id, "event_status", {"status": "closed"})
+    # The final reveal: standings become visible to every player the
+    # moment the round closes, throttle or no throttle.
+    publish_leaderboard(request, event_id, force=True)
     return _event_json(_get_event(conn, event_id))
 
 

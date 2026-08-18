@@ -36,7 +36,11 @@ class TestStateSnapshot:
         assert snap["me"]["display_name"] == "Batman"
         assert snap["me"]["restriction"] == {
             "level": 0, "cooldown_until": None, "pending_notice": False}
-        assert snap["leaderboard"] is None
+        # Live visibility: standings ride the snapshot (increment 9) —
+        # one scoreless team, labeled by its player's display name.
+        assert snap["leaderboard"] == [{
+            "team_id": join["player"]["team_id"], "team": "Batman",
+            "score": 0, "rank": 1, "you": True}]
 
         riddles = snap["riddles"]
         assert [r["text"] for r in riddles] == ["First riddle",

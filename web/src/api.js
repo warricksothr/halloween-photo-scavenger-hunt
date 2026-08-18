@@ -36,6 +36,7 @@ export const api = {
   logout: () => request('/api/logout', { method: 'POST' }),
   noticeAck: () => request('/api/me/notice-ack', { method: 'POST' }),
   drawer: () => request('/api/evidence'),
+  recap: () => request('/api/recap'),
   submit: (riddleId, evidenceItemId) =>
     request('/api/submissions', {
       method: 'POST',

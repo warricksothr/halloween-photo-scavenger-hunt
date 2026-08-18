@@ -80,11 +80,44 @@ export default {
       loading: 'Opening the drawer…',
       empty: 'No evidence yet. Take a photo of something suspicious.',
     },
+    standings: {
+      headline: 'Standings',
+      // final-reveal mid-round (snapshot.leaderboard is null)
+      sealed: 'Standings are sealed — the host reveals them when the round closes.',
+      empty: 'No operatives on the board yet.',
+      caseClosed: 'Case Closed',
+      caseClosedSubtext: (winner, score, total) =>
+        `${winner} solved Gotham — ${score} of ${total} riddles. Final standings are in.`,
+      recapHeadline: "The Night's Intel Trail",
+      you: '(you)',
+    },
   },
 
   tabs: {
     riddles: 'Riddles',
     drawer: 'Drawer',
+    standings: 'Standings',
+  },
+
+  // Recap timeline (increment 9, ADR 0005): the server ships facts
+  // (kind + team + riddle number), the theme pack renders the fiction.
+  // These are game-facing celebration lines, so they ARE themed — the
+  // un-themed-by-rule list is conduct surfaces only.
+  recap: {
+    opened: (n) =>
+      `The host opened the hunt — ${n} operative${n === 1 ? '' : 's'} linked in`,
+    closed: (n) =>
+      n > 0
+        ? `The window closed. Intel expired on ${n} pending scan${n === 1 ? '' : 's'}.`
+        : 'The window closed — every scan reviewed.',
+    firstSolve: (e) =>
+      `${e.team} drew first blood — Riddle #${e.riddle_sort} verified`,
+    solve: (e) =>
+      `${e.team} verified Riddle #${e.riddle_sort}`,
+    leadChange: (e) =>
+      `${e.team} took the lead (${e.score} solved)`,
+    massSolve: (e) =>
+      `Riddle #${e.riddle_sort} fell to every team — no match for Gotham`,
   },
 
   tiles: {

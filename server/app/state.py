@@ -13,8 +13,11 @@ Design notes that matter here:
 - Riddle ``state`` collapses submission history to what the tile grid
   needs: unsolved / pending / verified. Full history rides in
   ``submissions`` for the detail view.
-- ``leaderboard`` is null until increment 9; the field exists in the
-  shape from day one so the client never has to guess.
+- ``leaderboard`` rides the snapshot when the event's visibility is
+  ``live`` (null under ``final-reveal`` until close — api.md). The
+  standings query lives in leaderboard.py; the snapshot stays the
+  resync point, so a reconnecting client gets scores without a second
+  fetch.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app import auth
 from app.conduct import derive_restriction
+from app.leaderboard import _standings
 
 router = APIRouter(prefix="/api", tags=["state"])
 
@@ -75,6 +79,19 @@ def state(request: Request,
         for s in sub_rows
     ]
 
+    # Leaderboard (increment 9): included when live or after close;
+    # null while a final-reveal round is still running — the client
+    # shows the sealed note instead. Scores are a query, not a column
+    # (design.md), so this is always consistent with the verdicts.
+    board = None
+    if (event["leaderboard_visibility"] == "live"
+            or event["status"] == "closed"):
+        standings = _standings(conn, ctx.event_id)
+        for i, row in enumerate(standings, start=1):
+            row["rank"] = i
+            row["you"] = row["team_id"] == ctx.team_id
+        board = standings
+
     return {
         "event": {
             "id": event["id"], "name": event["name"],
@@ -91,5 +108,5 @@ def state(request: Request,
         },
         "riddles": riddles,
         "submissions": submissions,
-        "leaderboard": None,  # increment 9; the field exists from day one
+        "leaderboard": board,
     }

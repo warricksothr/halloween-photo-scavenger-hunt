@@ -10,6 +10,7 @@ import { LobbyScreen } from './screens/Lobby';
 import { RiddleListScreen } from './screens/RiddleList';
 import { RiddleDetailScreen } from './screens/RiddleDetail';
 import { DrawerScreen } from './screens/Drawer';
+import { StandingsScreen } from './screens/Standings';
 import { StrikeNoticeScreen } from './screens/StrikeNotice';
 
 // The shell owns phase routing: which top-level screen shows depends on
@@ -100,6 +101,8 @@ function GameShell({ snapshot, copy }) {
     );
   } else if (tab === 'riddles') {
     screen = <RiddleListScreen snapshot={snapshot} copy={copy} onOpenRiddle={setOpenRiddle} />;
+  } else if (tab === 'standings') {
+    screen = <StandingsScreen snapshot={snapshot} copy={copy} />;
   } else {
     screen = <DrawerScreen snapshot={snapshot} copy={copy} />;
   }
@@ -120,6 +123,10 @@ function GameShell({ snapshot, copy }) {
         <a href="#" class={tab === 'drawer' ? 'active' : ''}
            onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('drawer'); }}>
           <span class="tab-icon">▦</span>{copy.tabs.drawer}
+        </a>
+        <a href="#" class={tab === 'standings' ? 'active' : ''}
+           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('standings'); }}>
+          <span class="tab-icon">≡</span>{copy.tabs.standings}
         </a>
       </nav>
     </div>
