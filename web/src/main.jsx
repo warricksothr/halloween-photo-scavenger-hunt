@@ -5,12 +5,14 @@ import { getState, refresh, subscribe } from './store';
 import { Header } from './components/Header';
 import { JoinScreen } from './screens/Join';
 import { ModJoinScreen } from './screens/ModJoin';
+import { TeamJoinScreen } from './screens/TeamJoin';
 import { ModConsoleScreen } from './screens/ModConsole';
 import { LobbyScreen } from './screens/Lobby';
 import { RiddleListScreen } from './screens/RiddleList';
 import { RiddleDetailScreen } from './screens/RiddleDetail';
 import { DrawerScreen } from './screens/Drawer';
 import { StandingsScreen } from './screens/Standings';
+import { TeamScreen } from './screens/Team';
 import { StrikeNoticeScreen } from './screens/StrikeNotice';
 
 // The shell owns phase routing: which top-level screen shows depends on
@@ -44,6 +46,16 @@ function App() {
         </main>
       </div>
     );
+  }
+
+  // A /t/<token> invite link decides the screen in EVERY phase before
+  // the role/snapshot routing does: a fresh device must reach the
+  // invite landing instead of the join screen, and a logged-in player
+  // who opens a link (the switch case) must reach it too — the
+  // snapshot routing below would otherwise swallow the path.
+  const teamInvite = window.location.pathname.match(/^\/t\/([A-Za-z0-9]+)/);
+  if (teamInvite) {
+    return <TeamJoinScreen token={teamInvite[1]} copy={state.copy} />;
   }
 
   if (state.phase === 'join') {
@@ -101,6 +113,8 @@ function GameShell({ snapshot, copy }) {
     );
   } else if (tab === 'riddles') {
     screen = <RiddleListScreen snapshot={snapshot} copy={copy} onOpenRiddle={setOpenRiddle} />;
+  } else if (tab === 'team') {
+    screen = <TeamScreen snapshot={snapshot} copy={copy} />;
   } else if (tab === 'standings') {
     screen = <StandingsScreen snapshot={snapshot} copy={copy} />;
   } else {
@@ -123,6 +137,10 @@ function GameShell({ snapshot, copy }) {
         <a href="#" class={tab === 'drawer' ? 'active' : ''}
            onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('drawer'); }}>
           <span class="tab-icon">▦</span>{copy.tabs.drawer}
+        </a>
+        <a href="#" class={tab === 'team' ? 'active' : ''}
+           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('team'); }}>
+          <span class="tab-icon">⬡</span>{copy.tabs.team}
         </a>
         <a href="#" class={tab === 'standings' ? 'active' : ''}
            onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('standings'); }}>

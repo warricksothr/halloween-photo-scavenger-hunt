@@ -34,10 +34,48 @@ when the increment runs and its tests pass.
 
 ## Phase 3 — Stretch
 
-- [ ] Team invites + roster + multi-member drawers
+- [x] Team invites + roster + multi-member drawers
 - [ ] Moderator team management
 
 ## Notes / blockers
+
+- **2026-08-18 — Teams stretch: invites + roster + multi-member
+  drawers complete.** Backend `app/teams.py` (purely additive — the
+  `team_invite` table shipped empty in 0001): `GET /api/team` (roster
+  with device_label/last_seen_at, open invites, effective size limit
+  = team.size_limit ?? event.team_size_limit), `POST /api/team/rename`
+  (any member; audit `team.renamed` + forced leaderboard publish),
+  invites create/revoke/info/redeem at `/api/team/invites…`. Invite
+  URL is `/t/<token>` (distinct from `/j/` join codes, `/m/` mod
+  codes; SPA fallback already covers it). Token: 10 chars, 10-min TTL,
+  single-use — redeem does a conditional `UPDATE … WHERE redeemed_by
+  IS NULL …` stamping the real player id (the original `''`
+  placeholder violated the `redeemed_by → player(id)` FK; insert the
+  fresh player row first, roll it back on a lost race). Redeem
+  branches: fresh player (display_name 422 validated BEFORE the
+  transaction), already-member 200 no-op, switch (409
+  `switch_needs_confirm` when the old team holds evidence/submissions,
+  then `confirm_switch=true` → 201; baggage stays with the old team,
+  old sessions revoked, audit detail `switched_from_team_id`).
+  Capacity enforced at REDEMPTION for fresh joins AND switchers (a
+  switcher frees a seat on the old team, not the target). Drawer joins
+  player for `uploaded_by_name`. Frontend: `Team.jsx` (identity/
+  rename, roster, invite panel with 1s countdown ticker; invite shown
+  as copyable link — no QR service on a party LAN) + `TeamJoin.jsx`
+  (`/t/<token>` landing; loads the arkham pack itself when no snapshot
+  exists, same pattern as JoinScreen; switch warning Stay/Switch
+  variant per mocks/team.html; clears the path with
+  `history.replaceState` before `refresh()` so the /t/ route doesn't
+  re-trigger). main.jsx: `/t/` match runs in EVERY phase before
+  role/snapshot routing; 4th tab (⬡ Team). Copy in the theme pack
+  (`screens.team`, `screens.teamJoin`, `tabs.team`) — team/invite UI
+  is game-facing, so it IS themed (unlike mod/conduct surfaces). 16
+  new tests in test_teams.py (lifecycle, redeem branches, capacity,
+  switch, rename→leaderboard, closed event); full suite 127 passing;
+  live curl smoke verified invite→redeem→roster 2/2, team_full at 3rd,
+  rename→standings label, switch with baggage 409→confirm→roster.
+  Gotcha found in smoke: curl needs `-c` on redeem to save the
+  minted session cookie (old one is revoked on switch).
 
 - **2026-08-18 — Increment 10 complete (deployment & ops).** Purge:
   `POST /api/admin/events/{id}/purge` in events.py — host-only,

@@ -64,11 +64,16 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 def _item_json(row: sqlite3.Row) -> dict:
     """Drawer shape. photo_path never leaves the server — the photo URL
     is the authenticated endpoint, and paths are an implementation detail
-    (api.md: thumbnails by id)."""
+    (api.md: thumbnails by id). ``uploaded_by_name`` is resolved by the
+    drawer query (teams stretch: a multi-member drawer shows who shot
+    what); standalone single-item lookups may omit it."""
     return {
         "id": row["id"],
         "riddle_id": row["riddle_id"],
         "uploaded_by": row["uploaded_by"],
+        "uploaded_by_name": (
+            row["uploaded_by_name"] if "uploaded_by_name" in row.keys()
+            else None),
         "created_at": row["created_at"],
         "photo_url": f"/api/evidence/{row['id']}/photo",
     }
@@ -185,10 +190,15 @@ async def upload(
 def drawer(request: Request,
            ctx: auth.PlayerContext = Depends(auth.require_player)):
     conn: sqlite3.Connection = request.app.state.db
+    # Team-scoped from day one (design.md): the drawer IS the team's
+    # shared pool — a multi-member team sees every member's photos,
+    # each labeled with who shot it.
     rows = conn.execute(
-        "SELECT * FROM evidence_item"
-        " WHERE team_id = ? AND quarantined = 0"
-        " ORDER BY created_at DESC",
+        "SELECT e.*, p.display_name AS uploaded_by_name"
+        " FROM evidence_item e"
+        " JOIN player p ON p.id = e.uploaded_by"
+        " WHERE e.team_id = ? AND e.quarantined = 0"
+        " ORDER BY e.created_at DESC",
         (ctx.team_id,),
     ).fetchall()
     return [_item_json(r) for r in rows]

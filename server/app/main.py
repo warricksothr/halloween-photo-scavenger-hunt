@@ -22,7 +22,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import db as db_module
-from app import events, evidence, leaderboard, mod, players, sse, state, submissions
+from app import events, evidence, leaderboard, mod, players, sse, state, submissions, teams
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -98,6 +98,7 @@ def create_app(
     app.include_router(submissions.router)
     app.include_router(mod.router)
     app.include_router(leaderboard.router)
+    app.include_router(teams.router)
     app.include_router(sse.router)
 
     @app.get("/api/health")

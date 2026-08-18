@@ -37,6 +37,22 @@ export const api = {
   noticeAck: () => request('/api/me/notice-ack', { method: 'POST' }),
   drawer: () => request('/api/evidence'),
   recap: () => request('/api/recap'),
+  // ── Teams (stretch) ──
+  team: () => request('/api/team'),
+  renameTeam: (name) =>
+    request('/api/team/rename', { method: 'POST', body: { name } }),
+  createInvite: () => request('/api/team/invites', { method: 'POST' }),
+  revokeInvite: (token) =>
+    request(`/api/team/invites/${encodeURIComponent(token)}/revoke`,
+            { method: 'POST' }),
+  inviteInfo: (token) =>
+    request(`/api/team/invites/${encodeURIComponent(token)}`),
+  redeemInvite: (token, displayName, deviceLabel, confirmSwitch) =>
+    request(`/api/team/invites/${encodeURIComponent(token)}/redeem`, {
+      method: 'POST',
+      body: { display_name: displayName, device_label: deviceLabel,
+              confirm_switch: confirmSwitch },
+    }),
   submit: (riddleId, evidenceItemId) =>
     request('/api/submissions', {
       method: 'POST',

@@ -91,11 +91,52 @@ export default {
       recapHeadline: "The Night's Intel Trail",
       you: '(you)',
     },
+    team: {
+      headline: 'Strike Team',
+      loading: 'Assembling the roster…',
+      namePlaceholder: 'Name your team',
+      operatives: 'operatives',
+      editName: 'Edit',
+      saveName: 'Save',
+      cancel: 'Cancel',
+      roster: 'Roster',
+      you: '(you)',
+      recruit: 'Recruit an Operative',
+      createInvite: 'Create invite link',
+      newCode: 'New code',
+      revoke: 'Revoke',
+      singleUse: 'Single-use',
+      expiresIn: 'expires in',
+      teamFull: 'The team is at full strength.',
+      inviteNote:
+        'Share the link with your teammate — it works once, for ten minutes.',
+    },
+    teamJoin: {
+      // The /t/<token> landing: an invite, not a join code. Themed like
+      // join (it is game onboarding, not a conduct surface).
+      headline: 'You Have Been Recruited',
+      teamLine: (teamName, eventName) =>
+        teamName
+          ? `${teamName} wants you on their team — ${eventName}.`
+          : `A strike team wants you — ${eventName}.`,
+      nameLabel: 'Codename',
+      join: 'Join the Team',
+      expired: 'That invite link is expired or already used. Ask for a fresh one.',
+      // Switch warning (design.md invite edge case; mocks/team.html):
+      // an existing player with evidence gets the honest version.
+      switchHeadline: 'Changing Teams?',
+      switchBody:
+        'Your evidence and submission history stay with your current team. This cannot be undone.',
+      stay: 'Stay',
+      switchConfirm: 'Switch team',
+      full: 'That team is full.',
+    },
   },
 
   tabs: {
     riddles: 'Riddles',
     drawer: 'Drawer',
+    team: 'Team',
     standings: 'Standings',
   },
 
