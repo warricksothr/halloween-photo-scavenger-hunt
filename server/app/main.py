@@ -19,9 +19,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 
 from app import db as db_module
 from app import events, evidence, leaderboard, mod, players, sse, state, submissions
+
+# The production frontend is the Vite build at web/dist (built with
+# `npm run build`; NOT gitignored artifacts in the repo — the deploy
+# recipe builds it on the host). In development this directory may not
+# exist and Vite serves the app on :5173 with /api proxied here, so
+# static mounting is skipped entirely when the directory is absent.
+DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[2] / "web" / "dist"
 
 
 def create_app(
@@ -29,6 +37,7 @@ def create_app(
     admin_config: tuple[str, str] | None = None,
     cookie_secure: bool = True,
     photos_dir: Path | None = None,
+    static_dir: Path | str | None = DEFAULT_STATIC_DIR,
 ) -> FastAPI:
     """Build the app around one database and one admin credential pair.
 
@@ -99,7 +108,44 @@ def create_app(
         ).fetchone()[0]
         return {"status": "ok", "schema_version": version}
 
+    if static_dir is not None and Path(static_dir).is_dir():
+        _mount_spa(app, Path(static_dir))
+
     return app
+
+
+def _mount_spa(app: FastAPI, static_dir: Path) -> None:
+    """Serve the built PWA with an SPA fallback.
+
+    Registered LAST so every /api route above wins. The fallback exists
+    because the join and mod links live in the URL path
+    (`/j/<code>`, `/m/<code>` — design.md Hosting & access): opening a
+    QR link hits uvicorn directly, and the app shell parses the code
+    out of the path itself.
+
+    Caching: Vite hashes asset filenames (assets/*), so those are
+    immutable forever; index.html, sw.js, and the manifest must
+    revalidate every load or a deploy would strand players on a stale
+    shell (and a stale service worker).
+    """
+    root = static_dir.resolve()
+    index = root / "index.html"
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        # An unmatched /api path is a 404 in JSON, never the HTML
+        # shell — a client typo should fail loudly, not parse HTML.
+        if path.startswith("api/"):
+            return JSONResponse(status_code=404, content={
+                "error": "not_found", "message": "No such endpoint."})
+        candidate = (root / path).resolve()
+        if candidate.is_file() and candidate.is_relative_to(root):
+            immutable = "assets" in candidate.relative_to(root).parts
+            return FileResponse(candidate, headers={"Cache-Control": (
+                "public, max-age=31536000, immutable"
+                if immutable else "no-cache")})
+        # /j/<code>, /m/<code>, / itself: the app shell decides.
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 # No module-level `app = create_app()`: constructing at import time would

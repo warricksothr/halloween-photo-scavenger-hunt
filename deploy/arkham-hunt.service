@@ -1,0 +1,51 @@
+# arkham-hunt.service — the party server as a systemd USER unit.
+#
+# A user unit (not a system unit) matches the hosting decision in
+# docs/design.md: one small VPS, one deployment, run as an unprivileged
+# login user. No root, no container — the app is one uvicorn process
+# serving both the API and the built PWA (increment 10).
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/arkham-hunt.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now arkham-hunt
+#   loginctl enable-linger "$USER"   # survive logout — the party must
+#                                    # not depend on your SSH session
+#
+# The admin credentials come from the environment, NOT the unit file
+# (secrets do not live in committed files — repo policy). Put them in an
+# EnvironmentFile that stays out of git:
+#   ~/.config/arkham-hunt.env, mode 0600:
+#     ARKHAM_ADMIN_USERNAME=you
+#     ARKHAM_ADMIN_PASSWORD_HASH=<output of `python -m app.security 'pw'`
+#                                 run from the repo's server/ venv>
+
+[Unit]
+Description=Arkham Halloween photo scavenger hunt (uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to the checkout location on the host.
+WorkingDirectory=%h/arkham/server
+EnvironmentFile=%h/.config/arkham-hunt.env
+# --factory: create_app() reads the env at startup, so each restart
+# picks up fresh credentials/config without an edit here.
+ExecStart=%h/arkham/server/.venv/bin/uvicorn app.main:create_app \
+    --factory --host 127.0.0.1 --port 8000
+# Binds loopback only — nginx is the public face (deploy/nginx.conf)
+# and terminates TLS. Nothing but the proxy should reach :8000.
+
+# One night, no second chances: restart fast and forever if the process
+# dies. SQLite + WAL means a crash loses at most the uncommitted write.
+Restart=always
+RestartSec=2
+
+# Light hardening (compatible with a user unit):
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

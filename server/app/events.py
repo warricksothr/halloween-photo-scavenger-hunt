@@ -398,3 +398,88 @@ def delete_riddle(event_id: str, riddle_id: str, request: Request,
                    entity_type="riddle", entity_id=riddle_id,
                    details={"text": row["text"]})  # final copy, forensics
     return {"ok": True}
+
+
+# ── Purge (increment 10) ─────────────────────────────────────────────
+
+
+class PurgeBody(BaseModel):
+    # api.md: "confirm param" — the host re-types the event NAME (not
+    # the id): the thing they're about to destroy should be the thing
+    # they have to name. A wrong name 409s rather than purging.
+    confirm: str
+
+
+@router.post("/events/{event_id}/purge")
+def purge_event(event_id: str, body: PurgeBody, request: Request,
+                _: str = Depends(auth.require_admin)):
+    """Delete an event and everything attached to it (design.md: CLOSED
+    events are "retained, then purged"). Host-only, closed events only —
+    purging a live round mid-party must not be a reachable state.
+
+    Delete order matters: only riddle/team/moderator carry ON DELETE
+    CASCADE from event, and submission/verdict/strike/audit_event do
+    NOT cascade — so the transaction removes the leaf rows first and
+    the event row last, letting the cascades sweep the rest.
+
+    The event.purged audit row is written (with the pre-delete counts,
+    audit-actions.md) and then deleted with the rest of the log — the
+    purge is total; the counts also come back in the response."""
+    conn: sqlite3.Connection = request.app.state.db
+    event = _get_event(conn, event_id)
+    if event is None:
+        return _err(404, "event_not_found", "No such event.")
+    if event["status"] != "closed":
+        return _err(409, "event_not_closed",
+                    "Close the event before purging it.")
+    if body.confirm != event["name"]:
+        return _err(409, "confirm_mismatch",
+                    "Type the event's name exactly to purge it.")
+
+    # Photo files are named by evidence id (originals/{id} + the
+    # derivative at photo_path) — collect them before the rows vanish.
+    evidence_rows = conn.execute(
+        "SELECT e.id, e.photo_path FROM evidence_item e"
+        " JOIN team t ON t.id = e.team_id WHERE t.event_id = ?",
+        (event_id,),
+    ).fetchall()
+    counts = {
+        "submissions": conn.execute(
+            "SELECT COUNT(*) FROM submission WHERE riddle_id IN"
+            " (SELECT id FROM riddle WHERE event_id = ?)",
+            (event_id,)).fetchone()[0],
+        "evidence": len(evidence_rows),
+    }
+
+    with conn:
+        # The final audit row: the purge records what it destroyed,
+        # then disappears with the event's log.
+        log_action(conn, event_id=event_id, actor_type=ActorType.ADMIN,
+                   actor_id=None, action=Action.EVENT_PURGED,
+                   entity_type="event", entity_id=event_id,
+                   details=counts)
+        sub_scope = ("submission WHERE riddle_id IN"
+                     " (SELECT id FROM riddle WHERE event_id = ?)")
+        conn.execute(
+            "DELETE FROM verdict WHERE submission_id IN"
+            " (SELECT id FROM %s)" % sub_scope, (event_id,))
+        conn.execute("DELETE FROM strike WHERE event_id = ?", (event_id,))
+        conn.execute("DELETE FROM %s" % sub_scope, (event_id,))
+        conn.execute("DELETE FROM audit_event WHERE event_id = ?",
+                     (event_id,))
+        # The event row: cascades sweep riddle, team (and through it
+        # player, session, evidence_item), moderator (+ sessions), and
+        # team_invite.
+        conn.execute("DELETE FROM event WHERE id = ?", (event_id,))
+
+    # After the commit: unlink the photo files. A missing file is not
+    # an error — the rows are gone either way (a partial upload failure
+    # earlier could have left a row without its file).
+    photos_dir = request.app.state.photos_dir
+    for row in evidence_rows:
+        for rel in (row["photo_path"], f"originals/{row['id']}"):
+            try:
+                (photos_dir / rel).unlink()
+            except FileNotFoundError:
+                pass
+    return {"ok": True, "purged": counts}

@@ -30,7 +30,7 @@ when the increment runs and its tests pass.
 - [x] 7. Moderation queue + verdicts + SSE
 - [x] 8. Conduct system
 - [x] 9. Leaderboard & round end
-- [ ] 10. Deployment & ops
+- [x] 10. Deployment & ops
 
 ## Phase 3 — Stretch
 
@@ -39,6 +39,37 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-08-18 — Increment 10 complete (deployment & ops).** Purge:
+  `POST /api/admin/events/{id}/purge` in events.py — host-only,
+  closed-only (409 `event_not_closed`), confirm param is the event
+  NAME (409 `confirm_mismatch`); writes the `event.purged` audit row
+  with pre-delete counts then deletes it with the log (purge is
+  total). Delete order is load-bearing: submission/verdict/strike/
+  audit_event do NOT cascade from event, so they're deleted
+  explicitly before the event row (cascades sweep riddle/team/
+  player/session/evidence/moderator/team_invite); photo files
+  (derivatives/{id}.jpg + originals/{id}) unlinked after commit,
+  missing files tolerated. Static serving: `create_app(static_dir=)`
+  defaults to `web/dist`; `_mount_spa` catch-all registered LAST so
+  API routes win — `/j/<code>`, `/m/<code>`, unknown paths →
+  index.html (no-cache); `assets/` hashed files immutable; unmatched
+  `/api/*` → JSON 404, never HTML; skipped when dist is absent (dev
+  mode). Ops: `deploy/` — arkham-hunt.service (user unit,
+  EnvironmentFile for secrets at ~/.config/arkham-hunt.env, loopback
+  :8000, Restart=always, linger note), nginx.conf (TLS proxy;
+  **proxy_buffering off** + 300s read timeout on the SSE location —
+  the increment 7 note made permanent; client_max_body_size 12m),
+  backup.sh (online snapshot via the venv's Python sqlite3 backup
+  API — the sqlite3 CLI is NOT installed on this host, so don't
+  depend on it; tar.gz of DB + photos), RUNBOOK.md (deploy, restore
+  drill, event setup with /j//m/ QR links, 8-step full smoke
+  walkthrough, mid-night backup, purge, failure cheatsheet). 111
+  pytest passing (6 new in test_deploy.py — note: TestClient must be
+  entered with __enter__ or the lifespan never runs and app.state is
+  unset); live curl smoke: shell at / and /j/<code>, immutable asset
+  headers, JSON 404 for /api/nope, backup tarball contained DB +
+  photos while live, purge guards (open → 409, wrong name → 409) and
+  real purge (event gone, photos dir empty).
 - **2026-08-18 — Increment 9 complete (leaderboard & round end).**
   `app/leaderboard.py`: `_standings` is a GROUP BY over VERIFIED
   submissions (design.md "score is a query, not a column") — LEFT JOIN
