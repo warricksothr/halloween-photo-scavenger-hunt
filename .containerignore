@@ -1,0 +1,15 @@
+# Build-context hygiene for `podman build` / `docker build` (and the
+# identical .containerignore for podman-first hosts). The image rebuilds
+# web/dist inside stage 1 and installs server/ editable — anything the
+# host already generated is either rebuilt or runtime state:
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.egg-info
+**/data
+**/backups
+.git
+docs/reference
+deploy

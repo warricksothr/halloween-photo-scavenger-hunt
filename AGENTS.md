@@ -56,5 +56,9 @@ in `docs/` — read it before writing any code:
   to uvicorn on :8000), `npm run build`. The Vite Preact plugin is
   `@preact/preset-vite` — `@preact/preset-preact` is the old preact-cli
   preset and 404s on npm.
+- Container deploy: repo-root `Containerfile` + `deploy/CONTAINER.md`.
+  Build with `podman build --format docker` (OCI format silently drops
+  the HEALTHCHECK). Plain-HTTP runs need `ARKHAM_COOKIE_SECURE=false`
+  or every login 401s (Secure cookies never leave the browser).
 - Git history was squashed once to purge committed screenshots; treat
   history as owned and force-push only with the user's explicit approval.

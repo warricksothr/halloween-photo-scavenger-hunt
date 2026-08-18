@@ -39,6 +39,25 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-08-18 — Container deployment added.** Repo-root
+  `Containerfile` (multi-stage: `node:20-alpine` builds web/dist →
+  `python:3.12-slim` runtime, unprivileged user, HEALTHCHECK on
+  /api/health) + `deploy/CONTAINER.md` (local podman/docker runbook:
+  build, run, verify, backup/restore from the named volume, update,
+  teardown, gotchas). The editable install keeps `app` at
+  /srv/arkham/server/app so main.py's `__file__`-relative DB/static
+  paths land the runtime data dir at /srv/arkham/data — the one path
+  the volume covers. Build with `--format docker` under podman or the
+  OCI image silently drops the HEALTHCHECK. `.dockerignore` +
+  `.containerignore` keep venv/node_modules/dist/data out of the
+  build context. **New env var `ARKHAM_COOKIE_SECURE=false`**
+  (main.py): plain-HTTP runs (this recipe, LAN hosts without TLS)
+  need it or Secure cookies never reach the browser and every login
+  silently 401s; tests keep passing the factory arg. Verified against
+  podman 4.9: build → healthy → admin login → event open → player
+  join over plain HTTP → SSE heartbeat → DB (WAL) in the named
+  volume.
+
 - **2026-08-18 — Moderator team management complete (ADR 0006).**
   `GET /api/mod/teams` (event-wide roster: members with
   device_label/last_seen, open-invite count, effective size limit;

@@ -59,10 +59,15 @@ def create_app(
             "`python -m app.security '<password>'`), or pass admin_config "
             "to create_app()."
         )
-    # cookie_secure=False exists for tests and plain-HTTP local dev only —
-    # browsers refuse to send Secure cookies over http, which is correct
-    # behavior in production (the VPS terminates TLS) and a silent 401
-    # factory everywhere else.
+    # ARKHAM_COOKIE_SECURE=false exists for plain-HTTP runs (the local
+    # container recipe, LAN party hosts with no TLS). Browsers refuse to
+    # send Secure cookies over http, which is correct in production (the
+    # VPS terminates TLS) and a silent 401 factory everywhere else —
+    # without this toggle a local container could never log in. Tests
+    # keep passing the argument; the env var only fills the default.
+    if cookie_secure and os.environ.get(
+            "ARKHAM_COOKIE_SECURE", "").lower() in {"0", "false", "no"}:
+        cookie_secure = False
 
     # Photos live beside the DB by default (data/photos/ — gitignored);
     # tests inject their own temp dir so no test writes real files.
