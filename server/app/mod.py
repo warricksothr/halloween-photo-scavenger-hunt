@@ -490,3 +490,115 @@ def player_history(player_id: str, request: Request,
         "strikes": [dict(s) for s in strikes],
         "sessions": [dict(s) for s in sessions],
     }
+
+
+# ── Team management (stretch; design.md "Moderation / administration
+# additions") ──
+
+@router.get("/teams")
+def mod_teams(request: Request,
+              ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Roster view for the whole event: every team with its members
+    (device label + last-seen, the multi-teaming heuristics), pending
+    invites, and the effective size limit. Read-only — never audited
+    (ADR 0004)."""
+    conn: sqlite3.Connection = request.app.state.db
+    teams = conn.execute(
+        "SELECT t.id, t.name, t.size_limit, e.team_size_limit"
+        " FROM team t JOIN event e ON e.id = t.event_id"
+        " WHERE t.event_id = ? ORDER BY t.created_at ASC, t.id ASC",
+        (ctx.event_id,),
+    ).fetchall()
+    members = conn.execute(
+        "SELECT p.id, p.team_id, p.display_name,"
+        "       (SELECT MAX(s.last_seen_at) FROM session s"
+        "        WHERE s.player_id = p.id AND s.revoked_at IS NULL"
+        "       ) AS last_seen_at,"
+        "       (SELECT s.device_label FROM session s"
+        "        WHERE s.player_id = p.id AND s.revoked_at IS NULL"
+        "        ORDER BY s.last_seen_at DESC LIMIT 1) AS device_label"
+        " FROM player p JOIN team t ON t.id = p.team_id"
+        " WHERE t.event_id = ? ORDER BY p.created_at ASC",
+        (ctx.event_id,),
+    ).fetchall()
+    now = int(time.time())
+    invites = conn.execute(
+        "SELECT ti.team_id, COUNT(*) AS open"
+        " FROM team_invite ti JOIN team t ON t.id = ti.team_id"
+        " WHERE t.event_id = ? AND ti.redeemed_by IS NULL"
+        "   AND ti.revoked_at IS NULL AND ti.expires_at > ?"
+        " GROUP BY ti.team_id",
+        (ctx.event_id, now),
+    ).fetchall()
+    open_invites = {r["team_id"]: r["open"] for r in invites}
+    by_team: dict[str, list] = {}
+    for m in members:
+        by_team.setdefault(m["team_id"], []).append(
+            {"id": m["id"], "display_name": m["display_name"],
+             "device_label": m["device_label"],
+             "last_seen_at": m["last_seen_at"]})
+    return {
+        "teams": [
+            {"id": t["id"], "name": t["name"],
+             "size_limit": t["size_limit"] or t["team_size_limit"],
+             "open_invites": open_invites.get(t["id"], 0),
+             "members": by_team.get(t["id"], [])}
+            for t in teams
+        ]
+    }
+
+
+@router.post("/teams/{team_id}/remove/{player_id}")
+def remove_member(team_id: str, player_id: str, request: Request,
+                  ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+    """Remove a member from a team (audit `team.member_removed`).
+
+    player.team_id is NOT NULL, so removal PARKS the player on a fresh
+    empty team-of-one rather than orphaning them — the mirror of a
+    voluntary switch: evidence and submissions stay with the old team
+    (they reference team_id), and all of the removed player's sessions
+    are revoked. A removed device must rejoin with the join code (solo
+    parking spot) or a team invite (rejoin elsewhere) — deliberate,
+    because "clear devices" is the same endpoint's job: a lost phone
+    and an accidental join both leave revoked sessions.
+
+    Removing the last member is allowed: the team row simply stands
+    empty (score stays queryable — verified submissions still
+    reference it). Players never remove members; the audit actor is
+    the moderator."""
+    conn: sqlite3.Connection = request.app.state.db
+    row = conn.execute(
+        "SELECT p.team_id FROM player p JOIN team t ON t.id = p.team_id"
+        " WHERE p.id = ? AND t.event_id = ?",
+        (player_id, ctx.event_id),
+    ).fetchone()
+    if row is None or row["team_id"] != team_id:
+        # 404, not 409: "not on that team" and "no such player" are the
+        # same answer to a moderator — don't confirm cross-team facts.
+        return _err(404, "not_found", "That player is not on that team.")
+
+    now = int(time.time())
+    with conn:
+        new_team_id = ids.new_id()
+        conn.execute(
+            "INSERT INTO team (id, event_id, created_at) VALUES (?, ?, ?)",
+            (new_team_id, ctx.event_id, now),
+        )
+        conn.execute("UPDATE player SET team_id = ? WHERE id = ?",
+                     (new_team_id, player_id))
+        conn.execute(
+            "UPDATE session SET revoked_at = ?"
+            " WHERE player_id = ? AND revoked_at IS NULL",
+            (now, player_id),
+        )
+        log_action(conn, event_id=ctx.event_id,
+                   actor_type=ActorType.MODERATOR, actor_id=ctx.moderator_id,
+                   action=Action.TEAM_MEMBER_REMOVED,
+                   entity_type="team", entity_id=team_id,
+                   details={"player_id": player_id})
+    # The parking team is empty and scoreless, so standings usually
+    # don't move — but if the old team's label was that player's
+    # display name, it just changed. Outside the transaction, per the
+    # sse.publish rule.
+    publish_leaderboard(request, ctx.event_id)
+    return {"ok": True, "parked_team_id": new_team_id}

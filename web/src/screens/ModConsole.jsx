@@ -43,6 +43,13 @@ export function ModConsoleScreen({ modEvent, copy }) {
   // (strikes included) loads lazily for consistency of judgment.
   const [confirming, setConfirming] = useState(false);
   const [history, setHistory] = useState(null);
+  // Team management (stretch): a collapsible roster below the queue.
+  // Removal is a danger action — same armed-confirm pattern as
+  // INAPPROPRIATE — and copy stays plain by rule (conduct-adjacent
+  // surface; nothing themed).
+  const [showTeams, setShowTeams] = useState(false);
+  const [teams, setTeams] = useState(null);
+  const [confirmRemove, setConfirmRemove] = useState(null); // {team, member}
 
   async function reload() {
     const result = await api.modQueue();
@@ -118,6 +125,33 @@ export function ModConsoleScreen({ modEvent, copy }) {
     const result = await api.modResolveFlag(item.evidence.id, resolution);
     if (result?.error) setError(result.message);
     await reload();
+  }
+
+  async function loadTeams() {
+    const result = await api.modTeams();
+    if (result.error) setError(result.message);
+    else setTeams(result.teams);
+  }
+
+  function toggleTeams() {
+    const next = !showTeams;
+    setShowTeams(next);
+    setConfirmRemove(null);
+    // Load on open only — membership changes are deliberate moderator
+    // acts, not a stream; there is no SSE delta for them.
+    if (next && teams === null) loadTeams();
+  }
+
+  async function removeMember() {
+    if (busy || !confirmRemove) return;
+    setBusy(true);
+    setError(null);
+    const { team, member } = confirmRemove;
+    const result = await api.modRemoveMember(team.id, member.id);
+    if (result?.error) setError(result.message);
+    else setConfirmRemove(null);
+    await loadTeams();
+    setBusy(false);
   }
 
   const openItem = queue?.find((item) => item.id === openId) ?? null;
@@ -360,6 +394,79 @@ export function ModConsoleScreen({ modEvent, copy }) {
           </section>
         </section>
       )}
+
+      {/* Team management (stretch; design.md moderation additions):
+          the roster view with per-member removal. Collapsed by default
+          — the queue is the work; rosters are the exception. */}
+      <section style={{ borderTop: '1px dashed var(--border-dim)', paddingTop: 10 }}>
+        <button
+          class="btn secondary"
+          style={{ width: 'auto', padding: '6px 12px', fontSize: '0.7rem' }}
+          onClick={toggleTeams}
+        >
+          {showTeams ? 'Hide teams' : 'Teams'}
+        </button>
+        {showTeams && (
+          teams === null ? (
+            <p class="dim" style={{ marginTop: 8 }}>Loading rosters…</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              {teams.map((team) => (
+                <div key={team.id} class="panel" style={{ padding: '8px 16px' }}>
+                  <div class="dim" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    {team.name ?? team.members[0]?.display_name ?? '(empty)'}
+                    {' · '}{team.members.length} / {team.size_limit}
+                    {team.open_invites > 0 && ` · ${team.open_invites} invite${team.open_invites > 1 ? 's' : ''} open`}
+                  </div>
+                  {team.members.map((member) => (
+                    <div key={member.id} class="list-row" style={{ fontSize: '0.8rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {member.display_name}
+                        <span class="dim" style={{ fontSize: '0.72rem' }}>
+                          {' '}{member.device_label ? `${member.device_label} · ` : ''}{ago(member.last_seen_at ?? 0)}
+                        </span>
+                      </div>
+                      {confirmRemove?.member.id === member.id ? (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            class="btn danger"
+                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem' }}
+                            disabled={busy}
+                            onClick={removeMember}
+                          >
+                            Confirm remove
+                          </button>
+                          <button
+                            class="btn secondary"
+                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem' }}
+                            disabled={busy}
+                            onClick={() => setConfirmRemove(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          class="btn secondary"
+                          style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem', color: 'var(--alert)', borderColor: 'var(--alert)' }}
+                          onClick={() => setConfirmRemove({ team, member })}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <p class="dim" style={{ fontSize: '0.72rem' }}>
+                Removing a member parks them on their own team and revokes
+                their sessions — their evidence stays with the old team.
+                They can rejoin with the join code or a team invite.
+              </p>
+            </div>
+          )
+        )}
+      </section>
     </main>
   );
 }

@@ -35,9 +35,31 @@ when the increment runs and its tests pass.
 ## Phase 3 — Stretch
 
 - [x] Team invites + roster + multi-member drawers
-- [ ] Moderator team management
+- [x] Moderator team management
 
 ## Notes / blockers
+
+- **2026-08-18 — Moderator team management complete (ADR 0006).**
+  `GET /api/mod/teams` (event-wide roster: members with
+  device_label/last_seen, open-invite count, effective size limit;
+  read-only, never audited) and
+  `POST /api/mod/teams/{team_id}/remove/{player_id}` (audit
+  `team.member_removed`, actor moderator, entity the team, details
+  `{ player_id }`). Removal PARKS the player on a fresh empty
+  team-of-one — `player.team_id` is NOT NULL so a removed player
+  cannot be orphaned; the parking spot mirrors the voluntary-switch
+  rule: evidence/submissions stay with the old team (they reference
+  team_id), all sessions revoked, rejoin via join code or invite.
+  Removing the last member leaves an empty team row whose score stays
+  queryable. `publish_leaderboard` after commit (the old team's label
+  may have been the removed player's display name). Mod console: a
+  collapsible "Teams" section below the queue with per-member Remove
+  → Confirm remove (same armed-confirm pattern as INAPPROPRIATE),
+  plain hardcoded copy (un-themed by rule). 6 new tests in
+  test_teams.py (roster shape, removal semantics, rejoin after
+  removal, empty-team standings, 404s, players 401). Full suite 133
+  passing; npm build 54.6 kB; live curl smoke verified roster view,
+  removal, revoked-session 401, and the audit row.
 
 - **2026-08-18 — Teams stretch: invites + roster + multi-member
   drawers complete.** Backend `app/teams.py` (purely additive — the

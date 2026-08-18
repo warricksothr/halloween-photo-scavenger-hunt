@@ -82,6 +82,11 @@ export const api = {
       body: { resolution },
     }),
   modPlayerHistory: (playerId) => request(`/api/mod/players/${playerId}`),
+  // ── Team management (stretch) ──
+  modTeams: () => request('/api/mod/teams'),
+  modRemoveMember: (teamId, playerId) =>
+    request(`/api/mod/teams/${encodeURIComponent(teamId)}/remove/${encodeURIComponent(playerId)}`,
+            { method: 'POST' }),
   // ── Conduct (increment 8) ──
   // Verdict + strike in one action (design.md): the moderator never
   // needs a second screen. cooldownMinutes matters only at strike 2.

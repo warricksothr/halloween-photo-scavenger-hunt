@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 
 from app import ids
 from test_evidence import make_jpeg
-from test_mod import _submit
+from test_mod import _mod, _submit
 from test_leaderboard import _multi_party
 
 
@@ -392,3 +392,155 @@ class TestClosedEvent:
             json={"display_name": "Robin"})
         assert resp.status_code == 409
         assert resp.json()["error"] == "event_closed"
+
+
+class TestModTeamManagement:
+    """Moderator team management (stretch): the roster view and
+    member removal. Semantics per ADR 0006: removal parks the player
+    on a fresh empty team-of-one, revokes their sessions, leaves their
+    evidence with the old team, and audits `team.member_removed`."""
+
+    def _cooked_party(self, admin, client):
+        """An open event (size limit 4) with Batman+Robin teamed and
+        Oracle solo. Returns (party-dict, mod-client)."""
+        p = _multi_party(admin, client, ("Batman", "Robin", "Oracle"),
+                         riddles=("R1",))
+        client.app.state.db.execute(
+            "UPDATE event SET team_size_limit = 4 WHERE id = ?",
+            (p["event_id"],))
+        client.app.state.db.commit()
+        batman = p["players"]["Batman"]["client"]
+        robin = p["players"]["Robin"]["client"]
+        token = _invite(batman)
+        assert robin.post(f"/api/team/invites/{token}/redeem",
+                          json={"display_name": "Robin",
+                                "device_label": "Robin's phone"}
+                          ).status_code == 201
+        return p, _mod(client, p["mod_code"])
+
+    def test_roster_view(self, admin, client):
+        p, mod = self._cooked_party(admin, client)
+        resp = mod.get("/api/mod/teams")
+        assert resp.status_code == 200, resp.text
+        teams = resp.json()["teams"]
+        # Three team rows: Bat-team (2 members), Robin's old empty
+        # team-of-one, Oracle's solo team.
+        sizes = sorted(len(t["members"]) for t in teams)
+        assert sizes == [0, 1, 2]
+        bat_team = next(t for t in teams if len(t["members"]) == 2)
+        assert [m["display_name"] for m in bat_team["members"]] == [
+            "Batman", "Robin"]
+        assert bat_team["members"][1]["device_label"] == "Robin's phone"
+        assert all(t["size_limit"] == 4 for t in teams)
+
+        # Roster is read-only and never audited (ADR 0004).
+        rows = client.app.state.db.execute(
+            "SELECT COUNT(*) AS n FROM audit_event"
+            " WHERE action = 'team.member_removed'").fetchone()
+        assert rows["n"] == 0
+
+    def test_remove_member(self, admin, client):
+        p, mod = self._cooked_party(admin, client)
+        robin = p["players"]["Robin"]
+        bat_team_id = p["players"]["Batman"]["team_id"]
+
+        # Robin has baggage: upload evidence, then get removed.
+        up = robin["client"].post(
+            "/api/evidence",
+            files={"photo": ("r.jpg", make_jpeg(), "image/jpeg")})
+        assert up.status_code == 201, up.text
+
+        resp = mod.post(
+            f"/api/mod/teams/{bat_team_id}/remove/{robin['player_id']}")
+        assert resp.status_code == 200, resp.text
+        parked = resp.json()["parked_team_id"]
+        assert parked != bat_team_id
+
+        # Robin is parked alone; their session is revoked.
+        row = client.app.state.db.execute(
+            "SELECT team_id FROM player WHERE id = ?",
+            (robin["player_id"],)).fetchone()
+        assert row["team_id"] == parked
+        sessions = client.app.state.db.execute(
+            "SELECT COUNT(*) AS n FROM session"
+            " WHERE player_id = ? AND revoked_at IS NULL",
+            (robin["player_id"],)).fetchone()
+        assert sessions["n"] == 0
+        # The revoked cookie no longer works.
+        assert robin["client"].get("/api/state").status_code == 401
+
+        # Evidence stays with the old team (anti-poaching).
+        ev = client.app.state.db.execute(
+            "SELECT team_id FROM evidence_item WHERE id = ?",
+            (up.json()["id"],)).fetchone()
+        assert ev["team_id"] == bat_team_id
+
+        # Batman's roster now shows one member.
+        roster = p["players"]["Batman"]["client"].get("/api/team").json()
+        assert [m["display_name"] for m in roster["members"]] == ["Batman"]
+
+        # Audit: moderator actor, entity the team, details the player.
+        audit = client.app.state.db.execute(
+            "SELECT actor_type, entity_type, entity_id, details"
+            " FROM audit_event WHERE action = 'team.member_removed'"
+        ).fetchone()
+        assert audit["actor_type"] == "moderator"
+        assert audit["entity_type"] == "team"
+        assert audit["entity_id"] == bat_team_id
+        assert robin["player_id"] in audit["details"]
+
+    def test_removed_player_can_rejoin(self, admin, client):
+        """Removal frees a seat, and the parked player rejoins
+        deliberately — here via a fresh invite (the join code parks
+        them solo just as well)."""
+        p, mod = self._cooked_party(admin, client)
+        robin = p["players"]["Robin"]
+        bat_team_id = p["players"]["Batman"]["team_id"]
+        mod.post(f"/api/mod/teams/{bat_team_id}/remove/{robin['player_id']}")
+
+        token = _invite(p["players"]["Batman"]["client"])
+        resp = robin["client"].post(
+            f"/api/team/invites/{token}/redeem",
+            json={"display_name": "Robin"})
+        # No baggage on the parking team → straight-through switch.
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["team_id"] == bat_team_id
+        assert robin["client"].get("/api/state").status_code == 200
+
+    def test_remove_last_member_leaves_empty_team(self, admin, client):
+        """A solo player's removal empties their team — the row stands
+        and its score stays queryable (submissions reference team_id)."""
+        p, mod = self._cooked_party(admin, client)
+        oracle = p["players"]["Oracle"]
+        resp = mod.post(
+            f"/api/mod/teams/{oracle['team_id']}/remove/{oracle['player_id']}")
+        assert resp.status_code == 200, resp.text
+
+        teams = mod.get("/api/mod/teams").json()["teams"]
+        oracle_old = next(t for t in teams if t["id"] == oracle["team_id"])
+        assert oracle_old["members"] == []
+        board = mod.get("/api/leaderboard").json()
+        assert any(s["team_id"] == oracle["team_id"]
+                   for s in board["standings"])
+
+    def test_remove_wrong_team_or_event_is_404(self, admin, client):
+        p, mod = self._cooked_party(admin, client)
+        oracle = p["players"]["Oracle"]
+        bat_team_id = p["players"]["Batman"]["team_id"]
+        # Oracle isn't on Batman's team → same 404 as a bad id.
+        resp = mod.post(
+            f"/api/mod/teams/{bat_team_id}/remove/{oracle['player_id']}")
+        assert resp.status_code == 404
+        assert mod.post(
+            f"/api/mod/teams/{bat_team_id}/remove/nope").status_code == 404
+
+    def test_players_cannot_remove(self, admin, client):
+        p, _ = self._cooked_party(admin, client)
+        batman = p["players"]["Batman"]["client"]
+        robin = p["players"]["Robin"]
+        bat_team_id = p["players"]["Batman"]["team_id"]
+        resp = batman.post(
+            f"/api/mod/teams/{bat_team_id}/remove/{robin['player_id']}")
+        assert resp.status_code == 401
+        # And the moderator roster view is staff-only too.
+        assert batman.get("/api/mod/teams").status_code == 401
