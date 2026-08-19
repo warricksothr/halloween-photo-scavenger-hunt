@@ -34,6 +34,8 @@ in `docs/` — read it before writing any code:
 - Comment the *why*, not the what. Docs carry design, code carries
   mechanism — this project is a teaching vehicle.
 - Commit early and often; imperative commit messages; push to `origin main`.
+- Ops docs (`deploy/*.md`) carry only commands that were actually run
+  and verified in a live smoke — plus the gotchas that run surfaced.
 
 ## Policy — do not commit
 
@@ -60,5 +62,16 @@ in `docs/` — read it before writing any code:
   Build with `podman build --format docker` (OCI format silently drops
   the HEALTHCHECK). Plain-HTTP runs need `ARKHAM_COOKIE_SECURE=false`
   or every login 401s (Secure cookies never leave the browser).
+- Tests: one `TestClient` per player/moderator — a shared jar means
+  every join/redeem overwrites that client's session cookie. And
+  `TestClient(app)` never runs the lifespan (no `app.state`) unless
+  used as a context manager (`with TestClient(app)`).
+- curl smoke tests: pass `-c jar` on every call that SETS a cookie
+  (join, invite redeem) — `-b` alone leaves the jar stale, which
+  surfaces as phantom 401s after a switch (redeem revokes the old
+  session and mints a new one).
+- Before asserting on response/DB shapes in tests, grep the source:
+  the drawer returns a bare list (not `{"items": …}`), leaderboard
+  uses `standings`, the audit table is `audit_event`.
 - Git history was squashed once to purge committed screenshots; treat
   history as owned and force-push only with the user's explicit approval.

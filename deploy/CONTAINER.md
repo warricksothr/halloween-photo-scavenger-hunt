@@ -165,3 +165,8 @@ podman rmi arkham-hunt:local  # image too, if reclaiming space
 - **SELinux hosts** (Fedora/RHEL rootless podman) with a *bind mount*
   instead of a named volume: append `:Z` (`-v /path/data:/srv/arkham/data:Z`).
   Named volumes need no label.
+- **Compose override files don't replace ports**: the classic
+  list-merge semantics APPEND a ports mapping from an override file
+  instead of replacing the base one — the container then still tries
+  the base file's port. Change the port by editing `compose.yml`,
+  never by override.
