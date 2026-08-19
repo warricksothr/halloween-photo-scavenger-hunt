@@ -5,10 +5,12 @@ holds the whole app (web build + FastAPI server + SQLite), with no
 nginx and no TLS. For the TLS-terminated VPS path, see
 `deploy/RUNBOOK.md` (systemd + nginx) instead.
 
-Every command below was run and verified against the image built from
-the repo `Containerfile` (podman 4.9). `docker` is a drop-in
-replacement — swap the word `podman` for `docker` throughout; the
-`Containerfile` is valid syntax for both.
+The easy path is **compose** — one command up, one command down
+(§1). The raw `podman run` recipe stays in §2 for hosts without a
+compose frontend. Every command below was run and verified against the
+repo `Containerfile` + `compose.yml` (podman 4.9, podman-compose). Any
+of `podman-compose`, `podman compose`, or `docker compose` works — the
+`Containerfile` and `compose.yml` are valid syntax for both runtimes.
 
 ## When to use this vs. the systemd path
 
@@ -18,7 +20,31 @@ replacement — swap the word `podman` for `docker` throughout; the
 | Host needs Python/Node | no — both live in the image       | yes                                 |
 | Best for               | party-night on a laptop/LAN, evals | the standing VPS deployment         |
 
-## 0. Build the image
+## 1. One command: compose
+
+```sh
+# Credentials go in a gitignored .env beside compose.yml (or export
+# them in the shell). Generate the hash with any checkout's venv:
+server/.venv/bin/python -m app.security 'your-password'
+cat > .env <<EOF
+ARKHAM_ADMIN_USERNAME=admin
+ARKHAM_ADMIN_PASSWORD_HASH=<hash from above>
+EOF
+
+podman-compose up -d        # builds the image on first run, then starts
+```
+
+`compose.yml` pins the whole recipe: build from the Containerfile,
+`ARKHAM_COOKIE_SECURE=false`, loopback port 8080, and the `arkham-data`
+named volume. It refuses to start without `ARKHAM_ADMIN_PASSWORD_HASH`
+(a `:?` interpolation guard) so you never get a running container with
+no admin path. Teardown is `podman-compose down` (add `-v` to also drop
+the volume — only when the night's data is done). For a LAN party, edit
+the port to `"8080:8000"` to publish on all interfaces.
+
+## 2. Raw podman/docker (no compose frontend)
+
+Build the image:
 
 ```sh
 # --format docker keeps the HEALTHCHECK: podman's default OCI format
@@ -36,7 +62,7 @@ package's `__file__`, so the image keeps the repo layout and the
 runtime data dir lands at `/srv/arkham/data` — the one path a volume
 must cover.
 
-## 1. First run
+Then run it:
 
 ```sh
 # Generate the admin password hash once (any checkout with the server
@@ -67,7 +93,7 @@ The three environment variables, and why:
 on phones on the same network), publish on all interfaces and give the
 room the host's LAN address: `-p 8080:8000`.
 
-## 2. Prove it works (30 seconds)
+## 3. Prove it works (30 seconds)
 
 ```sh
 curl -s http://127.0.0.1:8080/api/health        # {"status":"ok",...}
@@ -85,7 +111,7 @@ game board appears instead of bouncing back to the join screen) proves
 the cookie toggle; a join that silently returns to the join screen
 means `ARKHAM_COOKIE_SECURE=false` is missing.
 
-## 3. Backup / restore
+## 4. Backup / restore
 
 The state lives entirely in the named volume (`/srv/arkham/data`: the
 SQLite DB — WAL mode, so expect `arkham.db-wal` alongside — and
@@ -109,21 +135,23 @@ podman run --rm -v arkham-data:/data:ro -v "$PWD:/out" alpine \
 Restore: stop the container, replace the volume contents, start. Prove
 the restore once before the night — a backup never restored is a rumor.
 
-## 4. Update to a new build
+## 5. Update to a new build
 
 ```sh
 git pull
-podman build --format docker -t arkham-hunt:local .
-podman stop arkham-hunt && podman rm arkham-hunt
-# same run command as §1 — the volume carries the state forward
+podman-compose up -d --build   # rebuilds the image, swaps the container
+# (raw path: podman build --format docker -t arkham-hunt:local . &&
+#  podman stop arkham-hunt && podman rm arkham-hunt, then §2's run)
 ```
 
-## 5. Teardown
+## 6. Teardown
 
 ```sh
-podman rm -f arkham-hunt
-podman volume rm arkham-data      # only when the night's data is done
-podman rmi arkham-hunt:local
+podman-compose down           # stop + remove the container
+podman-compose down -v        # …and the volume — only when the night's
+                              # data is done
+podman rmi arkham-hunt:local  # image too, if reclaiming space
+# (raw path: podman rm -f arkham-hunt && podman volume rm arkham-data)
 ```
 
 ## Gotchas verified on the first pass

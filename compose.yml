@@ -1,0 +1,41 @@
+# Compose for the local/LAN container recipe (deploy/CONTAINER.md).
+#
+# One command up, one command down. Works with podman-compose,
+# `podman compose`, or `docker compose` — the file is plain v3 syntax.
+#
+# Secrets stay OUT of this file (AGENTS.md policy): put the admin
+# credentials in a gitignored .env beside it —
+#   ARKHAM_ADMIN_USERNAME=admin
+#   ARKHAM_ADMIN_PASSWORD_HASH=<python -m app.security 'pw'>
+# — or export them in the shell before `up`. Compose interpolates
+# ${VAR} from the environment and from ./.env.
+#
+# The image build is pinned to --format docker inside the Containerfile
+# path: compose build uses the same builder, and the HEALTHCHECK note
+# from CONTAINER.md (podman OCI drops healthchecks) applies only to
+# `podman build` by hand; the compose builders emit docker format.
+
+services:
+  arkham:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/arkham-hunt:local
+    container_name: arkham-hunt
+    restart: unless-stopped
+    ports:
+      # Loopback-only by default. For a LAN party (phones on the same
+      # network), publish on all interfaces: - "8080:8000".
+      - "127.0.0.1:8080:8000"
+    environment:
+      ARKHAM_ADMIN_USERNAME: ${ARKHAM_ADMIN_USERNAME:-admin}
+      ARKHAM_ADMIN_PASSWORD_HASH: ${ARKHAM_ADMIN_PASSWORD_HASH:?Set ARKHAM_ADMIN_PASSWORD_HASH in .env or the environment — see deploy/CONTAINER.md}
+      # Plain HTTP on a LAN port: required or every login 401s (Secure
+      # cookies never leave the browser). Do not set this on the TLS path.
+      ARKHAM_COOKIE_SECURE: "false"
+    volumes:
+      # The one path that matters: DB (WAL) + photos. See CONTAINER.md §4.
+      - arkham-data:/srv/arkham/data
+
+volumes:
+  arkham-data:

@@ -9,6 +9,9 @@ docs/reference/*.webp
 # Runtime data: SQLite database and uploaded player photos.
 data/
 
+# Secrets (compose interpolation source) — never commit.
+.env
+
 # Python
 __pycache__/
 *.pyc

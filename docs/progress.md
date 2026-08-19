@@ -57,6 +57,18 @@ when the increment runs and its tests pass.
   podman 4.9: build → healthy → admin login → event open → player
   join over plain HTTP → SSE heartbeat → DB (WAL) in the named
   volume.
+- **2026-08-18 (later) — One-command container recipe.** Repo-root
+  `compose.yml` pins the verified recipe (build from Containerfile,
+  `ARKHAM_COOKIE_SECURE=false`, loopback 8080, `arkham-data` volume,
+  restart unless-stopped); credentials come from a gitignored `.env`
+  (now in .gitignore) or the shell, with a `:?` interpolation guard so
+  the stack refuses to start without `ARKHAM_ADMIN_PASSWORD_HASH`.
+  Verified with podman-compose: `up -d` → healthy → admin login ok →
+  `down`. CONTAINER.md restructured: compose is §1 (the one-command
+  path), raw `podman run` is §2 (no compose frontend), sections
+  renumbered 1–6. Gotcha found: docker-compose v1-style list merge
+  means an override file APPENDS port mappings rather than replacing
+  them — change the port by editing compose.yml, not by override.
 
 - **2026-08-18 — Moderator team management complete (ADR 0006).**
   `GET /api/mod/teams` (event-wide roster: members with
