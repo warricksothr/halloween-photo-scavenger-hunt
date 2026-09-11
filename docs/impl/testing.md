@@ -51,6 +51,20 @@ Pass Playwright options after `--`, for example:
 npm --prefix web run test:e2e -- --workers=1
 ```
 
+Regenerate the tracked README product screenshots with the dedicated capture
+spec:
+
+```sh
+npm --prefix web run screenshots
+```
+
+The spec uses the same temporary server and built PWA as the browser smoke,
+seeds deterministic event data, and writes `join.png`, `riddle-board.png`,
+`evidence-drawer.png`, `moderator-console.png`, and `standings.png` under
+`docs/screenshots/`. Review those files as documentation assets before
+committing them. Set `README_SCREENSHOT_DIR` to write a review copy elsewhere.
+The fixture photo is generated in the spec and contains no player data.
+
 The Podman deployment smoke is intentionally opt-in because it builds the full
 image and needs host container networking:
 

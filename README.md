@@ -23,6 +23,33 @@ progress tracker live in [`docs/`](docs/).
 - [`docs/reference/THEME-NOTES.md`](docs/reference/THEME-NOTES.md) —
   Arkham visual language and verdict copy bank
 
+## What it looks like
+
+The player PWA is designed for phones at the venue. Moderators use a separate
+queue view on a larger screen. These captures come from the deterministic
+Playwright flow described in [`docs/impl/testing.md`](docs/impl/testing.md).
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/join.png" alt="Player join screen" width="240"></td>
+    <td><img src="docs/screenshots/riddle-board.png" alt="Player riddle board" width="240"></td>
+    <td><img src="docs/screenshots/evidence-drawer.png" alt="Player evidence drawer" width="240"></td>
+  </tr>
+  <tr>
+    <td align="center">Join</td>
+    <td align="center">Riddle board</td>
+    <td align="center">Evidence drawer</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/moderator-console.png" alt="Moderator analysis queue" width="720"></td>
+    <td><img src="docs/screenshots/standings.png" alt="Player standings screen" width="240"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">Moderator console</td>
+    <td align="center">Standings</td>
+  </tr>
+</table>
+
 ## Quality checks
 
 Install the locked Python and npm dependencies, then run the shared fast gate:
