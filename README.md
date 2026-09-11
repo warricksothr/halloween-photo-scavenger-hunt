@@ -11,8 +11,9 @@ pack, not a fork point.
 
 ## Status
 
-**Design phase complete — no code yet.** The specification, build plan,
-and progress tracker live in [`docs/`](docs/).
+The MVP backend, PWA, moderation flow, team stretch, deployment recipe, and
+layered quality checks are implemented. The specification, build plan, and
+progress tracker live in [`docs/`](docs/).
 
 - [`docs/design.md`](docs/design.md) — the spec: game loop, verdict
   states, moderation & conduct systems, data model, flow diagrams
@@ -21,6 +22,27 @@ and progress tracker live in [`docs/`](docs/).
 - [`docs/progress.md`](docs/progress.md) — what's done, what's next
 - [`docs/reference/THEME-NOTES.md`](docs/reference/THEME-NOTES.md) —
   Arkham visual language and verdict copy bank
+
+## Quality checks
+
+Install the locked Python and npm dependencies, then run the shared fast gate:
+
+```sh
+bash scripts/check-quality.sh
+```
+
+The fast gate runs server tests with branch-aware coverage and Ruff, the
+isolated backup/restore check, frontend unit tests, and the production build.
+The built-PWA browser smoke and the Podman deployment smoke remain explicit
+longer gates:
+
+```sh
+npm --prefix web run test:e2e -- --workers=1
+bash scripts/smoke-container.sh
+```
+
+See [`docs/impl/testing.md`](docs/impl/testing.md) for the layer boundaries,
+required tools, and failure-artifact locations.
 
 ## Planned stack
 

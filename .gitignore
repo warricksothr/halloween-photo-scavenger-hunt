@@ -17,8 +17,12 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.coverage*
+.ruff_cache/
 *.egg-info/
 
 # Node / Vite
 node_modules/
 web/dist/
+web/.playwright-results/
+.deploy-smoke-results/

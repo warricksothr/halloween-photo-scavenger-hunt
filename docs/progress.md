@@ -39,6 +39,56 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-10 — Shared fast quality gate and CI workflow added.**
+  `scripts/check-quality.sh` installs `server/uv.lock` with `uv sync --locked`,
+  runs the server and deployment checks, installs `web/package-lock.json` with
+  `npm ci`, then runs frontend unit tests and the production build.
+  `.github/workflows/quality.yml` runs that same command for pull requests and
+  pushes to `main`, caches the Python and npm stores, and uploads any available
+  failure diagnostics. The built-PWA and Podman smokes remain explicit manual
+  gates because they need Chromium and a container runtime. README, testing
+  docs, and ADR 0010 name the commands and boundary.
+
+- **2026-09-09 — Built-PWA browser smoke added.** `web/e2e/game-loop.spec.js`
+  runs through the built `web/dist` path with Playwright, a temporary SQLite
+  database, temporary photo storage, and generated admin credentials. The
+  smoke covers QR-style player and moderator routes, evidence drawer upload,
+  pending submission state, moderator verification, SSE delivery, solved tile,
+  and live standings. `npm ci --prefix web && npm --prefix web test &&
+  npm --prefix web run test:e2e -- --workers=1` passes with 11 unit tests and
+  one browser test. The browser gate is documented in `docs/impl/testing.md`
+  and artifacts stay under ignored `web/.playwright-results/`.
+  A frontend boot defect found by this smoke is fixed in `web/src/store.js`:
+  subscriber notifications now receive a fresh state shell, so Preact rerenders
+  after the initial unauthenticated probe.
+
+- **2026-09-09 — Backend concurrency regressions covered.**
+  `server/tests/test_regressions.py` now synchronizes invite redemption and
+  close-versus-verdict races, checks the database result and audit rows,
+  exercises SSE routing and unsubscribe cleanup, reopens a copied migrated
+  database, verifies missing-admin startup failure, and checks reciprocal
+  cross-event/cross-team privacy. The shared SQLite connection now uses a
+  request-level reentrant lock for invite redemption, event close, and
+  moderator verdict handlers. The full quality gate passes 139 tests with
+  94.48% branch-aware coverage.
+
+- **2026-09-10 — Backup and container deployment checks added.**
+  `scripts/check-deploy.sh` runs shell syntax checks and an isolated backup /
+  restore test without requiring the `sqlite3` CLI. `scripts/smoke-container.sh`
+  is the opt-in Podman gate: it builds with Docker-format health checks, waits
+  for health, logs in, opens an event, joins a player over plain HTTP, uploads
+  a synthetic photo, receives an SSE heartbeat, and removes its disposable
+  image, container, volume, credentials, and generated photos. A failed run
+  keeps logs under ignored `.deploy-smoke-results/`. The deployment test
+  passed, and the Podman smoke passed on Podman 4.9.3. ADR 0009 records why
+  these gates stay separate.
+
+- **2026-09-09 — Backend quality gate added.** `scripts/check-server.sh`
+  runs the 133-test server suite with branch-aware coverage and a 90% floor,
+  then runs Ruff lint and format checks. The baseline is 93.29% combined
+  line-and-branch coverage. The script stores coverage data in a temporary
+  directory and leaves no report or database in the repository.
+
 - **2026-08-18 — Container deployment added.** Repo-root
   `Containerfile` (multi-stage: `node:20-alpine` builds web/dist →
   `python:3.12-slim` runtime, unprivileged user, HEALTHCHECK on
