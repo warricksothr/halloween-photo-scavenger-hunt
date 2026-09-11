@@ -1,0 +1,41 @@
+name: Quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fast-quality:
+    name: Fast quality gate
+    runs-on: docker
+    container:
+      image: container.local.sothr.com/library/golang:1.25-alpine
+    timeout-minutes: 20
+    steps:
+      - name: Install CI tools
+        run: apk add --no-cache bash ca-certificates git nodejs npm python3 uv
+
+      - name: Check out repository
+        uses: Actions-Mirrors/forgejo-actions-checkout@v6
+
+      - name: Run the shared fast quality command
+        run: bash scripts/check-quality.sh
+
+      # The built-PWA smoke needs Chromium and the container smoke needs
+      # Podman and host networking. Both remain explicit manual gates. See
+      # docs/impl/testing.md for their commands and artifact locations.
+      - name: Upload failure diagnostics
+        if: ${{ failure() }}
+        uses: Actions-Mirrors/forgejo-upload-artifact@v4
+        with:
+          name: quality-diagnostics
+          if-no-files-found: ignore
+          path: |
+            .deploy-smoke-results/
+            web/.playwright-results/
+            coverage.xml

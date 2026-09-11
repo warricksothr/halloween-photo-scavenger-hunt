@@ -43,9 +43,11 @@ when the increment runs and its tests pass.
   `scripts/check-quality.sh` installs `server/uv.lock` with `uv sync --locked`,
   runs the server and deployment checks, installs `web/package-lock.json` with
   `npm ci`, then runs frontend unit tests and the production build.
-  `.github/workflows/quality.yml` runs that same command for pull requests and
-  pushes to `main`, caches the Python and npm stores, and uploads any available
-  failure diagnostics. The built-PWA and Podman smokes remain explicit manual
+  `.forgejo/workflows/quality.yml` runs that same command on the internal
+  Forgejo host for pull requests and pushes to `main`, using the Docker runner
+  and mirrored Forgejo actions. The upstream GitHub mirror keeps only a manual
+  pointer workflow and does not run this CI job. The workflow uploads any
+  available failure diagnostics. The built-PWA and Podman smokes remain explicit manual
   gates because they need Chromium and a container runtime. README, testing
   docs, and ADR 0010 name the commands and boundary.
 

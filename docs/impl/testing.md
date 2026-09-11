@@ -9,8 +9,10 @@ bash scripts/check-quality.sh
 
 `check-quality.sh` installs the locked Python environment with `uv sync
 --locked`, installs the npm lockfile with `npm ci`, then runs the server,
-deployment, frontend unit, and production-build checks. The GitHub Actions
-workflow invokes this same script on pull requests and pushes to `main`.
+deployment, frontend unit, and production-build checks. The Forgejo workflow
+at `.forgejo/workflows/quality.yml` invokes this same script on pull requests
+and pushes to `main`. The upstream GitHub mirror keeps
+only a manual pointer workflow and does not run the quality gate.
 
 To run only the deployment checks, use:
 

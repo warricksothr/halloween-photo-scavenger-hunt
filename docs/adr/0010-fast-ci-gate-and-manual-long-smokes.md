@@ -22,11 +22,11 @@ while a maintainer runs a different sequence, the two quality paths can drift.
 `uv sync`, runs `scripts/check-server.sh` and `scripts/check-deploy.sh`, then
 runs `npm ci`, the frontend unit tests, and the production build.
 
-`.github/workflows/quality.yml` runs that script on pull requests and pushes to
-`main`. GitHub Actions caches the uv and npm dependency stores using
-`server/uv.lock` and `web/package-lock.json`. The workflow uploads any browser,
-deployment, or coverage diagnostics that exist when a step fails; the failed
-step's test and coverage output remains in the job log.
+`.forgejo/workflows/quality.yml` runs that script on the internal Forgejo
+host for pull requests and pushes to `main`. The Docker runner uses the
+repository's `container.local.sothr.com/library/golang:1.25-alpine` image and
+Forgejo's mirrored checkout and artifact actions. The upstream GitHub mirror
+keeps a manual pointer workflow and does not run the quality gate.
 
 The workflow documents the browser and Podman smokes through
 `docs/impl/testing.md`, but does not run them as hidden required jobs. Maintainers
