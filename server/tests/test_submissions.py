@@ -10,7 +10,6 @@ import json
 import time
 
 from fastapi.testclient import TestClient
-
 from test_evidence import make_jpeg
 
 
@@ -24,24 +23,31 @@ def _party(admin, client, riddles=("Find it",), players=("Batman",)):
     event = resp.json()
     riddle_ids = []
     for i, text in enumerate(riddles, start=1):
-        r = admin.post(f"/api/admin/events/{event['id']}/riddles",
-                       json={"text": text, "sort_order": i})
+        r = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": text, "sort_order": i},
+        )
         riddle_ids.append(r.json()["id"])
     admin.post(f"/api/admin/events/{event['id']}/open")
     for name in players:
-        client.post(f"/api/join/{event['join_code']}",
-                    json={"display_name": name})
-    up = client.post("/api/evidence",
-                     files={"photo": ("a.jpg", make_jpeg(), "image/jpeg")})
+        client.post(f"/api/join/{event['join_code']}", json={"display_name": name})
+    up = client.post(
+        "/api/evidence", files={"photo": ("a.jpg", make_jpeg(), "image/jpeg")}
+    )
     assert up.status_code == 201, up.text
-    return {"event_id": event["id"], "join_code": event["join_code"],
-            "riddle_ids": riddle_ids, "evidence_id": up.json()["id"]}
+    return {
+        "event_id": event["id"],
+        "join_code": event["join_code"],
+        "riddle_ids": riddle_ids,
+        "evidence_id": up.json()["id"],
+    }
 
 
 def _submit(client, riddle_id, evidence_id):
-    return client.post("/api/submissions",
-                       json={"riddle_id": riddle_id,
-                             "evidence_item_id": evidence_id})
+    return client.post(
+        "/api/submissions",
+        json={"riddle_id": riddle_id, "evidence_item_id": evidence_id},
+    )
 
 
 class TestSubmit:
@@ -59,8 +65,10 @@ class TestSubmit:
         ).fetchall()
         assert len(rows) == 1
         details = json.loads(rows[0]["details"])
-        assert details == {"riddle_id": p["riddle_ids"][0],
-                           "evidence_item_id": p["evidence_id"]}
+        assert details == {
+            "riddle_id": p["riddle_ids"][0],
+            "evidence_item_id": p["evidence_id"],
+        }
 
         # The snapshot reflects the new tile state immediately.
         snap = client.get("/api/state").json()
@@ -122,8 +130,10 @@ class TestSubmit:
         conn.commit()
         # New evidence + new riddle needed: riddle 1 already has a
         # pending sub from this team, which would 409 first.
-        resp = admin.post(f"/api/admin/events/{p['event_id']}/riddles",
-                          json={"text": "R2", "sort_order": 2})
+        resp = admin.post(
+            f"/api/admin/events/{p['event_id']}/riddles",
+            json={"text": "R2", "sort_order": 2},
+        )
         riddle2 = resp.json()["id"]
         resp = _submit(client, riddle2, p["evidence_id"])
         assert resp.status_code == 403
@@ -131,33 +141,49 @@ class TestSubmit:
 
 
 class TestRestrictionGates:
-    def _strike(self, conn, event_id, player_id, submission_id, level,
-                cooldown_until=None):
+    def _strike(
+        self, conn, event_id, player_id, submission_id, level, cooldown_until=None
+    ):
         now = int(time.time())
-        conn.execute("INSERT INTO moderator (id, event_id, created_at)"
-                     " VALUES ('mod1', ?, ?) ON CONFLICT DO NOTHING",
-                     (event_id, now))
+        conn.execute(
+            "INSERT INTO moderator (id, event_id, created_at)"
+            " VALUES ('mod1', ?, ?) ON CONFLICT DO NOTHING",
+            (event_id, now),
+        )
         conn.execute(
             "INSERT INTO strike (id, player_id, event_id, level,"
             " submission_id, issued_by, cooldown_until, created_at)"
             " VALUES (?, ?, ?, ?, ?, 'mod1', ?, ?)",
-            (f"st-{level}", player_id, event_id, level, submission_id,
-             cooldown_until, now),
+            (
+                f"st-{level}",
+                player_id,
+                event_id,
+                level,
+                submission_id,
+                cooldown_until,
+                now,
+            ),
         )
         conn.commit()
 
-    def test_strike_2_cooldown_blocks_uploads_not_submissions(
-            self, admin, client):
+    def test_strike_2_cooldown_blocks_uploads_not_submissions(self, admin, client):
         p = _party(admin, client, riddles=("R1", "R2"))
         conn = client.app.state.db
         player_id = conn.execute("SELECT id FROM player").fetchone()[0]
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"]).json()
-        self._strike(conn, p["event_id"], player_id, sub["id"], 2,
-                     cooldown_until=int(time.time()) + 900)
+        self._strike(
+            conn,
+            p["event_id"],
+            player_id,
+            sub["id"],
+            2,
+            cooldown_until=int(time.time()) + 900,
+        )
 
         # Upload blocked during cooldown…
-        resp = client.post("/api/evidence",
-                           files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+        resp = client.post(
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 403
         assert resp.json()["error"] == "upload_restricted"
         # …but an existing drawer photo may still be submitted.
@@ -170,8 +196,9 @@ class TestRestrictionGates:
         player_id = conn.execute("SELECT id FROM player").fetchone()[0]
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"]).json()
         self._strike(conn, p["event_id"], player_id, sub["id"], 3)
-        resp = client.post("/api/evidence",
-                           files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+        resp = client.post(
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 403
 
     def test_expired_cooldown_allows_uploads(self, admin, client):
@@ -179,10 +206,17 @@ class TestRestrictionGates:
         conn = client.app.state.db
         player_id = conn.execute("SELECT id FROM player").fetchone()[0]
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"]).json()
-        self._strike(conn, p["event_id"], player_id, sub["id"], 2,
-                     cooldown_until=int(time.time()) - 1)  # already past
-        resp = client.post("/api/evidence",
-                           files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+        self._strike(
+            conn,
+            p["event_id"],
+            player_id,
+            sub["id"],
+            2,
+            cooldown_until=int(time.time()) - 1,
+        )  # already past
+        resp = client.post(
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 201
 
 
@@ -195,12 +229,11 @@ class TestDuplicateFlag:
         # TestClient with an independent cookie jar.
         p = _party(admin, client)
         other = TestClient(client.app)
-        other.post(f"/api/join/{p['join_code']}",
-                   json={"display_name": "Robin"})
+        other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         # Robin uploads the identical image bytes from a different team.
         resp = other.post(
-            "/api/evidence",
-            files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 201  # the upload itself is fine
 
         conn = other.app.state.db
@@ -219,13 +252,13 @@ class TestDuplicateFlag:
     def test_same_team_reupload_does_not_flag(self, admin, client):
         """Re-uploading your own rejected photo is not a cross-team
         problem; no flag row."""
-        p = _party(admin, client)  # one player, one upload
+        _party(admin, client)  # one player, one upload
         resp = client.post(
-            "/api/evidence",
-            files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 201
         conn = client.app.state.db
         flags = conn.execute(
-            "SELECT COUNT(*) FROM audit_event"
-            " WHERE action = 'duplicate_flag.raised'").fetchone()[0]
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'duplicate_flag.raised'"
+        ).fetchone()[0]
         assert flags == 0

@@ -46,8 +46,14 @@ def seeded(conn):
         VALUES ('evid1', 'team1', 'player1', 'photos/evid1.jpg', 'ff00ff00ff00ff00', {now});
         """
     )
-    return {"event": "ev1", "team": "team1", "player": "player1",
-            "riddle": "riddle1", "evidence": "evid1", "now": now}
+    return {
+        "event": "ev1",
+        "team": "team1",
+        "player": "player1",
+        "riddle": "riddle1",
+        "evidence": "evid1",
+        "now": now,
+    }
 
 
 @pytest.fixture()
@@ -69,9 +75,9 @@ def client(tmp_path):
 @pytest.fixture()
 def admin(client):
     """The same client, logged in. Login itself is tested separately."""
-    resp = client.post("/api/admin/login",
-                       json={"username": ADMIN_USER,
-                             "password": ADMIN_PASSWORD})
+    resp = client.post(
+        "/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASSWORD}
+    )
     assert resp.status_code == 200
     return client
 
@@ -91,8 +97,10 @@ def conn_seeded_pending(admin):
     now = int(time.time())
     resp = admin.post("/api/admin/events", json={"name": "Seeded Party"})
     event_id = resp.json()["id"]
-    admin.post(f"/api/admin/events/{event_id}/riddles",
-               json={"text": "Find the thing", "sort_order": 1})
+    admin.post(
+        f"/api/admin/events/{event_id}/riddles",
+        json={"text": "Find the thing", "sort_order": 1},
+    )
     admin.post(f"/api/admin/events/{event_id}/open")
     conn = admin.app.state.db
     riddle_id = conn.execute(

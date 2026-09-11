@@ -37,13 +37,21 @@ def join(join_code: str, body: JoinBody, request: Request):
     if event is None:
         # 404, not 401: the code is a URL path, so an invalid one is
         # simply a bad address — same treatment as any unknown route.
-        return JSONResponse(status_code=404, content={
-            "error": "bad_join_code",
-            "message": "That join link doesn't match any event."})
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "bad_join_code",
+                "message": "That join link doesn't match any event.",
+            },
+        )
     if event["status"] == "closed":
-        return JSONResponse(status_code=409, content={
-            "error": "event_closed",
-            "message": "This event has already ended."})
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "event_closed",
+                "message": "This event has already ended.",
+            },
+        )
 
     now = int(time.time())
     team_id, player_id = ids.new_id(), ids.new_id()
@@ -62,47 +70,78 @@ def join(join_code: str, body: JoinBody, request: Request):
             (player_id, team_id, body.display_name, now),
         )
         token = auth.issue_player_session(
-            conn, player_id=player_id, device_label=body.device_label,
+            conn,
+            player_id=player_id,
+            device_label=body.device_label,
             user_agent=user_agent,
         )
-        log_action(conn, event_id=event["id"], actor_type=ActorType.PLAYER,
-                   actor_id=player_id, action=Action.PLAYER_JOINED,
-                   entity_type="player", entity_id=player_id,
-                   details={"display_name": body.display_name,
-                            "device_label": body.device_label})
+        log_action(
+            conn,
+            event_id=event["id"],
+            actor_type=ActorType.PLAYER,
+            actor_id=player_id,
+            action=Action.PLAYER_JOINED,
+            entity_type="player",
+            entity_id=player_id,
+            details={
+                "display_name": body.display_name,
+                "device_label": body.device_label,
+            },
+        )
 
-    resp = JSONResponse(status_code=201, content={
-        "event": {"id": event["id"], "name": event["name"],
-                  "status": event["status"], "theme": event["theme"]},
-        "player": {"id": player_id, "display_name": body.display_name,
-                   "team_id": team_id},
-    })
+    resp = JSONResponse(
+        status_code=201,
+        content={
+            "event": {
+                "id": event["id"],
+                "name": event["name"],
+                "status": event["status"],
+                "theme": event["theme"],
+            },
+            "player": {
+                "id": player_id,
+                "display_name": body.display_name,
+                "team_id": team_id,
+            },
+        },
+    )
     # SameSite=Lax (not Strict like admin): the player arrives *by
     # following* the join link/QR from another app, and the cookie must
     # survive that first navigation.
-    resp.set_cookie(auth.PLAYER_COOKIE_NAME, token, httponly=True,
-                    secure=request.app.state.cookie_secure, samesite="lax")
+    resp.set_cookie(
+        auth.PLAYER_COOKIE_NAME,
+        token,
+        httponly=True,
+        secure=request.app.state.cookie_secure,
+        samesite="lax",
+    )
     return resp
 
 
 @router.post("/logout")
-def logout(request: Request,
-           ctx: auth.PlayerContext = Depends(auth.require_player)):
+def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     conn: sqlite3.Connection = request.app.state.db
     with conn:
         auth.revoke_player_session(conn, ctx.session_id)
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.SESSION_REVOKED,
-                   entity_type="session", entity_id=ctx.session_id,
-                   details={"reason": "logout"})
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.SESSION_REVOKED,
+            entity_type="session",
+            entity_id=ctx.session_id,
+            details={"reason": "logout"},
+        )
     resp = JSONResponse(content={"ok": True})
     resp.delete_cookie(auth.PLAYER_COOKIE_NAME)
     return resp
 
 
 @router.post("/me/notice-ack")
-def notice_ack(request: Request,
-               ctx: auth.PlayerContext = Depends(auth.require_player)):
+def notice_ack(
+    request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)
+):
     """Acknowledge the strike interstitial (api.md): the client shows it
     when the snapshot's ``pending_notice`` is true, and this call is
     what clears it. Ack state lives in the audit log, not a column
@@ -117,9 +156,14 @@ def notice_ack(request: Request,
     if restriction.pending_notice_strike_id is None:
         return {"ok": True}
     with conn:
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.NOTICE_ACKNOWLEDGED,
-                   entity_type="strike",
-                   entity_id=restriction.pending_notice_strike_id,
-                   details={"strike_id": restriction.pending_notice_strike_id})
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.NOTICE_ACKNOWLEDGED,
+            entity_type="strike",
+            entity_id=restriction.pending_notice_strike_id,
+            details={"strike_id": restriction.pending_notice_strike_id},
+        )
     return {"ok": True}

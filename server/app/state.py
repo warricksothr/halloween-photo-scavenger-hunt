@@ -34,13 +34,10 @@ router = APIRouter(prefix="/api", tags=["state"])
 
 
 @router.get("/state")
-def state(request: Request,
-          ctx: auth.PlayerContext = Depends(auth.require_player)):
+def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     conn: sqlite3.Connection = request.app.state.db
 
-    event = conn.execute(
-        "SELECT * FROM event WHERE id = ?", (ctx.event_id,)
-    ).fetchone()
+    event = conn.execute("SELECT * FROM event WHERE id = ?", (ctx.event_id,)).fetchone()
 
     # One query per concern, each cheap at party scale; the snapshot is
     # rebuilt from source tables every time (no caching — correctness
@@ -56,11 +53,16 @@ def state(request: Request,
         (ctx.team_id, ctx.event_id),
     ).fetchall()
     riddles = [
-        {"id": r["id"], "text": r["text"], "sort_order": r["sort_order"],
-         # A team has at most one pending sub per riddle (partial unique
-         # index); verified is terminal. Anything else → unsolved.
-         "state": {"pending": "pending", "verified": "verified"}.get(
-             r["sub_status"], "unsolved")}
+        {
+            "id": r["id"],
+            "text": r["text"],
+            "sort_order": r["sort_order"],
+            # A team has at most one pending sub per riddle (partial unique
+            # index); verified is terminal. Anything else → unsolved.
+            "state": {"pending": "pending", "verified": "verified"}.get(
+                r["sub_status"], "unsolved"
+            ),
+        }
         for r in riddle_rows
     ]
 
@@ -74,8 +76,13 @@ def state(request: Request,
         (ctx.team_id,),
     ).fetchall()
     submissions = [
-        {"id": s["id"], "riddle_id": s["riddle_id"], "status": s["status"],
-         "verdict_flavor": s["verdict_flavor"], "created_at": s["created_at"]}
+        {
+            "id": s["id"],
+            "riddle_id": s["riddle_id"],
+            "status": s["status"],
+            "verdict_flavor": s["verdict_flavor"],
+            "created_at": s["created_at"],
+        }
         for s in sub_rows
     ]
 
@@ -84,8 +91,7 @@ def state(request: Request,
     # shows the sealed note instead. Scores are a query, not a column
     # (design.md), so this is always consistent with the verdicts.
     board = None
-    if (event["leaderboard_visibility"] == "live"
-            or event["status"] == "closed"):
+    if event["leaderboard_visibility"] == "live" or event["status"] == "closed":
         standings = _standings(conn, ctx.event_id)
         for i, row in enumerate(standings, start=1):
             row["rank"] = i
@@ -94,7 +100,8 @@ def state(request: Request,
 
     return {
         "event": {
-            "id": event["id"], "name": event["name"],
+            "id": event["id"],
+            "name": event["name"],
             "status": event["status"],
             "leaderboard_visibility": event["leaderboard_visibility"],
             "theme": event["theme"],

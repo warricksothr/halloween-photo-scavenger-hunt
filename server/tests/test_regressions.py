@@ -1,0 +1,302 @@
+"""Focused regression tests for the application's cross-boundary invariants."""
+
+from __future__ import annotations
+
+import asyncio
+import shutil
+import sqlite3
+
+import pytest
+from fastapi.testclient import TestClient
+from httpx2 import ASGITransport, AsyncClient
+from test_evidence import make_jpeg
+from test_mod import _mod, _submit
+from test_mod import _party as mod_party
+from test_teams import _invite, _party
+
+from app import db as db_module
+from app.main import create_app
+from app.sse import SseBroker, _stream
+
+
+def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
+    """The conditional invite update wins one redemption and rolls back the other."""
+    party = _party(admin, client)
+    batman = party["players"]["Batman"]["client"]
+    token = _invite(batman)
+
+    async def redeem_pair():
+        start_barrier = asyncio.Barrier(2)
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(transport=transport, base_url="http://test") as robin,
+            AsyncClient(transport=transport, base_url="http://test") as oracle,
+        ):
+
+            async def redeem(player, display_name):
+                await start_barrier.wait()
+                return await player.post(
+                    f"/api/team/invites/{token}/redeem",
+                    json={"display_name": display_name},
+                )
+
+            return await asyncio.gather(
+                redeem(robin, "Robin"), redeem(oracle, "Oracle")
+            )
+
+    responses = asyncio.run(redeem_pair())
+
+    assert sorted(response.status_code for response in responses) == [201, 410]
+    assert (
+        sum(response.json().get("error") == "invite_closed" for response in responses)
+        == 1
+    )
+
+    conn = client.app.state.db
+    invite = conn.execute(
+        "SELECT redeemed_by FROM team_invite WHERE token = ?", (token,)
+    ).fetchone()
+    assert invite["redeemed_by"] is not None
+    members = conn.execute(
+        "SELECT display_name FROM player WHERE team_id = ? ORDER BY created_at, id",
+        (party["players"]["Batman"]["team_id"],),
+    ).fetchall()
+    assert {member["display_name"] for member in members} in (
+        {"Batman", "Robin"},
+        {"Batman", "Oracle"},
+    )
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM audit_event"
+            " WHERE action = 'team_invite.redeemed' AND entity_id = ?",
+            (token,),
+        ).fetchone()[0]
+        == 1
+    )
+
+
+def test_event_close_and_verdict_leave_one_terminal_submission(admin, client):
+    """Close and verdict serialize without leaving a pending submission."""
+    party = mod_party(admin, client)
+    moderator = _mod(client, party["mod_code"])
+    submission = _submit(client, party["riddle_ids"][0], party["evidence_id"])
+
+    async def race():
+        start_barrier = asyncio.Barrier(2)
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(admin.cookies),
+            ) as admin_api,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(moderator.cookies),
+            ) as moderator_api,
+        ):
+
+            async def close_event():
+                await start_barrier.wait()
+                return await admin_api.post(
+                    f"/api/admin/events/{party['event_id']}/close"
+                )
+
+            async def issue_verdict():
+                await start_barrier.wait()
+                return await moderator_api.post(
+                    f"/api/mod/queue/{submission['id']}/verdict",
+                    json={"verdict": "verified"},
+                )
+
+            return await asyncio.gather(close_event(), issue_verdict())
+
+    try:
+        close_response, verdict_response = asyncio.run(race())
+    finally:
+        moderator.close()
+
+    assert close_response.status_code == 200
+    assert verdict_response.status_code in (200, 409)
+
+    conn = client.app.state.db
+    event = conn.execute(
+        "SELECT status FROM event WHERE id = ?", (party["event_id"],)
+    ).fetchone()
+    row = conn.execute(
+        "SELECT status FROM submission WHERE id = ?", (submission["id"],)
+    ).fetchone()
+    verdicts = conn.execute(
+        "SELECT COUNT(*) FROM verdict WHERE submission_id = ?", (submission["id"],)
+    ).fetchone()[0]
+    closed_audits = conn.execute(
+        "SELECT COUNT(*) FROM audit_event"
+        " WHERE event_id = ? AND action = 'event.closed'",
+        (party["event_id"],),
+    ).fetchone()[0]
+    verdict_audits = conn.execute(
+        "SELECT COUNT(*) FROM audit_event"
+        " WHERE event_id = ? AND action = 'verdict.issued'",
+        (party["event_id"],),
+    ).fetchone()[0]
+
+    assert event["status"] == "closed"
+    assert row["status"] in ("expired", "verified")
+    assert (row["status"] == "verified") == (verdicts == 1 == verdict_audits)
+    assert closed_audits == 1
+
+
+def test_sse_player_routing_and_stream_cleanup():
+    """Player deltas target one player and disconnects unregister subscribers."""
+    loop = asyncio.new_event_loop()
+    broker = SseBroker(loop)
+    owner = broker.subscribe(
+        event_id="event-1", role="player", team_id="team-1", player_id="player-1"
+    )
+    teammate = broker.subscribe(
+        event_id="event-1", role="player", team_id="team-1", player_id="player-2"
+    )
+    other_event = broker.subscribe(
+        event_id="event-2", role="player", team_id="team-1", player_id="player-1"
+    )
+
+    async def read_one_frame():
+        stream = _stream(broker, owner)
+        broker.publish(
+            "event-1",
+            "strike",
+            {"level": 1},
+            to="player",
+            player_id="player-1",
+        )
+        frame = await asyncio.wait_for(anext(stream), timeout=1)
+        await stream.aclose()
+        return frame
+
+    try:
+        frame = loop.run_until_complete(read_one_frame())
+    finally:
+        loop.close()
+
+    assert frame == b'event: strike\ndata: {"level": 1}\n\n'
+    assert owner not in broker._subscribers
+    assert teammate.queue.empty()
+    assert other_event.queue.empty()
+
+
+def test_migrated_database_preserves_rows_and_constraints(tmp_path):
+    """A copied database can rerun migrations without losing its schema."""
+    source_path = tmp_path / "source.db"
+    source = db_module.connect(source_path)
+    assert db_module.apply_migrations(source) == [1]
+    source.execute(
+        "INSERT INTO event (id, name, join_code, mod_code, created_at)"
+        " VALUES ('event-1', 'Persisted Party', 'JOIN1', 'MOD1', 1)"
+    )
+    source.commit()
+    source.close()
+
+    migrated_path = tmp_path / "migrated.db"
+    shutil.copy2(source_path, migrated_path)
+    migrated = db_module.connect(migrated_path)
+    assert db_module.apply_migrations(migrated) == []
+    assert migrated.execute("SELECT name FROM event WHERE id = 'event-1'").fetchone()[
+        0
+    ] == ("Persisted Party")
+    assert migrated.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    with pytest.raises(sqlite3.IntegrityError):
+        migrated.execute(
+            "INSERT INTO team (id, event_id, created_at)"
+            " VALUES ('team-1', 'missing-event', 1)"
+        )
+    migrated.close()
+
+
+def test_startup_requires_admin_credentials(monkeypatch, tmp_path):
+    """The factory refuses to build an app without an admin credential pair."""
+    monkeypatch.delenv("ARKHAM_ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ARKHAM_ADMIN_PASSWORD_HASH", raising=False)
+
+    with pytest.raises(RuntimeError, match="Admin credentials not configured"):
+        create_app(tmp_path / "missing-admin.db")
+
+
+def test_cross_event_and_cross_team_reads_hide_foreign_data(admin, client):
+    """Player and moderator reads stay inside their event and team scope."""
+    first = mod_party(admin, client)
+    first_mod = _mod(client, first["mod_code"])
+    first_submission = _submit(client, first["riddle_ids"][0], first["evidence_id"])
+
+    second_event = admin.post("/api/admin/events", json={"name": "Second Party"}).json()
+    second_riddle = admin.post(
+        f"/api/admin/events/{second_event['id']}/riddles",
+        json={"text": "Second clue", "sort_order": 1},
+    ).json()
+    admin.post(f"/api/admin/events/{second_event['id']}/open")
+    second_player = TestClient(client.app)
+    second_join = second_player.post(
+        f"/api/join/{second_event['join_code']}",
+        json={"display_name": "Robin"},
+    ).json()
+    second_evidence = second_player.post(
+        "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+    ).json()
+    second_mod = _mod(client, second_event["mod_code"])
+
+    assert (
+        second_player.get(f"/api/evidence/{first['evidence_id']}/photo").status_code
+        == 404
+    )
+    assert all(
+        item["id"] != first["evidence_id"]
+        for item in second_player.get("/api/evidence").json()
+    )
+    foreign_submit = second_player.post(
+        "/api/submissions",
+        json={
+            "riddle_id": second_riddle["id"],
+            "evidence_item_id": first["evidence_id"],
+        },
+    )
+    assert foreign_submit.status_code == 404
+    assert (
+        second_mod.get(f"/api/mod/evidence/{first['evidence_id']}/photo").status_code
+        == 404
+    )
+    assert second_mod.get(f"/api/mod/players/{first['player_id']}").status_code == 404
+    assert all(
+        item["id"] != first_submission["id"]
+        for item in second_mod.get("/api/mod/queue").json()
+    )
+
+    conn = client.app.state.db
+    first_audit_ids = {
+        row["id"]
+        for row in conn.execute(
+            "SELECT id FROM audit_event WHERE event_id = ?", (first["event_id"],)
+        ).fetchall()
+    }
+    second_audit = second_mod.get("/api/mod/audit").json()
+    assert second_audit
+    assert first_audit_ids.isdisjoint(row["id"] for row in second_audit)
+
+    # The reciprocal moderator boundary is checked too: event A cannot read
+    # event B's photo, player history, queue item, or audit timeline.
+    assert (
+        first_mod.get(f"/api/mod/evidence/{second_evidence['id']}/photo").status_code
+        == 404
+    )
+    assert (
+        first_mod.get(f"/api/mod/players/{second_join['player']['id']}").status_code
+        == 404
+    )
+    assert all(
+        item["id"] != second_evidence["id"]
+        for item in first_mod.get("/api/mod/queue").json()
+    )
+    first_mod_audit = first_mod.get("/api/mod/audit").json()
+    assert all(row["id"] in first_audit_ids for row in first_mod_audit)
+    second_player.close()
+    first_mod.close()
+    second_mod.close()

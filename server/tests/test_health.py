@@ -8,8 +8,9 @@ from app.security import hash_password
 
 
 def test_health(tmp_path):
-    app = create_app(tmp_path / "health.db",
-                     admin_config=("admin", hash_password("pw")))
+    app = create_app(
+        tmp_path / "health.db", admin_config=("admin", hash_password("pw"))
+    )
     with TestClient(app) as client:  # context manager runs the lifespan
         resp = client.get("/api/health")
     assert resp.status_code == 200

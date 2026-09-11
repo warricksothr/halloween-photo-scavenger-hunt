@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
+from app.db import hold_request_lock
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api", tags=["teams"])
@@ -41,14 +42,16 @@ INVITE_TTL_SECONDS = 600
 
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status,
-                        content={"error": code, "message": message})
+    return JSONResponse(status_code=status, content={"error": code, "message": message})
 
 
 def _invite_json(row: sqlite3.Row) -> dict:
-    return {"token": row["token"], "expires_at": row["expires_at"],
-            "created_at": row["created_at"],
-            "invite_url": f"/t/{row['token']}"}
+    return {
+        "token": row["token"],
+        "expires_at": row["expires_at"],
+        "created_at": row["created_at"],
+        "invite_url": f"/t/{row['token']}",
+    }
 
 
 def _capacity(conn: sqlite3.Connection, team_id: str) -> tuple[int, int]:
@@ -65,17 +68,16 @@ def _capacity(conn: sqlite3.Connection, team_id: str) -> tuple[int, int]:
 
 
 @router.get("/team")
-def team_state(request: Request,
-               ctx: auth.PlayerContext = Depends(auth.require_player)):
+def team_state(
+    request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)
+):
     """Roster + identity + open invites for the caller's team.
 
     Roster device lines are the device_label + last_seen_at the
     moderator heuristics use (mocks/team.html) — a member can spot a
     dead device without waiting for a moderator."""
     conn: sqlite3.Connection = request.app.state.db
-    team = conn.execute(
-        "SELECT name FROM team WHERE id = ?", (ctx.team_id,)
-    ).fetchone()
+    team = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()
     members = conn.execute(
         "SELECT p.id, p.display_name, p.created_at,"
         "       (SELECT MAX(s.last_seen_at) FROM session s"
@@ -97,13 +99,15 @@ def team_state(request: Request,
     ).fetchall()
     _, limit = _capacity(conn, ctx.team_id)
     return {
-        "team": {"id": ctx.team_id, "name": team["name"],
-                 "size_limit": limit},
+        "team": {"id": ctx.team_id, "name": team["name"], "size_limit": limit},
         "members": [
-            {"id": m["id"], "display_name": m["display_name"],
-             "device_label": m["device_label"],
-             "last_seen_at": m["last_seen_at"],
-             "you": m["id"] == ctx.player_id}
+            {
+                "id": m["id"],
+                "display_name": m["display_name"],
+                "device_label": m["device_label"],
+                "last_seen_at": m["last_seen_at"],
+                "you": m["id"] == ctx.player_id,
+            }
             for m in members
         ],
         "invites": [_invite_json(i) for i in invites],
@@ -115,24 +119,33 @@ class RenameBody(BaseModel):
 
 
 @router.post("/team/rename")
-def rename_team(body: RenameBody, request: Request,
-                ctx: auth.PlayerContext = Depends(auth.require_player)):
+def rename_team(
+    body: RenameBody,
+    request: Request,
+    ctx: auth.PlayerContext = Depends(auth.require_player),
+):
     """Any member may name the team — party-scale trust, and the audit
     row keeps the old name (team.renamed, audit-actions.md). The
     leaderboard label picks the name up immediately (leaderboard.py
     COALESCEs team.name before the display-name fallback)."""
     conn: sqlite3.Connection = request.app.state.db
-    old = conn.execute("SELECT name FROM team WHERE id = ?",
-                       (ctx.team_id,)).fetchone()["name"]
+    old = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()[
+        "name"
+    ]
     if body.name == old:
         return {"ok": True, "name": old}
     with conn:
-        conn.execute("UPDATE team SET name = ? WHERE id = ?",
-                     (body.name, ctx.team_id))
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.TEAM_RENAMED,
-                   entity_type="team", entity_id=ctx.team_id,
-                   details={"old_name": old, "new_name": body.name})
+        conn.execute("UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id))
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.TEAM_RENAMED,
+            entity_type="team",
+            entity_id=ctx.team_id,
+            details={"old_name": old, "new_name": body.name},
+        )
     # The name rides the leaderboard; tell everyone it changed.
     publish_leaderboard(request, ctx.event_id, force=True)
     return {"ok": True, "name": body.name}
@@ -142,8 +155,9 @@ def rename_team(body: RenameBody, request: Request,
 
 
 @router.post("/team/invites", status_code=201)
-def create_invite(request: Request,
-                  ctx: auth.PlayerContext = Depends(auth.require_player)):
+def create_invite(
+    request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)
+):
     """Mint a single-use invite token for the caller's team. Any member
     may invite — the size limit is enforced at redemption, so creating
     one more invite than there are seats is harmless."""
@@ -157,25 +171,31 @@ def create_invite(request: Request,
             " expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
             (token, ctx.team_id, ctx.player_id, expires_at, now),
         )
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.TEAM_INVITE_CREATED,
-                   entity_type="team_invite", entity_id=token,
-                   details={"expires_at": expires_at})
-    row = conn.execute("SELECT * FROM team_invite WHERE token = ?",
-                       (token,)).fetchone()
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.TEAM_INVITE_CREATED,
+            entity_type="team_invite",
+            entity_id=token,
+            details={"expires_at": expires_at},
+        )
+    row = conn.execute("SELECT * FROM team_invite WHERE token = ?", (token,)).fetchone()
     return _invite_json(row)
 
 
 @router.post("/team/invites/{token}/revoke")
-def revoke_invite(token: str, request: Request,
-                  ctx: auth.PlayerContext = Depends(auth.require_player)):
+def revoke_invite(
+    token: str, request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)
+):
     """Kill an open invite (mis-sent QR, or simply rotate). Only members
     of the invite's team may revoke it; already-redeemed tokens are
     history, not revocable."""
     conn: sqlite3.Connection = request.app.state.db
     invite = conn.execute(
-        "SELECT team_id, redeemed_by, revoked_at FROM team_invite"
-        " WHERE token = ?", (token,),
+        "SELECT team_id, redeemed_by, revoked_at FROM team_invite WHERE token = ?",
+        (token,),
     ).fetchone()
     if invite is None or invite["team_id"] != ctx.team_id:
         # 404, not 403: a token of another team is simply not here.
@@ -183,12 +203,20 @@ def revoke_invite(token: str, request: Request,
     if invite["redeemed_by"] is not None or invite["revoked_at"] is not None:
         return _err(409, "invite_closed", "That invite is already used or revoked.")
     with conn:
-        conn.execute("UPDATE team_invite SET revoked_at = ? WHERE token = ?",
-                     (int(time.time()), token))
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.TEAM_INVITE_REVOKED,
-                   entity_type="team_invite", entity_id=token,
-                   details={})
+        conn.execute(
+            "UPDATE team_invite SET revoked_at = ? WHERE token = ?",
+            (int(time.time()), token),
+        )
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.TEAM_INVITE_REVOKED,
+            entity_type="team_invite",
+            entity_id=token,
+            details={},
+        )
     return {"ok": True}
 
 
@@ -205,17 +233,22 @@ def invite_info(token: str, request: Request):
         " FROM team_invite ti"
         " JOIN team t ON t.id = ti.team_id"
         " JOIN event e ON e.id = t.event_id"
-        " WHERE ti.token = ?", (token,),
+        " WHERE ti.token = ?",
+        (token,),
     ).fetchone()
-    if (invite is None or invite["redeemed_by"] is not None
-            or invite["revoked_at"] is not None
-            or invite["expires_at"] <= int(time.time())
-            or invite["status"] == "closed"):
-        return _err(404, "bad_invite",
-                    "That invite link is expired or already used.")
-    return {"event_name": invite["event_name"],
-            "team_name": invite["team_name"],
-            "expires_at": invite["expires_at"]}
+    if (
+        invite is None
+        or invite["redeemed_by"] is not None
+        or invite["revoked_at"] is not None
+        or invite["expires_at"] <= int(time.time())
+        or invite["status"] == "closed"
+    ):
+        return _err(404, "bad_invite", "That invite link is expired or already used.")
+    return {
+        "event_name": invite["event_name"],
+        "team_name": invite["team_name"],
+        "expires_at": invite["expires_at"],
+    }
 
 
 class RedeemBody(BaseModel):
@@ -224,7 +257,11 @@ class RedeemBody(BaseModel):
     confirm_switch: bool = False
 
 
-@router.post("/team/invites/{token}/redeem", status_code=201)
+@router.post(
+    "/team/invites/{token}/redeem",
+    status_code=201,
+    dependencies=[Depends(hold_request_lock)],
+)
 def redeem_invite(token: str, body: RedeemBody, request: Request):
     """Join the inviter's team via the token (design.md flow):
 
@@ -246,31 +283,38 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
     ).fetchone()
     if invite is None:
         return _err(404, "bad_invite", "That invite link is invalid.")
-    if (invite["redeemed_by"] is not None or invite["revoked_at"] is not None
-            or invite["expires_at"] <= now):
-        return _err(410, "invite_closed",
-                    "That invite link is expired or already used.")
-    event = conn.execute("SELECT status FROM event WHERE id = ?",
-                         (invite["event_id"],)).fetchone()
+    if (
+        invite["redeemed_by"] is not None
+        or invite["revoked_at"] is not None
+        or invite["expires_at"] <= now
+    ):
+        return _err(
+            410, "invite_closed", "That invite link is expired or already used."
+        )
+    event = conn.execute(
+        "SELECT status FROM event WHERE id = ?", (invite["event_id"],)
+    ).fetchone()
     if event["status"] == "closed":
         return _err(409, "event_closed", "This event has already ended.")
 
     team_id = invite["team_id"]
     player_ctx = auth.current_player(request)
-    joining_fresh = (player_ctx is None
-                     or player_ctx.event_id != invite["event_id"])
+    joining_fresh = player_ctx is None or player_ctx.event_id != invite["event_id"]
 
     # Validate BEFORE the transaction: a 422 raised after the player
     # insert would leave the ``with conn:`` block having to unwind —
     # keep all refusal paths that need no writes ahead of it.
     if joining_fresh and not body.display_name:
-        return _err(422, "display_name_required",
-                    "New players join with a display name.")
+        return _err(
+            422, "display_name_required", "New players join with a display name."
+        )
 
     if player_ctx is not None and player_ctx.event_id == invite["event_id"]:
         if player_ctx.team_id == team_id:
-            return JSONResponse(status_code=200, content={
-                "ok": True, "team_id": team_id, "already_member": True})
+            return JSONResponse(
+                status_code=200,
+                content={"ok": True, "team_id": team_id, "already_member": True},
+            )
         # A switch: anything the player's old team holds stays behind.
         baggage = conn.execute(
             "SELECT (SELECT COUNT(*) FROM evidence_item"
@@ -279,11 +323,13 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             "       AS submissions",
             (player_ctx.team_id, player_ctx.team_id),
         ).fetchone()
-        if (baggage["evidence"] or baggage["submissions"]) \
-                and not body.confirm_switch:
-            return _err(409, "switch_needs_confirm",
-                        "Your evidence and submission history stay with "
-                        "your current team. Confirm to switch anyway.")
+        if (baggage["evidence"] or baggage["submissions"]) and not body.confirm_switch:
+            return _err(
+                409,
+                "switch_needs_confirm",
+                "Your evidence and submission history stay with "
+                "your current team. Confirm to switch anyway.",
+            )
 
     # Capacity at redemption (design.md): the team fills and the next
     # redeem fails, however many invites are still floating around. The
@@ -304,7 +350,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
         switched_from = player_ctx.team_id
         player_id = player_ctx.player_id
 
-    with conn:
+    with request.app.state.db_lock, conn:
         if joining_fresh:
             conn.execute(
                 "INSERT INTO player (id, team_id, display_name, created_at)"
@@ -326,8 +372,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             # and now. Roll back so the fresh player row (if any) does
             # not leak, and answer with an honest 410.
             conn.rollback()
-            return _err(410, "invite_closed",
-                        "That invite link was just used.")
+            return _err(410, "invite_closed", "That invite link was just used.")
         if not joining_fresh:
             # The switch: repoint the player; their old session rows are
             # revoked (a device that changed allegiance must re-present
@@ -337,22 +382,40 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
                 " WHERE player_id = ? AND revoked_at IS NULL",
                 (now, player_id),
             )
-            conn.execute("UPDATE player SET team_id = ? WHERE id = ?",
-                         (team_id, player_id))
+            conn.execute(
+                "UPDATE player SET team_id = ? WHERE id = ?", (team_id, player_id)
+            )
         token_session = auth.issue_player_session(
-            conn, player_id=player_id, device_label=body.device_label,
+            conn,
+            player_id=player_id,
+            device_label=body.device_label,
             user_agent=user_agent,
         )
-        log_action(conn, event_id=invite["event_id"],
-                   actor_type=ActorType.PLAYER, actor_id=player_id,
-                   action=Action.TEAM_INVITE_REDEEMED,
-                   entity_type="team_invite", entity_id=token,
-                   details={"switched_from_team_id": switched_from})
+        log_action(
+            conn,
+            event_id=invite["event_id"],
+            actor_type=ActorType.PLAYER,
+            actor_id=player_id,
+            action=Action.TEAM_INVITE_REDEEMED,
+            entity_type="team_invite",
+            entity_id=token,
+            details={"switched_from_team_id": switched_from},
+        )
 
-    resp = JSONResponse(status_code=201, content={
-        "ok": True, "team_id": team_id, "player_id": player_id,
-        "switched_from_team_id": switched_from,
-    })
-    resp.set_cookie(auth.PLAYER_COOKIE_NAME, token_session, httponly=True,
-                    secure=request.app.state.cookie_secure, samesite="lax")
+    resp = JSONResponse(
+        status_code=201,
+        content={
+            "ok": True,
+            "team_id": team_id,
+            "player_id": player_id,
+            "switched_from_team_id": switched_from,
+        },
+    )
+    resp.set_cookie(
+        auth.PLAYER_COOKIE_NAME,
+        token_session,
+        httponly=True,
+        secure=request.app.state.cookie_secure,
+        samesite="lax",
+    )
     return resp

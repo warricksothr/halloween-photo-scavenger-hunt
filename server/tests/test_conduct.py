@@ -18,15 +18,15 @@ event + player + one upload).
 import time
 
 from fastapi.testclient import TestClient
-
 from test_evidence import make_jpeg
 from test_mod import _mod, _party, _submit
 
 
 def _fresh_upload(client):
     """A new drawer photo for the already-joined player on ``client``."""
-    up = client.post("/api/evidence",
-                     files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+    up = client.post(
+        "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+    )
     assert up.status_code == 201, up.text
     return up.json()["id"]
 
@@ -49,27 +49,41 @@ class TestInappropriateAction:
         assert body["strike"]["cooldown_until"] is None
 
         conn = client.app.state.db
-        assert conn.execute("SELECT status FROM submission WHERE id = ?",
-                            (sub["id"],)).fetchone()[0] == "inappropriate"
-        v = conn.execute("SELECT verdict, flavor_text FROM verdict"
-                         " WHERE submission_id = ?", (sub["id"],)).fetchone()
+        assert (
+            conn.execute(
+                "SELECT status FROM submission WHERE id = ?", (sub["id"],)
+            ).fetchone()[0]
+            == "inappropriate"
+        )
+        v = conn.execute(
+            "SELECT verdict, flavor_text FROM verdict WHERE submission_id = ?",
+            (sub["id"],),
+        ).fetchone()
         assert (v["verdict"], v["flavor_text"]) == ("inappropriate", "")
         # Quarantined immediately — the photo leaves the drawer.
-        assert conn.execute("SELECT quarantined FROM evidence_item"
-                            " WHERE id = ?",
-                            (p["evidence_id"],)).fetchone()[0] == 1
-        strike = conn.execute("SELECT * FROM strike WHERE id = ?",
-                              (body["strike"]["id"],)).fetchone()
+        assert (
+            conn.execute(
+                "SELECT quarantined FROM evidence_item WHERE id = ?",
+                (p["evidence_id"],),
+            ).fetchone()[0]
+            == 1
+        )
+        strike = conn.execute(
+            "SELECT * FROM strike WHERE id = ?", (body["strike"]["id"],)
+        ).fetchone()
         assert strike["level"] == 1
         assert strike["note"] == "not a party photo"
         assert strike["player_id"] == p["player_id"]
 
-        actions = [r[0] for r in conn.execute(
-            "SELECT action FROM audit_event WHERE action IN"
-            " ('verdict.issued', 'evidence.quarantined', 'strike.issued')"
-            " ORDER BY id")]
-        assert actions == ["verdict.issued", "evidence.quarantined",
-                           "strike.issued"]
+        actions = [
+            r[0]
+            for r in conn.execute(
+                "SELECT action FROM audit_event WHERE action IN"
+                " ('verdict.issued', 'evidence.quarantined', 'strike.issued')"
+                " ORDER BY id"
+            )
+        ]
+        assert actions == ["verdict.issued", "evidence.quarantined", "strike.issued"]
 
         # And the queue no longer holds it.
         assert mod.get("/api/mod/queue").json() == []
@@ -82,19 +96,30 @@ class TestInappropriateAction:
         mod_b = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
 
-        assert mod_a.post(f"/api/mod/queue/{sub['id']}/verdict",
-                          json={"verdict": "verified"}).status_code == 200
+        assert (
+            mod_a.post(
+                f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
+            ).status_code
+            == 200
+        )
         resp = _inappropriate(mod_b, sub["id"])
         assert resp.status_code == 409
         assert resp.json()["error"] == "already_resolved"
 
         conn = client.app.state.db
-        assert conn.execute("SELECT COUNT(*) FROM strike"
-                            " WHERE player_id = ?",
-                            (p["player_id"],)).fetchone()[0] == 0
-        assert conn.execute("SELECT quarantined FROM evidence_item"
-                            " WHERE id = ?",
-                            (p["evidence_id"],)).fetchone()[0] == 0
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM strike WHERE player_id = ?", (p["player_id"],)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT quarantined FROM evidence_item WHERE id = ?",
+                (p["evidence_id"],),
+            ).fetchone()[0]
+            == 0
+        )
 
     def test_cross_event_submission_404(self, admin, client):
         p = _party(admin, client)
@@ -118,16 +143,21 @@ class TestInappropriateAction:
 
         # A NEW photo for the same riddle submits normally.
         new_evidence = _fresh_upload(client)
-        resp = client.post("/api/submissions",
-                           json={"riddle_id": p["riddle_ids"][0],
-                                 "evidence_item_id": new_evidence})
+        resp = client.post(
+            "/api/submissions",
+            json={"riddle_id": p["riddle_ids"][0], "evidence_item_id": new_evidence},
+        )
         assert resp.status_code == 201
 
         # Resubmitting the quarantined photo is a 404 — it is simply
         # not in the player's drawer any more.
-        resp = client.post("/api/submissions",
-                           json={"riddle_id": p["riddle_ids"][1],
-                                 "evidence_item_id": p["evidence_id"]})
+        resp = client.post(
+            "/api/submissions",
+            json={
+                "riddle_id": p["riddle_ids"][1],
+                "evidence_item_id": p["evidence_id"],
+            },
+        )
         assert resp.status_code == 404
 
 
@@ -154,9 +184,10 @@ class TestStrikeLadder:
 
         # Warning only: uploads and submissions still work.
         new_evidence = _fresh_upload(client)
-        resp = client.post("/api/submissions",
-                           json={"riddle_id": p["riddle_ids"][1],
-                                 "evidence_item_id": new_evidence})
+        resp = client.post(
+            "/api/submissions",
+            json={"riddle_id": p["riddle_ids"][1], "evidence_item_id": new_evidence},
+        )
         assert resp.status_code == 201
 
     def test_strike_2_cooldown_blocks_uploads_only(self, admin, client):
@@ -175,15 +206,19 @@ class TestStrikeLadder:
         assert r["cooldown_until"] == strike["cooldown_until"]
 
         # Uploads blocked...
-        resp = client.post("/api/evidence",
-                           files={"photo": ("c.jpg", make_jpeg(),
-                                            "image/jpeg")})
+        resp = client.post(
+            "/api/evidence", files={"photo": ("c.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 403
         # ...but an existing drawer photo may still be submitted
         # (design.md: the cooldown gates uploads, not submissions).
-        resp = client.post("/api/submissions",
-                           json={"riddle_id": p["riddle_ids"][2],
-                                 "evidence_item_id": p["evidence_id"]})
+        resp = client.post(
+            "/api/submissions",
+            json={
+                "riddle_id": p["riddle_ids"][2],
+                "evidence_item_id": p["evidence_id"],
+            },
+        )
         assert resp.status_code == 201
 
     def test_strike_2_custom_cooldown_window(self, admin, client):
@@ -204,23 +239,27 @@ class TestStrikeLadder:
         # blocks uploads (that's the point of it).
         ammo = [_fresh_upload(client) for _ in range(3)]
         self._strike(admin, client, mod, p, evidence_id=ammo[0])
-        self._strike(admin, client, mod, p, riddle_idx=1,
-                     evidence_id=ammo[1])
-        strike = self._strike(admin, client, mod, p, riddle_idx=2,
-                              evidence_id=ammo[2])
+        self._strike(admin, client, mod, p, riddle_idx=1, evidence_id=ammo[1])
+        strike = self._strike(admin, client, mod, p, riddle_idx=2, evidence_id=ammo[2])
         assert strike["level"] == 3
 
         snap = client.get("/api/state").json()
         assert snap["me"]["restriction"]["level"] == 3
 
         # Uploads AND submissions both refuse (403).
-        assert client.post(
-            "/api/evidence",
-            files={"photo": ("d.jpg", make_jpeg(), "image/jpeg")}
-        ).status_code == 403
-        resp = client.post("/api/submissions",
-                           json={"riddle_id": p["riddle_ids"][3],
-                                 "evidence_item_id": p["evidence_id"]})
+        assert (
+            client.post(
+                "/api/evidence", files={"photo": ("d.jpg", make_jpeg(), "image/jpeg")}
+            ).status_code
+            == 403
+        )
+        resp = client.post(
+            "/api/submissions",
+            json={
+                "riddle_id": p["riddle_ids"][3],
+                "evidence_item_id": p["evidence_id"],
+            },
+        )
         assert resp.status_code == 403
         assert resp.json()["error"] == "submission_restricted"
 
@@ -235,16 +274,13 @@ class TestStrikeLadder:
         assert _inappropriate(mod, sub["id"]).status_code == 200
 
         other = TestClient(client.app)
-        other.post(f"/api/join/{p['join_code']}",
-                   json={"display_name": "Robin"})
+        other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         r = other.get("/api/state").json()["me"]["restriction"]
-        assert r == {"level": 0, "cooldown_until": None,
-                     "pending_notice": False}
+        assert r == {"level": 0, "cooldown_until": None, "pending_notice": False}
 
 
 class TestQuarantine:
-    def test_quarantined_photo_leaves_drawer_and_photo_endpoint(
-            self, admin, client):
+    def test_quarantined_photo_leaves_drawer_and_photo_endpoint(self, admin, client):
         p = _party(admin, client)
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
@@ -252,11 +288,9 @@ class TestQuarantine:
 
         drawer = client.get("/api/evidence").json()
         assert [i["id"] for i in drawer] == []
-        assert client.get(
-            f"/api/evidence/{p['evidence_id']}/photo").status_code == 404
+        assert client.get(f"/api/evidence/{p['evidence_id']}/photo").status_code == 404
         # Moderators keep access — quarantine is FOR them (disputes).
-        assert mod.get(
-            f"/api/mod/evidence/{p['evidence_id']}/photo").status_code == 200
+        assert mod.get(f"/api/mod/evidence/{p['evidence_id']}/photo").status_code == 200
 
 
 class TestNoticeAck:
@@ -277,8 +311,8 @@ class TestNoticeAck:
         assert snap["me"]["restriction"]["level"] == 1
 
         audit = client.app.state.db.execute(
-            "SELECT details FROM audit_event"
-            " WHERE action = 'notice.acknowledged'").fetchone()
+            "SELECT details FROM audit_event WHERE action = 'notice.acknowledged'"
+        ).fetchone()
         assert audit is not None
 
     def test_ack_with_no_pending_notice_is_idempotent(self, admin, client):
@@ -296,31 +330,36 @@ class TestStrikeReversal:
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         strike_id = _inappropriate(mod, sub["id"]).json()["strike"]["id"]
-        assert client.get("/api/state").json()[
-            "me"]["restriction"]["level"] == 1
+        assert client.get("/api/state").json()["me"]["restriction"]["level"] == 1
 
-        resp = admin.post(f"/api/admin/strikes/{strike_id}/reverse",
-                          json={"reason": "mis-tap"})
+        resp = admin.post(
+            f"/api/admin/strikes/{strike_id}/reverse", json={"reason": "mis-tap"}
+        )
         assert resp.status_code == 200
 
         r = client.get("/api/state").json()["me"]["restriction"]
-        assert r == {"level": 0, "cooldown_until": None,
-                     "pending_notice": False}
+        assert r == {"level": 0, "cooldown_until": None, "pending_notice": False}
 
         conn = client.app.state.db
-        strike = conn.execute("SELECT reversed_at FROM strike WHERE id = ?",
-                              (strike_id,)).fetchone()
+        strike = conn.execute(
+            "SELECT reversed_at FROM strike WHERE id = ?", (strike_id,)
+        ).fetchone()
         assert strike["reversed_at"] is not None
         audit = conn.execute(
             "SELECT actor_type, details FROM audit_event"
-            " WHERE action = 'strike.reversed'").fetchone()
+            " WHERE action = 'strike.reversed'"
+        ).fetchone()
         assert audit["actor_type"] == "admin"
 
         # Quarantine is NOT undone: the reversal corrects the ladder,
         # not the evidence (events.py docstring).
-        assert conn.execute("SELECT quarantined FROM evidence_item"
-                            " WHERE id = ?",
-                            (p["evidence_id"],)).fetchone()[0] == 1
+        assert (
+            conn.execute(
+                "SELECT quarantined FROM evidence_item WHERE id = ?",
+                (p["evidence_id"],),
+            ).fetchone()[0]
+            == 1
+        )
 
     def test_double_reversal_409_and_unknown_404(self, admin, client):
         p = _party(admin, client)
@@ -328,15 +367,15 @@ class TestStrikeReversal:
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         strike_id = _inappropriate(mod, sub["id"]).json()["strike"]["id"]
 
-        assert admin.post(
-            f"/api/admin/strikes/{strike_id}/reverse", json={}
-        ).status_code == 200
-        assert admin.post(
-            f"/api/admin/strikes/{strike_id}/reverse", json={}
-        ).status_code == 409
-        assert admin.post(
-            "/api/admin/strikes/nope/reverse", json={}
-        ).status_code == 404
+        assert (
+            admin.post(f"/api/admin/strikes/{strike_id}/reverse", json={}).status_code
+            == 200
+        )
+        assert (
+            admin.post(f"/api/admin/strikes/{strike_id}/reverse", json={}).status_code
+            == 409
+        )
+        assert admin.post("/api/admin/strikes/nope/reverse", json={}).status_code == 404
 
     def test_reversal_is_host_only(self, admin, client):
         """Moderators issue strikes; only the host reverses them.
@@ -349,15 +388,18 @@ class TestStrikeReversal:
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         strike_id = _inappropriate(mod, sub["id"]).json()["strike"]["id"]
 
-        assert mod.post(
-            f"/api/admin/strikes/{strike_id}/reverse", json={}
-        ).status_code == 401
+        assert (
+            mod.post(f"/api/admin/strikes/{strike_id}/reverse", json={}).status_code
+            == 401
+        )
         player_only = TestClient(client.app)
-        player_only.post(f"/api/join/{p['join_code']}",
-                         json={"display_name": "Robin"})
-        assert player_only.post(
-            f"/api/admin/strikes/{strike_id}/reverse", json={}
-        ).status_code == 401
+        player_only.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
+        assert (
+            player_only.post(
+                f"/api/admin/strikes/{strike_id}/reverse", json={}
+            ).status_code
+            == 401
+        )
 
     def test_player_history_shows_strikes_and_reversals(self, admin, client):
         """The moderator's consistency view records the reversal too

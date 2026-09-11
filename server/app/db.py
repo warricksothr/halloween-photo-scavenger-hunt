@@ -19,7 +19,10 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
+from collections.abc import Iterator
 from pathlib import Path
+
+from fastapi import Request
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -28,6 +31,12 @@ DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "arkham.db"
 # Migration filenames look like 0001_init.sql; the numeric prefix is the
 # version recorded in schema_migrations.
 _MIGRATION_RE = re.compile(r"^(\d+)_.*\.sql$")
+
+
+def hold_request_lock(request: Request) -> Iterator[None]:
+    """Serialize sync database handlers using the app's shared connection."""
+    with request.app.state.db_lock:
+        yield
 
 
 def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -68,11 +77,14 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         if match is None:
             continue
         version = int(match.group(1))
-        already = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-        ).fetchone() and conn.execute(
-            "SELECT 1 FROM schema_migrations WHERE version = ?", (version,)
-        ).fetchone()
+        already = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+            ).fetchone()
+            and conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version = ?", (version,)
+            ).fetchone()
+        )
         if already:
             continue
         sql = path.read_text(encoding="utf-8")

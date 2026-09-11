@@ -19,8 +19,10 @@ def _make_event(admin, *, open_it=True, close_it=False):
     assert resp.status_code == 201, resp.text
     event = resp.json()
     if open_it:
-        admin.post(f"/api/admin/events/{event['id']}/riddles",
-                   json={"text": "Find it", "sort_order": 1})
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Find it", "sort_order": 1},
+        )
         admin.post(f"/api/admin/events/{event['id']}/open")
     if close_it:
         admin.post(f"/api/admin/events/{event['id']}/close")
@@ -28,14 +30,14 @@ def _make_event(admin, *, open_it=True, close_it=False):
 
 
 def _join(client, join_code, name="Batman", device_label="Bruce's phone"):
-    return client.post(f"/api/join/{join_code}",
-                       json={"display_name": name,
-                             "device_label": device_label})
+    return client.post(
+        f"/api/join/{join_code}",
+        json={"display_name": name, "device_label": device_label},
+    )
 
 
 class TestJoin:
-    def test_join_creates_team_of_one_player_session_and_audit(
-            self, admin, client):
+    def test_join_creates_team_of_one_player_session_and_audit(self, admin, client):
         event_id, join_code = _make_event(admin)
         resp = _join(client, join_code)
         assert resp.status_code == 201, resp.text
@@ -44,16 +46,18 @@ class TestJoin:
         assert body["event"]["id"] == event_id
 
         conn = client.app.state.db
-        team = conn.execute("SELECT * FROM team WHERE id = ?",
-                            (body["player"]["team_id"],)).fetchone()
+        team = conn.execute(
+            "SELECT * FROM team WHERE id = ?", (body["player"]["team_id"],)
+        ).fetchone()
         assert team["event_id"] == event_id
         assert team["name"] is None  # unnamed team-of-one (MVP)
-        player = conn.execute("SELECT * FROM player WHERE id = ?",
-                              (body["player"]["id"],)).fetchone()
+        player = conn.execute(
+            "SELECT * FROM player WHERE id = ?", (body["player"]["id"],)
+        ).fetchone()
         assert player["team_id"] == team["id"]
         session = conn.execute(
-            "SELECT * FROM session WHERE player_id = ?",
-            (player["id"],)).fetchone()
+            "SELECT * FROM session WHERE player_id = ?", (player["id"],)
+        ).fetchone()
         assert session["device_label"] == "Bruce's phone"
         assert session["revoked_at"] is None
 
@@ -62,8 +66,7 @@ class TestJoin:
         ).fetchall()
         assert len(rows) == 1
         details = json.loads(rows[0]["details"])
-        assert details == {"display_name": "Batman",
-                           "device_label": "Bruce's phone"}
+        assert details == {"display_name": "Batman", "device_label": "Bruce's phone"}
         assert rows[0]["actor_type"] == "player"
 
     def test_session_token_is_hashed_at_rest(self, admin, client):
@@ -94,27 +97,29 @@ class TestJoin:
         _, join_code = _make_event(admin, open_it=False)
         assert _join(client, join_code).status_code == 201
 
-    def test_two_joins_get_independent_teams_and_sessions(
-            self, admin, client):
+    def test_two_joins_get_independent_teams_and_sessions(self, admin, client):
         event_id, join_code = _make_event(admin)
         r1 = _join(client, join_code, "Batman")
         r2 = _join(client, join_code, "Robin")
         assert r1.json()["player"]["team_id"] != r2.json()["player"]["team_id"]
         conn = client.app.state.db
-        assert conn.execute(
-            "SELECT COUNT(*) FROM team WHERE event_id = ?",
-            (event_id,)).fetchone()[0] == 2
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM team WHERE event_id = ?", (event_id,)
+            ).fetchone()[0]
+            == 2
+        )
         assert conn.execute("SELECT COUNT(*) FROM session").fetchone()[0] == 2
 
 
 class TestLastSeenThrottle:
     def test_last_seen_updates_at_most_once_per_minute(
-            self, admin, client, monkeypatch):
+        self, admin, client, monkeypatch
+    ):
         _, join_code = _make_event(admin)
         _join(client, join_code)
         conn = client.app.state.db
-        seen0 = conn.execute(
-            "SELECT last_seen_at FROM session").fetchone()[0]
+        seen0 = conn.execute("SELECT last_seen_at FROM session").fetchone()[0]
 
         # Patching the time module patches it for auth.py too (same
         # module object) — so this drives the throttle check directly.
@@ -122,22 +127,18 @@ class TestLastSeenThrottle:
         # far. Within the window: no write.
         monkeypatch.setattr(time, "time", lambda: seen0 + 30)
         client.post("/api/logout")
-        seen1 = conn.execute(
-            "SELECT last_seen_at FROM session").fetchone()[0]
+        seen1 = conn.execute("SELECT last_seen_at FROM session").fetchone()[0]
         assert seen1 == seen0
 
-    def test_last_seen_updates_after_the_window(
-            self, admin, client, monkeypatch):
+    def test_last_seen_updates_after_the_window(self, admin, client, monkeypatch):
         _, join_code = _make_event(admin)
         _join(client, join_code)
         conn = client.app.state.db
-        seen0 = conn.execute(
-            "SELECT last_seen_at FROM session").fetchone()[0]
+        seen0 = conn.execute("SELECT last_seen_at FROM session").fetchone()[0]
 
         monkeypatch.setattr(time, "time", lambda: seen0 + 61)
         client.post("/api/logout")
-        seen1 = conn.execute(
-            "SELECT last_seen_at FROM session").fetchone()[0]
+        seen1 = conn.execute("SELECT last_seen_at FROM session").fetchone()[0]
         assert seen1 == seen0 + 61
 
 

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sqlite3
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request
@@ -41,14 +40,15 @@ class _Subscriber:
 
     __slots__ = ("queue", "event_id", "role", "team_id", "player_id")
 
-    def __init__(self, *, event_id: str, role: str, team_id: str | None,
-                 player_id: str | None):
+    def __init__(
+        self, *, event_id: str, role: str, team_id: str | None, player_id: str | None
+    ):
         self.queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self.event_id = event_id
-        self.role = role          # "player" | "moderator"
-        self.team_id = team_id    # None for moderators (they see all teams)
+        self.role = role  # "player" | "moderator"
+        self.team_id = team_id  # None for moderators (they see all teams)
         self.player_id = player_id  # None for moderators; the strike
-                                    # delta targets one player, not a team
+        # delta targets one player, not a team
 
 
 class SseBroker:
@@ -60,20 +60,33 @@ class SseBroker:
         self._loop = loop
         self._subscribers: set[_Subscriber] = set()
 
-    def subscribe(self, *, event_id: str, role: str,
-                  team_id: str | None,
-                  player_id: str | None = None) -> _Subscriber:
-        sub = _Subscriber(event_id=event_id, role=role, team_id=team_id,
-                          player_id=player_id)
+    def subscribe(
+        self,
+        *,
+        event_id: str,
+        role: str,
+        team_id: str | None,
+        player_id: str | None = None,
+    ) -> _Subscriber:
+        sub = _Subscriber(
+            event_id=event_id, role=role, team_id=team_id, player_id=player_id
+        )
         self._subscribers.add(sub)
         return sub
 
     def unsubscribe(self, sub: _Subscriber) -> None:
         self._subscribers.discard(sub)
 
-    def publish(self, event_id: str, name: str, payload: dict, *,
-                to: str = "all", team_id: str | None = None,
-                player_id: str | None = None) -> None:
+    def publish(
+        self,
+        event_id: str,
+        name: str,
+        payload: dict,
+        *,
+        to: str = "all",
+        team_id: str | None = None,
+        player_id: str | None = None,
+    ) -> None:
         """Route one delta. ``to``: "all" (everyone on the event),
         "moderators" (the queue), "team" (one team, with ``team_id``),
         or "player" (one player, with ``player_id`` — conduct deltas
@@ -90,8 +103,7 @@ class SseBroker:
                 continue
             # put_nowait: queues are unbounded — party scale (≤30
             # players + a few mods) cannot outrun a 15s heartbeat loop.
-            self._loop.call_soon_threadsafe(
-                sub.queue.put_nowait, (name, payload))
+            self._loop.call_soon_threadsafe(sub.queue.put_nowait, (name, payload))
 
 
 def format_sse(name: str, payload: dict) -> bytes:
@@ -108,7 +120,8 @@ async def _stream(broker: SseBroker, sub: _Subscriber) -> AsyncIterator[bytes]:
         while True:
             try:
                 name, payload = await asyncio.wait_for(
-                    sub.queue.get(), timeout=HEARTBEAT_SECONDS)
+                    sub.queue.get(), timeout=HEARTBEAT_SECONDS
+                )
                 yield format_sse(name, payload)
             except TimeoutError:
                 yield b": heartbeat\n\n"
@@ -130,32 +143,45 @@ async def events_stream(request: Request):
         role, event_id, team_id = "player", player.event_id, player.team_id
     else:
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=401, content={
-            "error": "not_authenticated",
-            "message": "Join the event first."})
+
+        return JSONResponse(
+            status_code=401,
+            content={"error": "not_authenticated", "message": "Join the event first."},
+        )
 
     broker: SseBroker = request.app.state.sse_broker
-    sub = broker.subscribe(event_id=event_id, role=role, team_id=team_id,
-                           player_id=player.player_id if player else None)
+    sub = broker.subscribe(
+        event_id=event_id,
+        role=role,
+        team_id=team_id,
+        player_id=player.player_id if player else None,
+    )
     return StreamingResponse(
         _stream(broker, sub),
         media_type="text/event-stream",
         # Cache-Control: no-cache keeps proxies honest; X-Accel-Buffering
         # off tells nginx (the VPS reverse proxy) not to buffer the
         # stream — without it deltas arrive in 4 kB batches, not live.
-        headers={"Cache-Control": "no-cache",
-                 "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def publish(request: Request, event_id: str, name: str, payload: dict,
-            *, to: str = "all", team_id: str | None = None,
-            player_id: str | None = None) -> None:
+def publish(
+    request: Request,
+    event_id: str,
+    name: str,
+    payload: dict,
+    *,
+    to: str = "all",
+    team_id: str | None = None,
+    player_id: str | None = None,
+) -> None:
     """The publisher's entry point — one import for the sync routers so
     they never touch the broker object themselves. Call AFTER the
     transaction commits: a delta for a rolled-back write would send
     clients chasing a row that doesn't exist."""
     broker: SseBroker | None = getattr(request.app.state, "sse_broker", None)
     if broker is not None:
-        broker.publish(event_id, name, payload, to=to, team_id=team_id,
-                       player_id=player_id)
+        broker.publish(
+            event_id, name, payload, to=to, team_id=team_id, player_id=player_id
+        )

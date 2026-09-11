@@ -126,8 +126,15 @@ def issue_player_session(
         "INSERT INTO session (id, token_hash, player_id, device_label,"
         " user_agent, created_at, last_seen_at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (ids.new_id(), _hash_token(token), player_id, device_label,
-         user_agent, now, now),
+        (
+            ids.new_id(),
+            _hash_token(token),
+            player_id,
+            device_label,
+            user_agent,
+            now,
+            now,
+        ),
     )
     return token
 
@@ -156,8 +163,9 @@ def current_player(request: Request) -> PlayerContext | None:
         return None
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
-        conn.execute("UPDATE session SET last_seen_at = ? WHERE id = ?",
-                     (now, row["session_id"]))
+        conn.execute(
+            "UPDATE session SET last_seen_at = ? WHERE id = ?", (now, row["session_id"])
+        )
         conn.commit()
     return PlayerContext(
         session_id=row["session_id"],
@@ -179,9 +187,7 @@ def require_player(request: Request) -> PlayerContext:
     return ctx
 
 
-def revoke_player_session(
-    conn: sqlite3.Connection, session_id: str
-) -> None:
+def revoke_player_session(conn: sqlite3.Connection, session_id: str) -> None:
     """Stamp revoked_at. Idempotent — re-revoking is a no-op because the
     moderator 'clear devices' flow (stretch) may batch-revoke."""
     conn.execute(
@@ -244,7 +250,8 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         conn.execute(
             "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
-            (now, row["session_id"]))
+            (now, row["session_id"]),
+        )
         conn.commit()
     return ModeratorContext(
         session_id=row["session_id"],
@@ -261,7 +268,9 @@ def require_moderator(request: Request) -> ModeratorContext:
     if ctx is None:
         raise HTTPException(
             status_code=401,
-            detail={"error": "not_authenticated",
-                    "message": "Moderator login required."},
+            detail={
+                "error": "not_authenticated",
+                "message": "Moderator login required.",
+            },
         )
     return ctx

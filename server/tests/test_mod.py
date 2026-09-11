@@ -13,7 +13,6 @@ import json
 import time
 
 from fastapi.testclient import TestClient
-
 from test_evidence import make_jpeg
 
 
@@ -22,15 +21,19 @@ def _party(admin, client, riddles=("Find it",)):
     the moderation tests need."""
     event = admin.post("/api/admin/events", json={"name": "Mod Party"}).json()
     riddle_ids = [
-        admin.post(f"/api/admin/events/{event['id']}/riddles",
-                   json={"text": t, "sort_order": i}).json()["id"]
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": t, "sort_order": i},
+        ).json()["id"]
         for i, t in enumerate(riddles, start=1)
     ]
     admin.post(f"/api/admin/events/{event['id']}/open")
-    join = client.post(f"/api/join/{event['join_code']}",
-                       json={"display_name": "Batman"}).json()
-    up = client.post("/api/evidence",
-                     files={"photo": ("a.jpg", make_jpeg(), "image/jpeg")})
+    join = client.post(
+        f"/api/join/{event['join_code']}", json={"display_name": "Batman"}
+    ).json()
+    up = client.post(
+        "/api/evidence", files={"photo": ("a.jpg", make_jpeg(), "image/jpeg")}
+    )
     assert up.status_code == 201, up.text
     return {
         "event_id": event["id"],
@@ -52,9 +55,10 @@ def _mod(client, mod_code, label_client=None):
 
 
 def _submit(client, riddle_id, evidence_id):
-    resp = client.post("/api/submissions",
-                       json={"riddle_id": riddle_id,
-                             "evidence_item_id": evidence_id})
+    resp = client.post(
+        "/api/submissions",
+        json={"riddle_id": riddle_id, "evidence_item_id": evidence_id},
+    )
     assert resp.status_code == 201, resp.text
     return resp.json()
 
@@ -114,8 +118,9 @@ class TestQueue:
         # The claim never blocks: mod B can re-claim and, crucially,
         # still verdict (ADR 0002).
         assert mod_b.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 200
-        resp = mod_b.post(f"/api/mod/queue/{sub['id']}/verdict",
-                          json={"verdict": "verified"})
+        resp = mod_b.post(
+            f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
+        )
         assert resp.status_code == 200
 
     def test_claim_on_missing_submission_404(self, admin, client):
@@ -139,17 +144,23 @@ class TestVerdict:
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
 
-        resp = mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                        json={"verdict": "verified",
-                              "flavor_text": "Clean shot, detective."})
+        resp = mod.post(
+            f"/api/mod/queue/{sub['id']}/verdict",
+            json={"verdict": "verified", "flavor_text": "Clean shot, detective."},
+        )
         assert resp.status_code == 200
         assert resp.json()["status"] == "verified"
 
         conn = client.app.state.db
-        assert conn.execute("SELECT status FROM submission WHERE id = ?",
-                            (sub["id"],)).fetchone()[0] == "verified"
-        v = conn.execute("SELECT * FROM verdict WHERE submission_id = ?",
-                         (sub["id"],)).fetchone()
+        assert (
+            conn.execute(
+                "SELECT status FROM submission WHERE id = ?", (sub["id"],)
+            ).fetchone()[0]
+            == "verified"
+        )
+        v = conn.execute(
+            "SELECT * FROM verdict WHERE submission_id = ?", (sub["id"],)
+        ).fetchone()
         assert v["verdict"] == "verified"
         assert v["flavor_text"] == "Clean shot, detective."
         audit = conn.execute(
@@ -172,18 +183,20 @@ class TestVerdict:
         mod_b = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
 
-        first = mod_a.post(f"/api/mod/queue/{sub['id']}/verdict",
-                           json={"verdict": "verified"})
-        second = mod_b.post(f"/api/mod/queue/{sub['id']}/verdict",
-                            json={"verdict": "obscured"})
+        first = mod_a.post(
+            f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
+        )
+        second = mod_b.post(
+            f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "obscured"}
+        )
         assert first.status_code == 200
         assert second.status_code == 409
         assert second.json()["error"] == "already_resolved"
 
         conn = client.app.state.db
         rows = conn.execute(
-            "SELECT verdict FROM verdict WHERE submission_id = ?",
-            (sub["id"],)).fetchall()
+            "SELECT verdict FROM verdict WHERE submission_id = ?", (sub["id"],)
+        ).fetchall()
         assert [r[0] for r in rows] == ["verified"]
 
     def test_verdict_after_close_loses_to_expiry(self, admin, client):
@@ -193,8 +206,9 @@ class TestVerdict:
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         admin.post(f"/api/admin/events/{p['event_id']}/close")
-        resp = mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                        json={"verdict": "verified"})
+        resp = mod.post(
+            f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
+        )
         assert resp.status_code == 409
         assert resp.json()["error"] == "already_resolved"
 
@@ -205,8 +219,9 @@ class TestVerdict:
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         for bad in ("bogus", "inappropriate"):
-            resp = mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                            json={"verdict": bad})
+            resp = mod.post(
+                f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": bad}
+            )
             assert resp.status_code == 422, bad
         # Still pending afterwards.
         assert mod.get("/api/mod/queue").json()[0]["id"] == sub["id"]
@@ -215,13 +230,13 @@ class TestVerdict:
         """A moderator of event A cannot touch event B's queue."""
         p = _party(admin, client)
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
-        other_event = admin.post("/api/admin/events",
-                                 json={"name": "Other"}).json()
+        other_event = admin.post("/api/admin/events", json={"name": "Other"}).json()
         other_mod = TestClient(client.app)
         other_mod.post(f"/api/mod/join/{other_event['mod_code']}")
         assert other_mod.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 404
-        resp = other_mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                              json={"verdict": "verified"})
+        resp = other_mod.post(
+            f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
+        )
         assert resp.status_code == 404
         # And the submission is still pending for the real moderator.
         assert _mod(client, p["mod_code"]).get("/api/mod/queue").json()
@@ -233,10 +248,10 @@ class TestDuplicateFlagResolution:
         second team's evidence."""
         p = _party(admin, client)
         other = TestClient(client.app)
-        other.post(f"/api/join/{p['join_code']}",
-                   json={"display_name": "Robin"})
-        resp = other.post("/api/evidence",
-                          files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+        other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
+        resp = other.post(
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 201
         p["flagged_evidence_id"] = resp.json()["id"]
         return p
@@ -248,19 +263,23 @@ class TestDuplicateFlagResolution:
         p = self._flagged_pair(admin, client)
         mod = _mod(client, p["mod_code"])
 
-        resp = mod.post(f"/api/mod/flags/{p['flagged_evidence_id']}/resolve",
-                        json={"resolution": "cleared"})
+        resp = mod.post(
+            f"/api/mod/flags/{p['flagged_evidence_id']}/resolve",
+            json={"resolution": "cleared"},
+        )
         assert resp.status_code == 200
         conn = client.app.state.db
         rows = conn.execute(
-            "SELECT * FROM audit_event"
-            " WHERE action = 'duplicate_flag.resolved'").fetchall()
+            "SELECT * FROM audit_event WHERE action = 'duplicate_flag.resolved'"
+        ).fetchall()
         assert len(rows) == 1
         assert json.loads(rows[0]["details"]) == {"resolution": "cleared"}
         assert rows[0]["actor_type"] == "moderator"
         # Resolving again: the flag is no longer open.
-        resp = mod.post(f"/api/mod/flags/{p['flagged_evidence_id']}/resolve",
-                        json={"resolution": "cleared"})
+        resp = mod.post(
+            f"/api/mod/flags/{p['flagged_evidence_id']}/resolve",
+            json={"resolution": "cleared"},
+        )
         assert resp.status_code == 404
 
     def test_flag_surfaces_on_queue_item(self, admin, client):
@@ -268,10 +287,10 @@ class TestDuplicateFlagResolution:
         item carries the flag details (the '⚠ SHARED?' mock row)."""
         p = _party(admin, client)
         robin = TestClient(client.app)
-        robin.post(f"/api/join/{p['join_code']}",
-                   json={"display_name": "Robin"})
-        up = robin.post("/api/evidence",
-                        files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")})
+        robin.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
+        up = robin.post(
+            "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+        )
         flagged_id = up.json()["id"]
         _submit(robin, p["riddle_ids"][0], flagged_id)
 
@@ -283,15 +302,20 @@ class TestDuplicateFlagResolution:
         assert flag["distance"] == 0
         assert flag["other_evidence_id"] == p["evidence_id"]
 
-    def test_resolve_unknown_flag_404_and_bad_resolution_422(
-            self, admin, client):
+    def test_resolve_unknown_flag_404_and_bad_resolution_422(self, admin, client):
         p = _party(admin, client)
         mod = _mod(client, p["mod_code"])
-        assert mod.post("/api/mod/flags/nope/resolve",
-                        json={"resolution": "cleared"}).status_code == 404
+        assert (
+            mod.post(
+                "/api/mod/flags/nope/resolve", json={"resolution": "cleared"}
+            ).status_code
+            == 404
+        )
         p2 = self._flagged_pair(admin, client)
-        resp = mod.post(f"/api/mod/flags/{p2['flagged_evidence_id']}/resolve",
-                        json={"resolution": "bogus"})
+        resp = mod.post(
+            f"/api/mod/flags/{p2['flagged_evidence_id']}/resolve",
+            json={"resolution": "bogus"},
+        )
         assert resp.status_code == 422
 
 
@@ -300,8 +324,10 @@ class TestPlayerHistory:
         p = _party(admin, client)
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
-        mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                 json={"verdict": "obscured", "flavor_text": "Too dark."})
+        mod.post(
+            f"/api/mod/queue/{sub['id']}/verdict",
+            json={"verdict": "obscured", "flavor_text": "Too dark."},
+        )
 
         resp = mod.get(f"/api/mod/players/{p['player_id']}")
         assert resp.status_code == 200
@@ -332,30 +358,41 @@ class TestSseDeltas:
         moderators' queue, not another team's or another event's."""
         p = _party(admin, client)
         broker = client.app.state.sse_broker
-        team_sub = broker.subscribe(event_id=p["event_id"],
-                                    role="player", team_id="t1")
-        other_team = broker.subscribe(event_id=p["event_id"],
-                                      role="player", team_id="t2")
-        mod_sub = broker.subscribe(event_id=p["event_id"],
-                                   role="moderator", team_id=None)
-        other_event = broker.subscribe(event_id="other-event",
-                                       role="moderator", team_id=None)
+        team_sub = broker.subscribe(event_id=p["event_id"], role="player", team_id="t1")
+        other_team = broker.subscribe(
+            event_id=p["event_id"], role="player", team_id="t2"
+        )
+        mod_sub = broker.subscribe(
+            event_id=p["event_id"], role="moderator", team_id=None
+        )
+        other_event = broker.subscribe(
+            event_id="other-event", role="moderator", team_id=None
+        )
         try:
             # publish() schedules queue puts on the app's running loop
             # via call_soon_threadsafe; the TestClient portal keeps that
             # loop alive, so a brief wait + any request flushes it.
-            broker.publish(p["event_id"], "verdict",
-                           {"submission_id": "s1"}, to="team",
-                           team_id="t1")
-            broker.publish(p["event_id"], "queue_resolved",
-                           {"submission_id": "s1"}, to="moderators")
+            broker.publish(
+                p["event_id"],
+                "verdict",
+                {"submission_id": "s1"},
+                to="team",
+                team_id="t1",
+            )
+            broker.publish(
+                p["event_id"],
+                "queue_resolved",
+                {"submission_id": "s1"},
+                to="moderators",
+            )
             time.sleep(0.05)
             client.get("/api/state")
 
-            assert team_sub.queue.get_nowait() == (
-                "verdict", {"submission_id": "s1"})
+            assert team_sub.queue.get_nowait() == ("verdict", {"submission_id": "s1"})
             assert mod_sub.queue.get_nowait() == (
-                "queue_resolved", {"submission_id": "s1"})
+                "queue_resolved",
+                {"submission_id": "s1"},
+            )
             assert other_team.queue.empty()
             assert other_event.queue.empty()
         finally:

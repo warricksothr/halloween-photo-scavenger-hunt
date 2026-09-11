@@ -23,15 +23,18 @@ from dataclasses import dataclass
 
 @dataclass
 class Restriction:
-    level: int                      # 0 clean, 1 warned, 2 cooldown, 3 banned
-    cooldown_until: int | None      # epoch seconds when level == 2
-    pending_notice: bool            # strike-1 interstitial not yet shown
+    level: int  # 0 clean, 1 warned, 2 cooldown, 3 banned
+    cooldown_until: int | None  # epoch seconds when level == 2
+    pending_notice: bool  # strike-1 interstitial not yet shown
     pending_notice_strike_id: str | None  # the strike the ack endpoint clears
 
     def as_dict(self) -> dict:
         # The snapshot shape (docs/impl/api.md).
-        return {"level": self.level, "cooldown_until": self.cooldown_until,
-                "pending_notice": self.pending_notice}
+        return {
+            "level": self.level,
+            "cooldown_until": self.cooldown_until,
+            "pending_notice": self.pending_notice,
+        }
 
     def blocks_uploads(self, now: int) -> bool:
         if self.level == 3:
@@ -67,19 +70,23 @@ def derive_restriction(conn: sqlite3.Connection, player_id: str) -> Restriction:
     ).fetchall()
     level = rows[0]["level"] if rows else 0
     cooldown_until = next(
-        (r["cooldown_until"] for r in rows
-         if r["level"] == 2 and r["cooldown_until"] is not None),
+        (
+            r["cooldown_until"]
+            for r in rows
+            if r["level"] == 2 and r["cooldown_until"] is not None
+        ),
         None,
     )
     pending_notice_strike_id = _unacknowledged_strike(conn, player_id)
     return Restriction(
-        level=level, cooldown_until=cooldown_until,
+        level=level,
+        cooldown_until=cooldown_until,
         pending_notice=pending_notice_strike_id is not None,
-        pending_notice_strike_id=pending_notice_strike_id)
+        pending_notice_strike_id=pending_notice_strike_id,
+    )
 
 
-def _unacknowledged_strike(conn: sqlite3.Connection,
-                           player_id: str) -> str | None:
+def _unacknowledged_strike(conn: sqlite3.Connection, player_id: str) -> str | None:
     """The earliest non-reversed strike with no matching
     ``notice.acknowledged`` audit row, or None."""
     row = conn.execute(

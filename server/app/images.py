@@ -37,9 +37,9 @@ from PIL import Image, ImageOps
 # Caps. Phone photos today run 12+ MP; 1920px is plenty for a party
 # screen and keeps derivatives small. MAX_PIXELS guards decompression
 # bombs (a valid JPEG can declare absurd dimensions).
-MAX_BYTES = 15 * 1024 * 1024   # 15 MB wire cap (route enforces)
-MAX_DIMENSION = 1920           # long-edge cap for the derivative
-MAX_PIXELS = 50_000_000        # decompressed pixel ceiling
+MAX_BYTES = 15 * 1024 * 1024  # 15 MB wire cap (route enforces)
+MAX_DIMENSION = 1920  # long-edge cap for the derivative
+MAX_PIXELS = 50_000_000  # decompressed pixel ceiling
 
 JPEG_QUALITY = 85
 
@@ -61,8 +61,8 @@ class TooManyPixelsError(Exception):
 @dataclass
 class ProcessedPhoto:
     derivative_bytes: bytes
-    phash: str          # 16 hex chars (64-bit aHash)
-    width: int          # derivative dimensions (post-transpose, post-cap)
+    phash: str  # 16 hex chars (64-bit aHash)
+    width: int  # derivative dimensions (post-transpose, post-cap)
     height: int
 
 
@@ -85,7 +85,11 @@ def average_hash(img: Image.Image) -> str:
     scan (party scale; no index needed, spec).
     """
     small = img.convert("L").resize((8, 8), Image.LANCZOS)
-    pixels = list(small.getdata())
+    # ``getdata()`` is deprecated in Pillow 12, while
+    # ``get_flattened_data()`` is unavailable in the Pillow 10 baseline.
+    # Mode L stores one byte per pixel, so the byte representation keeps
+    # this hash stable across the supported Pillow versions.
+    pixels = list(small.tobytes())
     mean = sum(pixels) / len(pixels)
     bits = 0
     for p in pixels:

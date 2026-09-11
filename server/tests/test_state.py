@@ -7,15 +7,19 @@ import time
 def _party(admin, client):
     """Create + open an event with two riddles, join one player.
     Returns (event_id, riddle_ids, join response body)."""
-    resp = admin.post("/api/admin/events",
-                      json={"name": "Snapshot Party", "team_size_limit": 3})
+    resp = admin.post(
+        "/api/admin/events", json={"name": "Snapshot Party", "team_size_limit": 3}
+    )
     event = resp.json()
     for i, text in enumerate(["First riddle", "Second riddle"], start=1):
-        admin.post(f"/api/admin/events/{event['id']}/riddles",
-                   json={"text": text, "sort_order": i})
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": text, "sort_order": i},
+        )
     admin.post(f"/api/admin/events/{event['id']}/open")
-    join = client.post(f"/api/join/{event['join_code']}",
-                       json={"display_name": "Batman"})
+    join = client.post(
+        f"/api/join/{event['join_code']}", json={"display_name": "Batman"}
+    )
     assert join.status_code == 201, join.text
     riddles = admin.get(f"/api/admin/events/{event['id']}/riddles").json()
     return event["id"], [r["id"] for r in riddles], join.json()
@@ -29,22 +33,33 @@ class TestStateSnapshot:
         snap = resp.json()
 
         assert snap["event"] == {
-            "id": event_id, "name": "Snapshot Party", "status": "open",
-            "leaderboard_visibility": "live", "theme": "arkham",
+            "id": event_id,
+            "name": "Snapshot Party",
+            "status": "open",
+            "leaderboard_visibility": "live",
+            "theme": "arkham",
             "team_size_limit": 3,
         }
         assert snap["me"]["display_name"] == "Batman"
         assert snap["me"]["restriction"] == {
-            "level": 0, "cooldown_until": None, "pending_notice": False}
+            "level": 0,
+            "cooldown_until": None,
+            "pending_notice": False,
+        }
         # Live visibility: standings ride the snapshot (increment 9) —
         # one scoreless team, labeled by its player's display name.
-        assert snap["leaderboard"] == [{
-            "team_id": join["player"]["team_id"], "team": "Batman",
-            "score": 0, "rank": 1, "you": True}]
+        assert snap["leaderboard"] == [
+            {
+                "team_id": join["player"]["team_id"],
+                "team": "Batman",
+                "score": 0,
+                "rank": 1,
+                "you": True,
+            }
+        ]
 
         riddles = snap["riddles"]
-        assert [r["text"] for r in riddles] == ["First riddle",
-                                                "Second riddle"]
+        assert [r["text"] for r in riddles] == ["First riddle", "Second riddle"]
         assert all(r["state"] == "unsolved" for r in riddles)
 
         # Seed a pending + a verified submission for this team (submission
@@ -77,8 +92,7 @@ class TestStateSnapshot:
 
         snap = client.get("/api/state").json()
         states = {r["id"]: r["state"] for r in snap["riddles"]}
-        assert states == {riddle_ids[0]: "pending",
-                          riddle_ids[1]: "verified"}
+        assert states == {riddle_ids[0]: "pending", riddle_ids[1]: "verified"}
         subs = {s["id"]: s for s in snap["submissions"]}
         assert subs["sub2"]["verdict_flavor"] == "Riddle solved."
         assert subs["sub1"]["status"] == "pending"
@@ -114,17 +128,24 @@ class TestStateSnapshot:
         # A strike with no notice.acknowledged row has a pending
         # interstitial — ack state is audit data, not a column (inc 8).
         assert snap["me"]["restriction"] == {
-            "level": 2, "cooldown_until": now + 900, "pending_notice": True}
+            "level": 2,
+            "cooldown_until": now + 900,
+            "pending_notice": True,
+        }
 
         client.post("/api/me/notice-ack")
         snap = client.get("/api/state").json()
         assert snap["me"]["restriction"] == {
-            "level": 2, "cooldown_until": now + 900, "pending_notice": False}
+            "level": 2,
+            "cooldown_until": now + 900,
+            "pending_notice": False,
+        }
 
         # Reversal flips the derived state back — nothing stored to sync.
         conn.execute(
-            "UPDATE strike SET reversed_by = 'mod1', reversed_at = ?"
-            " WHERE id = 'st1'", (now + 1000,))
+            "UPDATE strike SET reversed_by = 'mod1', reversed_at = ? WHERE id = 'st1'",
+            (now + 1000,),
+        )
         conn.commit()
         snap = client.get("/api/state").json()
         assert snap["me"]["restriction"]["level"] == 0

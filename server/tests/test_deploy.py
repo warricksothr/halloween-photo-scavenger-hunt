@@ -11,12 +11,11 @@ Two surfaces:
 """
 
 from fastapi.testclient import TestClient
+from test_leaderboard import _multi_party, _upload_and_solve
+from test_mod import _mod
 
 from app.main import create_app
 from app.security import hash_password
-from test_evidence import make_jpeg
-from test_leaderboard import _multi_party, _upload_and_solve
-from test_mod import _mod
 
 ADMIN_USER, ADMIN_PASSWORD = "admin", "pw"
 
@@ -29,46 +28,49 @@ def _app(tmp_path, static_dir=None):
     (db, admin_config, broker) is populated by the lifespan, which only
     runs on __enter__. A bare TestClient(app) would 500 on the first
     request with AttributeError on app.state."""
-    client = TestClient(create_app(
-        tmp_path / "api.db",
-        admin_config=(ADMIN_USER, hash_password(ADMIN_PASSWORD)),
-        cookie_secure=False,
-        photos_dir=tmp_path / "photos",
-        static_dir=static_dir,
-    ))
+    client = TestClient(
+        create_app(
+            tmp_path / "api.db",
+            admin_config=(ADMIN_USER, hash_password(ADMIN_PASSWORD)),
+            cookie_secure=False,
+            photos_dir=tmp_path / "photos",
+            static_dir=static_dir,
+        )
+    )
     client.__enter__()
     return client
 
 
 def _login(client):
-    resp = client.post("/api/admin/login",
-                       json={"username": ADMIN_USER,
-                             "password": ADMIN_PASSWORD})
+    resp = client.post(
+        "/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASSWORD}
+    )
     assert resp.status_code == 200
 
 
 def _event_counts(conn, event_id):
     """Row counts for every table the event owns, for assertions."""
+
     def n(sql, *args):
         return conn.execute(sql, args).fetchone()[0]
 
     return {
         "event": n("SELECT COUNT(*) FROM event WHERE id = ?", event_id),
-        "riddle": n("SELECT COUNT(*) FROM riddle WHERE event_id = ?",
-                    event_id),
-        "team": n("SELECT COUNT(*) FROM team WHERE event_id = ?",
-                  event_id),
+        "riddle": n("SELECT COUNT(*) FROM riddle WHERE event_id = ?", event_id),
+        "team": n("SELECT COUNT(*) FROM team WHERE event_id = ?", event_id),
         "submission": n(
             "SELECT COUNT(*) FROM submission WHERE riddle_id IN"
-            " (SELECT id FROM riddle WHERE event_id = ?)", event_id),
+            " (SELECT id FROM riddle WHERE event_id = ?)",
+            event_id,
+        ),
         "verdict": n(
             "SELECT COUNT(*) FROM verdict WHERE submission_id IN"
             " (SELECT s.id FROM submission s JOIN riddle r"
-            "  ON r.id = s.riddle_id WHERE r.event_id = ?)", event_id),
-        "audit": n("SELECT COUNT(*) FROM audit_event WHERE event_id = ?",
-                   event_id),
-        "moderator": n("SELECT COUNT(*) FROM moderator WHERE event_id = ?",
-                       event_id),
+            "  ON r.id = s.riddle_id WHERE r.event_id = ?)",
+            event_id,
+        ),
+        "audit": n("SELECT COUNT(*) FROM audit_event WHERE event_id = ?", event_id),
+        "moderator": n("SELECT COUNT(*) FROM moderator WHERE event_id = ?", event_id),
     }
 
 
@@ -93,16 +95,22 @@ class TestPurge:
         assert derivatives and originals
 
         client.post(f"/api/admin/events/{p['event_id']}/close")
-        resp = client.post(f"/api/admin/events/{p['event_id']}/purge",
-                           json={"confirm": "Standings Party"})
+        resp = client.post(
+            f"/api/admin/events/{p['event_id']}/purge",
+            json={"confirm": "Standings Party"},
+        )
         assert resp.status_code == 200
         assert resp.json()["purged"] == {"submissions": 1, "evidence": 1}
 
         conn = client.app.state.db
         assert all(v == 0 for v in _event_counts(conn, p["event_id"]).values())
         # The other event is intact.
-        assert conn.execute("SELECT COUNT(*) FROM event WHERE id = ?",
-                            (other["id"],)).fetchone()[0] == 1
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM event WHERE id = ?", (other["id"],)
+            ).fetchone()[0]
+            == 1
+        )
         # Photo files are gone too.
         assert list((photos_dir / "derivatives").iterdir()) == []
         assert list((photos_dir / "originals").iterdir()) == []
@@ -113,15 +121,18 @@ class TestPurge:
         p = _multi_party(client, client, ("Batman",))
 
         # Open event: purging a live round is not a reachable state.
-        resp = client.post(f"/api/admin/events/{p['event_id']}/purge",
-                           json={"confirm": "Standings Party"})
+        resp = client.post(
+            f"/api/admin/events/{p['event_id']}/purge",
+            json={"confirm": "Standings Party"},
+        )
         assert resp.status_code == 409
         assert resp.json()["error"] == "event_not_closed"
 
         client.post(f"/api/admin/events/{p['event_id']}/close")
         # Wrong name: the host must name the thing they're destroying.
-        resp = client.post(f"/api/admin/events/{p['event_id']}/purge",
-                           json={"confirm": "Not The Name"})
+        resp = client.post(
+            f"/api/admin/events/{p['event_id']}/purge", json={"confirm": "Not The Name"}
+        )
         assert resp.status_code == 409
         assert resp.json()["error"] == "confirm_mismatch"
 
@@ -133,12 +144,22 @@ class TestPurge:
         client.post(f"/api/admin/events/{p['event_id']}/close")
 
         # Moderators manage queues, not events (api.md).
-        assert mod.post(f"/api/admin/events/{p['event_id']}/purge",
-                        json={"confirm": "Standings Party"}
-                        ).status_code == 401
-        assert TestClient(client.app).post(
-            f"/api/admin/events/{p['event_id']}/purge",
-            json={"confirm": "Standings Party"}).status_code == 401
+        assert (
+            mod.post(
+                f"/api/admin/events/{p['event_id']}/purge",
+                json={"confirm": "Standings Party"},
+            ).status_code
+            == 401
+        )
+        assert (
+            TestClient(client.app)
+            .post(
+                f"/api/admin/events/{p['event_id']}/purge",
+                json={"confirm": "Standings Party"},
+            )
+            .status_code
+            == 401
+        )
 
 
 class TestStaticServing:

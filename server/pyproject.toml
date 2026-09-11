@@ -14,7 +14,15 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "httpx>=0.27",  # required by fastapi.testclient.TestClient
+    "pytest-cov>=6.0,<7.0",
+    "ruff>=0.9,<1.0",
+    # Starlette 1.x uses httpx2 for TestClient. Keeping this explicit avoids
+    # its deprecated fallback to the original httpx package.
+    "httpx2>=2.0,<3.0",
+    # Starlette 1.6 still imports anyio.abc.BlockingPortal, which AnyIO
+    # 4.15 deprecates at import time. Keep the test stack warning-free until
+    # Starlette moves to anyio.from_thread.BlockingPortal.
+    "anyio>=4.0,<4.15",
 ]
 
 [build-system]
@@ -29,3 +37,24 @@ app = ["migrations/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "error",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["server/app"]
+
+[tool.coverage.report]
+# The branch-aware baseline is 93%. Keep 3 percentage points for new paths
+# while requiring every quality run to report uncovered lines.
+fail_under = 90
+show_missing = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# E/F catch syntax and correctness defects; I keeps imports deterministic.
+select = ["E4", "E7", "E9", "F", "I"]

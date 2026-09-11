@@ -47,9 +47,7 @@ def test_one_pending_submission_per_riddle_per_team(seeded, conn):
     # team may submit again — free resubmission after a soft rejection.
     conn.execute("UPDATE submission SET status = 'obscured' WHERE id = 'sub1'")
     submit("sub2")
-    row = conn.execute(
-        "SELECT status FROM submission WHERE id = 'sub2'"
-    ).fetchone()
+    row = conn.execute("SELECT status FROM submission WHERE id = 'sub2'").fetchone()
     assert row["status"] == "pending"
 
 

@@ -29,7 +29,8 @@ from starlette.concurrency import run_in_threadpool
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
-from app.conduct import derive_restriction, now as conduct_now
+from app.conduct import derive_restriction
+from app.conduct import now as conduct_now
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -39,7 +40,7 @@ from app.images import (
 
 router = APIRouter(prefix="/api/evidence", tags=["evidence"])
 
-RATE_LIMIT_UPLOADS = 30          # per team …
+RATE_LIMIT_UPLOADS = 30  # per team …
 RATE_LIMIT_WINDOW_SECONDS = 600  # … per rolling 10 minutes
 
 # Cross-team duplicate-evidence flag (design.md): aHash Hamming distance
@@ -57,8 +58,7 @@ def _hamming(a: str, b: str) -> int:
 
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status,
-                        content={"error": code, "message": message})
+    return JSONResponse(status_code=status, content={"error": code, "message": message})
 
 
 def _item_json(row: sqlite3.Row) -> dict:
@@ -72,8 +72,8 @@ def _item_json(row: sqlite3.Row) -> dict:
         "riddle_id": row["riddle_id"],
         "uploaded_by": row["uploaded_by"],
         "uploaded_by_name": (
-            row["uploaded_by_name"] if "uploaded_by_name" in row.keys()
-            else None),
+            row["uploaded_by_name"] if "uploaded_by_name" in row.keys() else None
+        ),
         "created_at": row["created_at"],
         "photo_url": f"/api/evidence/{row['id']}/photo",
     }
@@ -92,8 +92,9 @@ async def upload(
     # cooldown_until; level 3 blocks for the rest of the event.
     restriction = derive_restriction(conn, ctx.player_id)
     if restriction.blocks_uploads(conduct_now()):
-        return _err(403, "upload_restricted",
-                    "Uploads are temporarily disabled for your team.")
+        return _err(
+            403, "upload_restricted", "Uploads are temporarily disabled for your team."
+        )
 
     data = await photo.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
@@ -116,16 +117,16 @@ async def upload(
         (ctx.team_id, cutoff),
     ).fetchone()[0]
     if recent >= RATE_LIMIT_UPLOADS:
-        return _err(429, "rate_limited",
-                    "Too many uploads — give it a minute and try again.")
+        return _err(
+            429, "rate_limited", "Too many uploads — give it a minute and try again."
+        )
 
     # Blocking Pillow work off the event loop (build plan's called-out
     # trap): inside `async def` it would stall every player.
     try:
         processed = await run_in_threadpool(process_upload, data)
     except NotAnImageError:
-        return _err(415, "not_an_image",
-                    "That file isn't a JPEG, PNG, or WebP photo.")
+        return _err(415, "not_an_image", "That file isn't a JPEG, PNG, or WebP photo.")
     except TooManyPixelsError:
         return _err(413, "too_large", "That photo's dimensions are too large.")
 
@@ -142,14 +143,30 @@ async def upload(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
             " photo_path, phash, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (evidence_id, ctx.team_id, ctx.player_id, riddle_id,
-             derivative_rel, processed.phash, now),
+            (
+                evidence_id,
+                ctx.team_id,
+                ctx.player_id,
+                riddle_id,
+                derivative_rel,
+                processed.phash,
+                now,
+            ),
         )
-        log_action(conn, event_id=ctx.event_id, actor_type=ActorType.PLAYER,
-                   actor_id=ctx.player_id, action=Action.EVIDENCE_UPLOADED,
-                   entity_type="evidence_item", entity_id=evidence_id,
-                   details={"riddle_tag": riddle_id, "bytes": len(data),
-                            "phash": processed.phash})
+        log_action(
+            conn,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.EVIDENCE_UPLOADED,
+            entity_type="evidence_item",
+            entity_id=evidence_id,
+            details={
+                "riddle_tag": riddle_id,
+                "bytes": len(data),
+                "phash": processed.phash,
+            },
+        )
 
         # Duplicate-evidence detection: compare the new phash against
         # every other team's evidence in this event (plain scan — party
@@ -165,13 +182,20 @@ async def upload(
         for other in other_rows:
             distance = _hamming(processed.phash, other["phash"])
             if distance <= PHASH_FLAG_THRESHOLD:
-                log_action(conn, event_id=ctx.event_id,
-                           actor_type=ActorType.SYSTEM, actor_id=None,
-                           action=Action.DUPLICATE_FLAG_RAISED,
-                           entity_type="evidence_item", entity_id=evidence_id,
-                           details={"other_team_id": other["team_id"],
-                                    "other_evidence_id": other["id"],
-                                    "distance": distance})
+                log_action(
+                    conn,
+                    event_id=ctx.event_id,
+                    actor_type=ActorType.SYSTEM,
+                    actor_id=None,
+                    action=Action.DUPLICATE_FLAG_RAISED,
+                    entity_type="evidence_item",
+                    entity_id=evidence_id,
+                    details={
+                        "other_team_id": other["team_id"],
+                        "other_evidence_id": other["id"],
+                        "distance": distance,
+                    },
+                )
                 break  # one flag per upload is enough to review
 
     # Files written after the row commits: a DB failure leaves no orphan
@@ -187,8 +211,7 @@ async def upload(
 
 
 @router.get("")
-def drawer(request: Request,
-           ctx: auth.PlayerContext = Depends(auth.require_player)):
+def drawer(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     conn: sqlite3.Connection = request.app.state.db
     # Team-scoped from day one (design.md): the drawer IS the team's
     # shared pool — a multi-member team sees every member's photos,
@@ -205,8 +228,11 @@ def drawer(request: Request,
 
 
 @router.get("/{evidence_id}/photo")
-def photo(evidence_id: str, request: Request,
-          ctx: auth.PlayerContext = Depends(auth.require_player)):
+def photo(
+    evidence_id: str,
+    request: Request,
+    ctx: auth.PlayerContext = Depends(auth.require_player),
+):
     conn: sqlite3.Connection = request.app.state.db
     row = conn.execute(
         "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)

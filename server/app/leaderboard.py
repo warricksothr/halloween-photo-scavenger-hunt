@@ -35,8 +35,7 @@ router = APIRouter(prefix="/api", tags=["leaderboard"])
 
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status,
-                        content={"error": code, "message": message})
+    return JSONResponse(status_code=status, content={"error": code, "message": message})
 
 
 def _standings(conn: sqlite3.Connection, event_id: str) -> list[dict]:
@@ -62,8 +61,10 @@ def _standings(conn: sqlite3.Connection, event_id: str) -> list[dict]:
         " ORDER BY score DESC, t.created_at ASC, t.id ASC",
         (event_id,),
     ).fetchall()
-    return [{"team_id": r["team_id"], "team": r["team_label"],
-             "score": r["score"]} for r in rows]
+    return [
+        {"team_id": r["team_id"], "team": r["team_label"], "score": r["score"]}
+        for r in rows
+    ]
 
 
 @router.get("/leaderboard")
@@ -86,17 +87,24 @@ def leaderboard(request: Request):
         "SELECT status, leaderboard_visibility FROM event WHERE id = ?",
         (event_id,),
     ).fetchone()
-    if (mod is None and event["leaderboard_visibility"] == "final-reveal"
-            and event["status"] != "closed"):
-        return _err(404, "leaderboard_sealed",
-                    "Standings are sealed until the final reveal.")
+    if (
+        mod is None
+        and event["leaderboard_visibility"] == "final-reveal"
+        and event["status"] != "closed"
+    ):
+        return _err(
+            404, "leaderboard_sealed", "Standings are sealed until the final reveal."
+        )
 
     standings = _standings(conn, event_id)
     for i, row in enumerate(standings, start=1):
         row["rank"] = i
         row["you"] = row["team_id"] == team_id
-    return {"visibility": event["leaderboard_visibility"],
-            "event_status": event["status"], "standings": standings}
+    return {
+        "visibility": event["leaderboard_visibility"],
+        "event_status": event["status"],
+        "standings": standings,
+    }
 
 
 # api.md: leaderboard deltas are throttled, ≥5s apart per event — a
@@ -105,8 +113,9 @@ def leaderboard(request: Request):
 LEADERBOARD_THROTTLE_SECONDS = 5
 
 
-def publish_leaderboard(request: Request, event_id: str,
-                        *, force: bool = False) -> None:
+def publish_leaderboard(
+    request: Request, event_id: str, *, force: bool = False
+) -> None:
     """Push a throttled ``leaderboard`` delta to everyone on the event.
 
     Called AFTER the committing transaction (same rule as every
@@ -121,16 +130,16 @@ def publish_leaderboard(request: Request, event_id: str,
     if event is None:
         return
     # Nobody to reveal to mid-round under final-reveal; close forces it.
-    if (event["leaderboard_visibility"] != "live"
-            and event["status"] != "closed"):
+    if event["leaderboard_visibility"] != "live" and event["status"] != "closed":
         return
     now = time.monotonic()
     last_sent = request.app.state.leaderboard_last_sent
     if not force and now - last_sent.get(event_id, 0.0) < LEADERBOARD_THROTTLE_SECONDS:
         return
     last_sent[event_id] = now
-    sse.publish(request, event_id, "leaderboard",
-                {"standings": _standings(conn, event_id)})
+    sse.publish(
+        request, event_id, "leaderboard", {"standings": _standings(conn, event_id)}
+    )
 
 
 # ── The recap (ADR 0005) ──────────────────────────────────────────────
@@ -138,8 +147,7 @@ def publish_leaderboard(request: Request, event_id: str,
 # Party-safe actions only (audit-actions.md): conduct rows
 # (strike.*, evidence.quarantined, duplicate_flag.*) are excluded at
 # the query, structurally — the recap cannot leak them.
-_RECAP_ACTIONS = ("event.opened", "event.closed", "player.joined",
-                  "verdict.issued")
+_RECAP_ACTIONS = ("event.opened", "event.closed", "player.joined", "verdict.issued")
 
 
 def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
@@ -169,7 +177,8 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
     # Verified verdicts carry no team/riddle ids of their own — resolve
     # through the submission row they judged.
     verdict_subs = {
-        r["entity_id"] for r in rows
+        r["entity_id"]
+        for r in rows
         if r["action"] == "verdict.issued"
         and json.loads(r["details"]).get("verdict") == "verified"
     }
@@ -181,12 +190,13 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
             " WHERE s.id IN (%s)" % ",".join("?" * len(verdict_subs)),
             tuple(verdict_subs),
         ).fetchall()
-        team_labels = {t["team_id"]: t["team"] for t in
-                       _standings(conn, event_id)}
+        team_labels = {t["team_id"]: t["team"] for t in _standings(conn, event_id)}
         sub_info = {
-            s["id"]: {"team_id": s["team_id"],
-                      "team": team_labels.get(s["team_id"], "?"),
-                      "riddle_sort": s["sort_order"]}
+            s["id"]: {
+                "team_id": s["team_id"],
+                "team": team_labels.get(s["team_id"], "?"),
+                "riddle_sort": s["sort_order"],
+            }
             for s in sub_rows
         }
 
@@ -201,12 +211,15 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
         at = r["created_at"]
         details = json.loads(r["details"])
         if r["action"] == "event.opened":
-            timeline.append({"kind": "opened", "at": at,
-                             "operatives": join_count})
+            timeline.append({"kind": "opened", "at": at, "operatives": join_count})
         elif r["action"] == "event.closed":
-            timeline.append({"kind": "closed", "at": at,
-                             "expired_pending": details.get(
-                                 "expired_pending", 0)})
+            timeline.append(
+                {
+                    "kind": "closed",
+                    "at": at,
+                    "expired_pending": details.get("expired_pending", 0),
+                }
+            )
         elif r["action"] == "verdict.issued":
             if details.get("verdict") != "verified":
                 continue
@@ -214,9 +227,13 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
             if info is None:
                 continue
             scores[info["team_id"]] = scores.get(info["team_id"], 0) + 1
-            entry = {"kind": "solve", "at": at, "team": info["team"],
-                     "riddle_sort": info["riddle_sort"],
-                     "team_id": info["team_id"]}
+            entry = {
+                "kind": "solve",
+                "at": at,
+                "team": info["team"],
+                "riddle_sort": info["riddle_sort"],
+                "team_id": info["team_id"],
+            }
             if not first_solve_done:
                 entry["kind"] = "first_solve"
                 first_solve_done = True
@@ -225,14 +242,19 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
             # Lead change: this team now holds the top score ALONE.
             top = max(scores.values())
             top_teams = [t for t, s in scores.items() if s == top]
-            if (len(top_teams) == 1 and top_teams[0] != leader):
+            if len(top_teams) == 1 and top_teams[0] != leader:
                 leader = top_teams[0]
                 # The first solve IS the first lead change; only a
                 # later change earns its own entry.
                 if entry["kind"] != "first_solve":
-                    timeline.append({"kind": "lead_change", "at": at,
-                                     "team": info["team"],
-                                     "score": top})
+                    timeline.append(
+                        {
+                            "kind": "lead_change",
+                            "at": at,
+                            "team": info["team"],
+                            "score": top,
+                        }
+                    )
 
     # Mass-solve pass: riddles solved by every team on the event.
     team_count = conn.execute(
@@ -242,12 +264,13 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
         solved_by: dict[int, set[str]] = {}
         for s in solves:
             solved_by.setdefault(s["riddle_sort"], set()).add(s["team_id"])
-        mass = {sort for sort, teams in solved_by.items()
-                if len(teams) == team_count}
+        mass = {sort for sort, teams in solved_by.items() if len(teams) == team_count}
         if mass:
             for entry in timeline:
-                if (entry["kind"] in ("solve", "first_solve")
-                        and entry["riddle_sort"] in mass):
+                if (
+                    entry["kind"] in ("solve", "first_solve")
+                    and entry["riddle_sort"] in mass
+                ):
                     entry["mass_solve"] = True
 
     # Internal fields (team_id, riddle set bookkeeping) are for the
@@ -258,8 +281,7 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
 
 
 @router.get("/recap")
-def recap(request: Request,
-          ctx: auth.PlayerContext = Depends(auth.require_player)):
+def recap(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     """The final standings + the night's timeline (mock: "Case Closed"
     banner + intel trail). Players only, and only after close — a live
     recap would spoil the final-reveal toggle it shares the log with."""
@@ -268,8 +290,7 @@ def recap(request: Request,
         "SELECT status, name FROM event WHERE id = ?", (ctx.event_id,)
     ).fetchone()
     if event["status"] != "closed":
-        return _err(409, "round_not_closed",
-                    "The recap unlocks when the round closes.")
+        return _err(409, "round_not_closed", "The recap unlocks when the round closes.")
 
     standings = _standings(conn, ctx.event_id)
     for i, row in enumerate(standings, start=1):
@@ -278,15 +299,18 @@ def recap(request: Request,
     total_riddles = conn.execute(
         "SELECT COUNT(*) FROM riddle WHERE event_id = ?", (ctx.event_id,)
     ).fetchone()[0]
-    return {"event_name": event["name"],
-            "standings": standings,
-            "total_riddles": total_riddles,
-            "timeline": _recap_timeline(conn, ctx.event_id)}
+    return {
+        "event_name": event["name"],
+        "standings": standings,
+        "total_riddles": total_riddles,
+        "timeline": _recap_timeline(conn, ctx.event_id),
+    }
 
 
 @router.get("/mod/audit")
-def mod_audit(request: Request,
-              ctx: auth.ModeratorContext = Depends(auth.require_moderator)):
+def mod_audit(
+    request: Request, ctx: auth.ModeratorContext = Depends(auth.require_moderator)
+):
     """The full forensic timeline (audit-actions.md): every row, conduct
     included. This is the moderators' side of the conduct wall — the
     player recap is a strict subset. Read-only; reads are never
@@ -299,9 +323,15 @@ def mod_audit(request: Request,
         (ctx.event_id,),
     ).fetchall()
     return [
-        {"id": r["id"], "actor_type": r["actor_type"],
-         "actor_id": r["actor_id"], "action": r["action"],
-         "entity_type": r["entity_type"], "entity_id": r["entity_id"],
-         "details": json.loads(r["details"]), "created_at": r["created_at"]}
+        {
+            "id": r["id"],
+            "actor_type": r["actor_type"],
+            "actor_id": r["actor_id"],
+            "action": r["action"],
+            "entity_type": r["entity_type"],
+            "entity_id": r["entity_id"],
+            "details": json.loads(r["details"]),
+            "created_at": r["created_at"],
+        }
         for r in rows
     ]

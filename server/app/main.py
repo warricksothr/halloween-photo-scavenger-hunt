@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
+import threading
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,7 +23,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import db as db_module
-from app import events, evidence, leaderboard, mod, players, sse, state, submissions, teams
+from app import (
+    events,
+    evidence,
+    leaderboard,
+    mod,
+    players,
+    sse,
+    state,
+    submissions,
+    teams,
+)
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -65,8 +76,11 @@ def create_app(
     # VPS terminates TLS) and a silent 401 factory everywhere else —
     # without this toggle a local container could never log in. Tests
     # keep passing the argument; the env var only fills the default.
-    if cookie_secure and os.environ.get(
-            "ARKHAM_COOKIE_SECURE", "").lower() in {"0", "false", "no"}:
+    if cookie_secure and os.environ.get("ARKHAM_COOKIE_SECURE", "").lower() in {
+        "0",
+        "false",
+        "no",
+    }:
         cookie_secure = False
 
     # Photos live beside the DB by default (data/photos/ — gitignored);
@@ -79,6 +93,10 @@ def create_app(
         conn = db_module.connect(db_path)
         db_module.apply_migrations(conn)
         app.state.db = conn
+        # Sync endpoints share one SQLite connection. Race-sensitive mutation
+        # handlers hold this reentrant lock for the full request, then acquire
+        # it again around their transaction blocks.
+        app.state.db_lock = threading.RLock()
         app.state.admin_config = admin_config
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
         app.state.cookie_secure = cookie_secure
@@ -109,9 +127,9 @@ def create_app(
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:
         conn: sqlite3.Connection = request.app.state.db
-        version = conn.execute(
-            "SELECT MAX(version) FROM schema_migrations"
-        ).fetchone()[0]
+        version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[
+            0
+        ]
         return {"status": "ok", "schema_version": version}
 
     if static_dir is not None and Path(static_dir).is_dir():
@@ -142,14 +160,23 @@ def _mount_spa(app: FastAPI, static_dir: Path) -> None:
         # An unmatched /api path is a 404 in JSON, never the HTML
         # shell — a client typo should fail loudly, not parse HTML.
         if path.startswith("api/"):
-            return JSONResponse(status_code=404, content={
-                "error": "not_found", "message": "No such endpoint."})
+            return JSONResponse(
+                status_code=404,
+                content={"error": "not_found", "message": "No such endpoint."},
+            )
         candidate = (root / path).resolve()
         if candidate.is_file() and candidate.is_relative_to(root):
             immutable = "assets" in candidate.relative_to(root).parts
-            return FileResponse(candidate, headers={"Cache-Control": (
-                "public, max-age=31536000, immutable"
-                if immutable else "no-cache")})
+            return FileResponse(
+                candidate,
+                headers={
+                    "Cache-Control": (
+                        "public, max-age=31536000, immutable"
+                        if immutable
+                        else "no-cache"
+                    )
+                },
+            )
         # /j/<code>, /m/<code>, / itself: the app shell decides.
         return FileResponse(index, headers={"Cache-Control": "no-cache"})
 

@@ -17,46 +17,58 @@ player/moderator (``admin`` and ``client`` share a jar).
 """
 
 from fastapi.testclient import TestClient
-
-from app import leaderboard as leaderboard_module
 from test_evidence import make_jpeg
 from test_mod import _mod, _submit
 
+from app import leaderboard as leaderboard_module
 
-def _multi_party(admin, client, names, riddles=("R1", "R2", "R3"),
-                 leaderboard_visibility="live"):
+
+def _multi_party(
+    admin, client, names, riddles=("R1", "R2", "R3"), leaderboard_visibility="live"
+):
     """Open event with N players (each in their own cookie jar) and the
     given riddles. Returns event facts plus {name: TestClient}."""
-    event = admin.post("/api/admin/events", json={
-        "name": "Standings Party",
-        "leaderboard_visibility": leaderboard_visibility,
-    }).json()
+    event = admin.post(
+        "/api/admin/events",
+        json={
+            "name": "Standings Party",
+            "leaderboard_visibility": leaderboard_visibility,
+        },
+    ).json()
     riddle_ids = [
-        admin.post(f"/api/admin/events/{event['id']}/riddles",
-                   json={"text": t, "sort_order": i}).json()["id"]
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": t, "sort_order": i},
+        ).json()["id"]
         for i, t in enumerate(riddles, start=1)
     ]
     players = {}
     for name in names:
         pc = TestClient(client.app)
-        join = pc.post(f"/api/join/{event['join_code']}",
-                       json={"display_name": name}).json()
-        players[name] = {"client": pc, "player_id": join["player"]["id"],
-                         "team_id": join["player"]["team_id"]}
+        join = pc.post(
+            f"/api/join/{event['join_code']}", json={"display_name": name}
+        ).json()
+        players[name] = {
+            "client": pc,
+            "player_id": join["player"]["id"],
+            "team_id": join["player"]["team_id"],
+        }
     admin.post(f"/api/admin/events/{event['id']}/open")
-    return {"event_id": event["id"], "mod_code": event["mod_code"],
-            "riddle_ids": riddle_ids, "players": players}
+    return {
+        "event_id": event["id"],
+        "mod_code": event["mod_code"],
+        "riddle_ids": riddle_ids,
+        "players": players,
+    }
 
 
 def _upload_and_solve(admin, pc, riddle_id, mod, name="shot.jpg"):
     """Upload a photo, submit it, and have the mod verify it. Returns
     the submission id."""
-    up = pc.post("/api/evidence",
-                 files={"photo": (name, make_jpeg(), "image/jpeg")})
+    up = pc.post("/api/evidence", files={"photo": (name, make_jpeg(), "image/jpeg")})
     assert up.status_code == 201, up.text
     sub = _submit(pc, riddle_id, up.json()["id"])
-    resp = mod.post(f"/api/mod/queue/{sub['id']}/verdict",
-                    json={"verdict": "verified"})
+    resp = mod.post(f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"})
     assert resp.status_code == 200, resp.text
     return sub["id"]
 
@@ -76,15 +88,17 @@ class TestStandings:
         board = batman.get("/api/leaderboard").json()
         standings = board["standings"]
         assert [(s["team"], s["score"]) for s in standings] == [
-            ("Batman", 2), ("Robin", 1), ("Oracle", 0)]
+            ("Batman", 2),
+            ("Robin", 1),
+            ("Oracle", 0),
+        ]
         assert [s["rank"] for s in standings] == [1, 2, 3]
         # "you" is caller-relative: Batman sees his own row flagged,
         # and nobody else's.
         assert [s["you"] for s in standings] == [True, False, False]
         # Robin's view flags Robin instead.
         robin_board = robin.get("/api/leaderboard").json()
-        assert [s["you"] for s in robin_board["standings"]] == [
-            False, True, False]
+        assert [s["you"] for s in robin_board["standings"]] == [False, True, False]
 
     def test_scoreless_teams_appear(self, admin, client):
         """A party where scoreless teams vanish reads as broken — the
@@ -95,10 +109,13 @@ class TestStandings:
         # joins can land in the same second — assert membership and
         # stability, not which of the two tied teams is listed first.
         assert sorted((s["team"], s["score"]) for s in board["standings"]) == [
-            ("Batman", 0), ("Robin", 0)]
+            ("Batman", 0),
+            ("Robin", 0),
+        ]
         again = p["players"]["Batman"]["client"].get("/api/leaderboard").json()
         assert [s["team"] for s in again["standings"]] == [
-            s["team"] for s in board["standings"]]
+            s["team"] for s in board["standings"]
+        ]
 
     def test_leaderboard_in_snapshot_when_live(self, admin, client):
         p = _multi_party(admin, client, ("Batman",))
@@ -112,8 +129,9 @@ class TestStandings:
 
 class TestVisibilityGating:
     def test_final_reveal_seals_players_until_close(self, admin, client):
-        p = _multi_party(admin, client, ("Batman",),
-                         leaderboard_visibility="final-reveal")
+        p = _multi_party(
+            admin, client, ("Batman",), leaderboard_visibility="final-reveal"
+        )
         batman = p["players"]["Batman"]["client"]
         mod = _mod(client, p["mod_code"])
 
@@ -154,8 +172,7 @@ class TestRecap:
         """The scripted night (build-plan verify): two teams trade the
         lead, one riddle falls to everyone, the round opens and closes.
         The recap must show exactly those moments — and nothing else."""
-        p = _multi_party(admin, client, ("Batman", "Robin"),
-                         riddles=("R1", "R2"))
+        p = _multi_party(admin, client, ("Batman", "Robin"), riddles=("R1", "R2"))
         mod = _mod(client, p["mod_code"])
         batman = p["players"]["Batman"]["client"]
         robin = p["players"]["Robin"]["client"]
@@ -172,7 +189,9 @@ class TestRecap:
         assert recap["total_riddles"] == 2
         # Final standings: a tie, earlier joiner first.
         assert [(s["team"], s["score"]) for s in recap["standings"]] == [
-            ("Batman", 1), ("Robin", 2)][::-1]  # Robin 2 > Batman 1
+            ("Batman", 1),
+            ("Robin", 2),
+        ][::-1]  # Robin 2 > Batman 1
         assert recap["standings"][0]["team"] == "Robin"
 
         kinds = [e["kind"] for e in recap["timeline"]]
@@ -184,20 +203,17 @@ class TestRecap:
 
         # Robin's R1 solve ties the lead (no lead_change); her R2 solve
         # takes it alone → exactly one lead_change, naming Robin.
-        lead_changes = [e for e in recap["timeline"]
-                        if e["kind"] == "lead_change"]
+        lead_changes = [e for e in recap["timeline"] if e["kind"] == "lead_change"]
         assert len(lead_changes) == 1
         assert lead_changes[0]["team"] == "Robin"
         assert lead_changes[0]["score"] == 2
 
         # R1 fell to every team: both its solve entries carry the flag.
-        r1_entries = [e for e in recap["timeline"]
-                      if e.get("riddle_sort") == 1]
+        r1_entries = [e for e in recap["timeline"] if e.get("riddle_sort") == 1]
         assert len(r1_entries) == 2
         assert all(e.get("mass_solve") for e in r1_entries)
         # R2 did not.
-        r2_entries = [e for e in recap["timeline"]
-                      if e.get("riddle_sort") == 2]
+        r2_entries = [e for e in recap["timeline"] if e.get("riddle_sort") == 2]
         assert all(not e.get("mass_solve") for e in r2_entries)
 
         # The closed entry reports the expired-pending count.
@@ -211,14 +227,16 @@ class TestRecap:
         mod = _mod(client, p["mod_code"])
         batman = p["players"]["Batman"]["client"]
 
-        sub_id = _upload_and_solve(admin, batman, p["riddle_ids"][0], mod)
+        _upload_and_solve(admin, batman, p["riddle_ids"][0], mod)
         # Flag a second photo inappropriate → conduct rows in the log.
-        up = batman.post("/api/evidence",
-                         files={"photo": ("bad.jpg", make_jpeg(),
-                                          "image/jpeg")})
+        up = batman.post(
+            "/api/evidence", files={"photo": ("bad.jpg", make_jpeg(), "image/jpeg")}
+        )
         sub2 = _submit(batman, p["riddle_ids"][1], up.json()["id"])
-        resp = mod.post(f"/api/mod/queue/{sub2['id']}/inappropriate",
-                        json={"note": "rules violation"})
+        resp = mod.post(
+            f"/api/mod/queue/{sub2['id']}/inappropriate",
+            json={"note": "rules violation"},
+        )
         assert resp.status_code == 200
 
         admin.post(f"/api/admin/events/{p['event_id']}/close")
@@ -226,20 +244,23 @@ class TestRecap:
         # The flagged submission is not a solve; the only verdict entry
         # is the verified one. No conduct kinds exist in the schema at
         # all — but belt-and-braces: no entry mentions the strike.
-        assert all(e["kind"] in ("opened", "closed", "first_solve",
-                                 "solve", "lead_change")
-                   for e in recap["timeline"])
-        assert not any("strike" in json_dump(e) or "quarantine" in json_dump(e)
-                       for e in recap["timeline"])
+        assert all(
+            e["kind"] in ("opened", "closed", "first_solve", "solve", "lead_change")
+            for e in recap["timeline"]
+        )
+        assert not any(
+            "strike" in json_dump(e) or "quarantine" in json_dump(e)
+            for e in recap["timeline"]
+        )
         # The inappropriate verdict does not count as a solve.
-        solves = [e for e in recap["timeline"]
-                  if e["kind"] in ("first_solve", "solve")]
+        solves = [e for e in recap["timeline"] if e["kind"] in ("first_solve", "solve")]
         assert len(solves) == 1
         assert solves[0]["riddle_sort"] == 1
 
 
 def json_dump(obj):
     import json
+
     return json.dumps(obj)
 
 
@@ -250,20 +271,26 @@ class TestModAudit:
         p = _multi_party(admin, client, ("Batman",))
         mod = _mod(client, p["mod_code"])
         batman = p["players"]["Batman"]["client"]
-        sub_id = _upload_and_solve(admin, batman, p["riddle_ids"][0], mod)
-        up = batman.post("/api/evidence",
-                         files={"photo": ("bad.jpg", make_jpeg(),
-                                          "image/jpeg")})
+        _upload_and_solve(admin, batman, p["riddle_ids"][0], mod)
+        up = batman.post(
+            "/api/evidence", files={"photo": ("bad.jpg", make_jpeg(), "image/jpeg")}
+        )
         sub2 = _submit(batman, p["riddle_ids"][1], up.json()["id"])
         mod.post(f"/api/mod/queue/{sub2['id']}/inappropriate", json={})
 
         audit = mod.get("/api/mod/audit").json()
         actions = [row["action"] for row in audit]
-        for expected in ("event.created", "riddle.created",
-                         "player.joined", "event.opened",
-                         "evidence.uploaded", "submission.created",
-                         "verdict.issued", "evidence.quarantined",
-                         "strike.issued"):
+        for expected in (
+            "event.created",
+            "riddle.created",
+            "player.joined",
+            "event.opened",
+            "evidence.uploaded",
+            "submission.created",
+            "verdict.issued",
+            "evidence.quarantined",
+            "strike.issued",
+        ):
             assert expected in actions, expected
         # Oldest first, monotonic ids.
         ids = [row["id"] for row in audit]
@@ -281,10 +308,12 @@ class TestModAudit:
         other = admin.post("/api/admin/events", json={"name": "Other"}).json()
         other_mod = _mod(client, other["mod_code"], TestClient(client.app))
         other_audit = other_mod.get("/api/mod/audit").json()
-        assert all(row["action"] != "player.joined" or True
-                   for row in other_audit)  # sanity: it's a valid list
-        assert not any(row["details"].get("display_name") == "Batman"
-                       for row in other_audit)
+        assert all(
+            row["action"] != "player.joined" or True for row in other_audit
+        )  # sanity: it's a valid list
+        assert not any(
+            row["details"].get("display_name") == "Batman" for row in other_audit
+        )
 
 
 class TestLeaderboardThrottle:
@@ -293,8 +322,6 @@ class TestLeaderboardThrottle:
         bypasses it. (The SSE wire itself was smoke-tested live in
         increment 7; this pins the throttle policy.)"""
         p = _multi_party(admin, client, ("Batman",))
-        mod = _mod(client, p["mod_code"])
-        batman = p["players"]["Batman"]["client"]
 
         class FakeRequest:
             pass

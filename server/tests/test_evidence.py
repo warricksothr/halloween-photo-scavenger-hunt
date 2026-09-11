@@ -38,12 +38,15 @@ def _party(admin, client, players=("Batman",)):
     """Open event + one player joined; returns (event_id, join_code)."""
     resp = admin.post("/api/admin/events", json={"name": "Photo Party"})
     event = resp.json()
-    admin.post(f"/api/admin/events/{event['id']}/riddles",
-               json={"text": "Find it", "sort_order": 1})
+    admin.post(
+        f"/api/admin/events/{event['id']}/riddles",
+        json={"text": "Find it", "sort_order": 1},
+    )
     admin.post(f"/api/admin/events/{event['id']}/open")
     for name in players:
-        resp = client.post(f"/api/join/{event['join_code']}",
-                           json={"display_name": name})
+        resp = client.post(
+            f"/api/join/{event['join_code']}", json={"display_name": name}
+        )
         assert resp.status_code == 201, resp.text
     return event["id"], event["join_code"]
 
@@ -92,8 +95,7 @@ class TestPipelineUnit:
             img = Image.new("RGB", (200, 200))
             for x in range(200):
                 for y in range(200):
-                    img.putpixel((x, y),
-                                 left_color if x < 100 else right_color)
+                    img.putpixel((x, y), left_color if x < 100 else right_color)
             buf = io.BytesIO()
             img.save(buf, format="JPEG")
             return buf.getvalue()
@@ -125,13 +127,15 @@ class TestUploadEndpoint:
 
         # Row carries the phash; the audit row rides the same transaction.
         conn = client.app.state.db
-        row = conn.execute("SELECT * FROM evidence_item WHERE id = ?",
-                           (item["id"],)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM evidence_item WHERE id = ?", (item["id"],)
+        ).fetchone()
         assert len(row["phash"]) == 16
         audit = conn.execute(
-            "SELECT details FROM audit_event"
-            " WHERE action = 'evidence.uploaded'").fetchone()
+            "SELECT details FROM audit_event WHERE action = 'evidence.uploaded'"
+        ).fetchone()
         import json
+
         assert json.loads(audit[0])["phash"] == row["phash"]
 
     def test_riddle_tag(self, admin, client):
@@ -146,8 +150,7 @@ class TestUploadEndpoint:
 
     def test_wrong_magic_bytes_415(self, admin, client):
         _party(admin, client)
-        resp = _upload(client, b"definitely not an image" * 4,
-                       filename="evil.jpg")
+        resp = _upload(client, b"definitely not an image" * 4, filename="evil.jpg")
         assert resp.status_code == 415
         assert resp.json()["error"] == "not_an_image"
 
@@ -169,8 +172,9 @@ class TestUploadEndpoint:
         # The window is rolling: backdate the two uploads beyond it and
         # the next upload succeeds.
         conn = client.app.state.db
-        conn.execute("UPDATE evidence_item SET created_at = ?",
-                     (int(time.time()) - 1200,))
+        conn.execute(
+            "UPDATE evidence_item SET created_at = ?", (int(time.time()) - 1200,)
+        )
         conn.commit()
         assert _upload(client, make_jpeg()).status_code == 201
 
@@ -182,6 +186,7 @@ class TestUploadEndpoint:
         photo_url = resp.json()["photo_url"]
         # Second player: fresh cookie jar via a new client on the same app.
         from fastapi.testclient import TestClient
+
         other = TestClient(client.app)
         other.post(f"/api/join/{join_code}", json={"display_name": "Robin"})
         resp = other.get(photo_url)
@@ -189,6 +194,7 @@ class TestUploadEndpoint:
         assert other.get("/api/evidence").json() == []  # own drawer only
 
     def test_upload_requires_auth(self, client):
-        resp = client.post("/api/evidence",
-                           files={"photo": ("x.jpg", make_jpeg(), "image/jpeg")})
+        resp = client.post(
+            "/api/evidence", files={"photo": ("x.jpg", make_jpeg(), "image/jpeg")}
+        )
         assert resp.status_code == 401

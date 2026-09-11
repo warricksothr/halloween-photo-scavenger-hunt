@@ -23,8 +23,12 @@ def _audit_rows(client, action=None):
 
 
 def _create_event(admin, **overrides):
-    body = {"name": "Gotham Halloween", "theme": "arkham",
-            "leaderboard_visibility": "live", "team_size_limit": 4}
+    body = {
+        "name": "Gotham Halloween",
+        "theme": "arkham",
+        "leaderboard_visibility": "live",
+        "team_size_limit": 4,
+    }
     body.update(overrides)
     resp = admin.post("/api/admin/events", json=body)
     assert resp.status_code == 201, resp.text
@@ -33,22 +37,25 @@ def _create_event(admin, **overrides):
 
 class TestAdminLogin:
     def test_bad_password_rejected(self, client):
-        resp = client.post("/api/admin/login",
-                           json={"username": ADMIN_USER, "password": "wrong"})
+        resp = client.post(
+            "/api/admin/login", json={"username": ADMIN_USER, "password": "wrong"}
+        )
         assert resp.status_code == 401
         assert resp.json()["error"] == "bad_credentials"
 
     def test_bad_username_rejected(self, client):
         # Same cost as a good username (argon2id runs either way), same
         # response — the API does not reveal which half was wrong.
-        resp = client.post("/api/admin/login",
-                           json={"username": "nobody", "password": ADMIN_PASSWORD})
+        resp = client.post(
+            "/api/admin/login", json={"username": "nobody", "password": ADMIN_PASSWORD}
+        )
         assert resp.status_code == 401
 
     def test_login_sets_httponly_cookie(self, client):
-        resp = client.post("/api/admin/login",
-                           json={"username": ADMIN_USER,
-                                 "password": ADMIN_PASSWORD})
+        resp = client.post(
+            "/api/admin/login",
+            json={"username": ADMIN_USER, "password": ADMIN_PASSWORD},
+        )
         assert resp.status_code == 200
         cookie = resp.headers["set-cookie"]
         assert "arkham_admin=" in cookie and "HttpOnly" in cookie
@@ -83,9 +90,10 @@ class TestEvents:
 
     def test_patch_updates_fields(self, admin):
         event = _create_event(admin)
-        resp = admin.patch(f"/api/admin/events/{event['id']}",
-                           json={"leaderboard_visibility": "final-reveal",
-                                 "team_size_limit": 2})
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}",
+            json={"leaderboard_visibility": "final-reveal", "team_size_limit": 2},
+        )
         assert resp.status_code == 200
         assert resp.json()["leaderboard_visibility"] == "final-reveal"
         assert resp.json()["team_size_limit"] == 2
@@ -96,8 +104,10 @@ class TestEvents:
 
     def test_invalid_visibility_rejected(self, admin):
         event = _create_event(admin)
-        resp = admin.patch(f"/api/admin/events/{event['id']}",
-                           json={"leaderboard_visibility": "sometimes"})
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}",
+            json={"leaderboard_visibility": "sometimes"},
+        )
         assert resp.status_code == 422
 
 
@@ -108,8 +118,10 @@ class TestLifecycle:
         resp = admin.post(f"/api/admin/events/{event['id']}/open")
         assert resp.status_code == 409
         assert resp.json()["error"] == "no_riddles"
-        admin.post(f"/api/admin/events/{event['id']}/riddles",
-                   json={"text": "Find it", "sort_order": 1})
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Find it", "sort_order": 1},
+        )
         resp = admin.post(f"/api/admin/events/{event['id']}/open")
         assert resp.status_code == 200
         assert resp.json()["status"] == "open"
@@ -142,20 +154,22 @@ class TestLifecycle:
 class TestRiddles:
     def test_crud_and_audit(self, admin):
         event = _create_event(admin)
-        resp = admin.post(f"/api/admin/events/{event['id']}/riddles",
-                          json={"text": "Speak the password", "sort_order": 1})
+        resp = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Speak the password", "sort_order": 1},
+        )
         assert resp.status_code == 201
         riddle = resp.json()
         assert riddle["text"] == "Speak the password"
 
         resp = admin.patch(
             f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
-            json={"text": "Answer the riddle", "sort_order": 2})
+            json={"text": "Answer the riddle", "sort_order": 2},
+        )
         assert resp.status_code == 200
         assert resp.json()["text"] == "Answer the riddle"
 
-        actions = [(r["action"], json.loads(r["details"]))
-                   for r in _audit_rows(admin)]
+        actions = [(r["action"], json.loads(r["details"])) for r in _audit_rows(admin)]
         created = dict(actions)["riddle.created"]
         edited = dict(actions)["riddle.edited"]
         assert created == {"text": "Speak the password", "sort_order": 1}
@@ -164,25 +178,26 @@ class TestRiddles:
         assert edited["new_text"] == "Answer the riddle"
         assert edited["old_sort"] == 1 and edited["new_sort"] == 2
 
-        resp = admin.delete(
-            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}")
+        resp = admin.delete(f"/api/admin/events/{event['id']}/riddles/{riddle['id']}")
         assert resp.status_code == 200
-        assert admin.get(
-            f"/api/admin/events/{event['id']}/riddles").json() == []
-        deleted = dict(actions := [(r["action"], json.loads(r["details"]))
-                                   for r in _audit_rows(admin)])["riddle.deleted"]
+        assert admin.get(f"/api/admin/events/{event['id']}/riddles").json() == []
+        deleted = dict(
+            actions := [
+                (r["action"], json.loads(r["details"])) for r in _audit_rows(admin)
+            ]
+        )["riddle.deleted"]
         assert deleted["text"] == "Answer the riddle"  # final copy kept
 
     def test_delete_referenced_riddle_409(self, admin, conn_seeded_pending):
         event_id = conn_seeded_pending
         riddles = admin.get(f"/api/admin/events/{event_id}/riddles").json()
-        resp = admin.delete(
-            f"/api/admin/events/{event_id}/riddles/{riddles[0]['id']}")
+        resp = admin.delete(f"/api/admin/events/{event_id}/riddles/{riddles[0]['id']}")
         assert resp.status_code == 409
         assert resp.json()["error"] == "riddle_in_use"
 
     def test_riddles_scoped_to_event(self, admin):
-        event = _create_event(admin)
-        resp = admin.post("/api/admin/events/other-event/riddles",
-                          json={"text": "x", "sort_order": 1})
+        _create_event(admin)
+        resp = admin.post(
+            "/api/admin/events/other-event/riddles", json={"text": "x", "sort_order": 1}
+        )
         assert resp.status_code == 404
