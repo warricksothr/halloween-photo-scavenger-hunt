@@ -19,11 +19,18 @@
 set -eu
 
 REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-DATA_DIR="$REPO_ROOT/data"
+# The override keeps isolated restore tests away from the repository's
+# runtime data. Production uses the default repo-relative directory.
+DATA_DIR="${ARKHAM_DATA_DIR:-$REPO_ROOT/data}"
 DEST_DIR="${1:-$REPO_ROOT/backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 WORK="$DEST_DIR/.backup-work-$STAMP"
 OUT="$DEST_DIR/arkham-backup-$STAMP.tar.gz"
+
+cleanup() {
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 if [ ! -f "$DATA_DIR/arkham.db" ]; then
     echo "no database at $DATA_DIR/arkham.db — nothing to back up" >&2
@@ -34,13 +41,16 @@ mkdir -p "$WORK/photos"
 PY="$REPO_ROOT/server/.venv/bin/python"
 if [ -x "$PY" ]; then :; elif command -v python3 >/dev/null; then PY=python3; else PY=""; fi
 if [ -n "$PY" ]; then
-    "$PY" -c "
+    ARKHAM_SOURCE_DB="$DATA_DIR/arkham.db" \
+    ARKHAM_SNAPSHOT_DB="$WORK/arkham.db" \
+    "$PY" -c '
+import os
 import sqlite3
-src = sqlite3.connect('$DATA_DIR/arkham.db')
-dst = sqlite3.connect('$WORK/arkham.db')
-src.backup(dst)
-dst.close(); src.close()
-"
+
+with sqlite3.connect(os.environ["ARKHAM_SOURCE_DB"]) as src:
+    with sqlite3.connect(os.environ["ARKHAM_SNAPSHOT_DB"]) as dst:
+        src.backup(dst)
+'
 elif command -v sqlite3 >/dev/null; then
     sqlite3 "$DATA_DIR/arkham.db" ".backup '$WORK/arkham.db'"
 else

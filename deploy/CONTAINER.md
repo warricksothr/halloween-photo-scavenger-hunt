@@ -111,6 +111,14 @@ game board appears instead of bouncing back to the join screen) proves
 the cookie toggle; a join that silently returns to the join screen
 means `ARKHAM_COOKIE_SECURE=false` is missing.
 
+For a disposable local gate that exercises the same raw recipe, run
+`bash scripts/smoke-container.sh` from the repository root. The script builds
+with `--format docker`, checks health, admin login, event setup, plain-HTTP
+player join, a synthetic photo upload, and an SSE heartbeat. It removes its
+container, volume, image, temporary credentials, and generated photos on both
+success and failure. A failed run keeps container logs and inspect output under
+ignored `.deploy-smoke-results/`.
+
 ## 4. Backup / restore
 
 The state lives entirely in the named volume (`/srv/arkham/data`: the
