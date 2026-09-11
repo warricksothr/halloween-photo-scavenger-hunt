@@ -70,7 +70,25 @@ function screenshotPath(name) {
   return path.join(SCREENSHOT_DIR, `${name}.png`);
 }
 
+async function normalizeDynamicValues(page) {
+  await page.evaluate(() => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const replacements = [
+      [/MODERATOR-[A-Z0-9]+/gi, 'MODERATOR'],
+      [/\b(?:just now|\d+ min ago)\b/g, 'just now'],
+    ];
+    let node = walker.nextNode();
+    while (node) {
+      for (const [pattern, replacement] of replacements) {
+        node.textContent = node.textContent.replace(pattern, replacement);
+      }
+      node = walker.nextNode();
+    }
+  });
+}
+
 async function capture(page, name) {
+  await normalizeDynamicValues(page);
   await page.screenshot({ path: screenshotPath(name), fullPage: true });
 }
 
@@ -176,10 +194,17 @@ test('capture the README product tour', async ({ browser }) => {
       moderator.getByRole('heading', { name: 'Analysis Queue' }),
     ).toBeVisible();
     await expect(moderator.getByText('1 pending')).toBeVisible();
+    const queueRefresh = moderator.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && response.url().endsWith('/api/mod/queue')
+      && response.ok(),
+    );
     await moderator.getByText('#1 — Batman', { exact: true }).click();
     await expect(
       moderator.getByRole('button', { name: '✓ Riddle Solved' }),
     ).toBeVisible();
+    await expect(moderator.getByText('BATMAN — HISTORY')).toBeVisible();
+    await queueRefresh;
     await capture(moderator, 'moderator-console');
 
     await moderator.getByRole('button', { name: '✓ Riddle Solved' }).click();
