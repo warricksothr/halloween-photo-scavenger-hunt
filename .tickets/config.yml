@@ -1,0 +1,37 @@
+schema: 3
+actors:
+  - id: human:sothr
+    name: ""
+labels:
+  - design
+  - mvp
+  - backend
+  - frontend
+  - security
+  - evidence
+  - moderation
+  - conduct
+  - leaderboard
+  - teams
+  - operations
+  - deployment
+  - stretch
+  - maintenance
+  - tracking
+  - readiness
+  - research
+  - theme
+  - testing
+  - tooling
+  - ci
+  - quality
+  - integration
+milestones: []
+series: []
+defaults:
+  type: task
+  priority: normal
+  actor: null
+  claim_expiry: null
+lock:
+  timeout: 10s
