@@ -21,7 +21,11 @@ const listeners = new Set();
 
 function set(patch) {
   Object.assign(state, patch);
-  listeners.forEach((fn) => fn(state));
+  // Preact skips a state update when the same object reference comes back.
+  // Publish a fresh shell so App rerenders after boot, joins, and SSE refreshes
+  // while getState() remains the store's stable mutable source for callers.
+  const nextState = { ...state };
+  listeners.forEach((fn) => fn(nextState));
 }
 
 export function subscribe(fn) {
