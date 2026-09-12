@@ -87,9 +87,10 @@ async function normalizeDynamicValues(page) {
   });
 }
 
-async function capture(page, name) {
+async function capture(page, name, { frame = false } = {}) {
   await normalizeDynamicValues(page);
-  await page.screenshot({ path: screenshotPath(name), fullPage: true });
+  const target = frame ? page.locator('.frame') : page;
+  await target.screenshot({ path: screenshotPath(name), fullPage: !frame });
 }
 
 test.beforeAll(async ({ playwright }) => {
@@ -205,7 +206,7 @@ test('capture the README product tour', async ({ browser }) => {
     ).toBeVisible();
     await expect(moderator.getByText('BATMAN — HISTORY')).toBeVisible();
     await queueRefresh;
-    await capture(moderator, 'moderator-console');
+    await capture(moderator, 'moderator-console', { frame: true });
 
     await moderator.getByRole('button', { name: '✓ Riddle Solved' }).click();
     await expect(

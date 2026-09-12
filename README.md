@@ -41,12 +41,16 @@ Playwright flow described in [`docs/impl/testing.md`](docs/impl/testing.md).
     <td align="center">Evidence drawer</td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/moderator-console.png" alt="Moderator analysis queue" width="720"></td>
-    <td><img src="docs/screenshots/standings.png" alt="Player standings screen" width="240"></td>
+    <td colspan="3" align="center"><img src="docs/screenshots/moderator-console.png" alt="Moderator analysis queue" width="420"></td>
   </tr>
   <tr>
-    <td colspan="2" align="center">Moderator console</td>
-    <td align="center">Standings</td>
+    <td colspan="3" align="center">Moderator console</td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><img src="docs/screenshots/standings.png" alt="Player standings screen" width="240"></td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center">Standings</td>
   </tr>
 </table>
 
