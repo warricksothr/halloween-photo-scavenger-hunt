@@ -7,4 +7,3 @@ tickets, and the next fix pass overwrites it.
 | Epic | Title | Status |
 |---|---|---|
 | [TKT-01M24GA0PMGWEM80RBS502FGVY](draft/TKT-01M24GA0PMGWEM80RBS502FGVY.md) | Prepare the first live event and future themes | draft |
-| [TKT-01M26C4XP6H6F83WTZGB6DXE6S](draft/TKT-01M26C4XP6H6F83WTZGB6DXE6S.md) | Build a trustworthy automated test pipeline | draft |
