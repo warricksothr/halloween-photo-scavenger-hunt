@@ -76,6 +76,13 @@ The scrub set is mutated in place across the request so the exception handler â€
 which runs after the middleware's `finally` resets the contextvars â€” still sees
 what the body added.
 
+A body larger than the buffer is the one case the scrub set cannot cover: the
+app reads the whole request while the scrubber holds the first
+`_BUFFERED_BODY_BYTES`. The middleware records that the copy is short and the
+handler logs the frames and the exception type *without the message*, which is
+the only place a value the scrubber never saw could appear. Failing safe is
+worth losing the message for a body that large; every other request keeps it.
+
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same
 request with a redacted path. A `logging.Filter` on `uvicorn.access` returns

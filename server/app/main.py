@@ -180,6 +180,7 @@ def create_app(
             method=request.method,
             path=getattr(request.state, "redacted_path", None),
             request_secrets=getattr(request.state, "request_secrets", ()),
+            include_message=not getattr(request.state, "safe_traceback", False),
         )
         request_id = getattr(request.state, "request_id", None)
         body: dict[str, str] = {

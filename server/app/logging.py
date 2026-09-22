@@ -124,6 +124,7 @@ def log_unhandled_exception(
     method: str | None,
     path: str | None,
     request_secrets: Iterable[str] = (),
+    include_message: bool = True,
 ) -> None:
     """Log one correlated traceback for an exception nothing caught.
 
@@ -142,11 +143,21 @@ def log_unhandled_exception(
     strings — is replaced with ``<redacted>``. Nothing is lost that
     matters: the type, the frames, and the message all survive unless the
     message names a secret.
+
+    ``include_message=False`` is for the request whose body was too large
+    to inspect whole: a value it read from that body may be in the message
+    and is not in ``request_secrets``, so the frames and the type are
+    logged without the message rather than risk it.
     """
-    rendered = _scrub_secrets(
-        "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
-        request_secrets,
-    )
+    if include_message:
+        rendered = _scrub_secrets(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            request_secrets,
+        )
+    else:
+        rendered = "".join(
+            traceback.format_list(traceback.extract_tb(exc.__traceback__))
+        )
     logging.getLogger(LOGGER_NAME).error(
         "unhandled_exception",
         extra={
@@ -155,6 +166,7 @@ def log_unhandled_exception(
             "method": method,
             "path": path,
             "exception_type": type(exc).__name__,
+            "message_included": include_message,
             "traceback": rendered,
         },
     )
@@ -400,14 +412,19 @@ class RequestLogMiddleware:
         # path below — a request that succeeds pays nothing but the copy.
         media = _media_type(scope)
         body = bytearray()
+        truncated = False
 
         async def receiving() -> Message:
+            nonlocal truncated
             message = await receive()
             if media in _PARSED_MEDIA and message["type"] == "http.request":
                 chunk = message.get("body", b"")
-                room = _BUFFERED_BODY_BYTES - len(body)
-                if chunk and room > 0:
-                    body.extend(chunk[:room])
+                if chunk:
+                    room = _BUFFERED_BODY_BYTES - len(body)
+                    if len(chunk) > room:
+                        truncated = True
+                        chunk = chunk[: max(room, 0)]
+                    body.extend(chunk)
             return message
 
         id_token = _request_id.set(request_id)
@@ -431,8 +448,10 @@ class RequestLogMiddleware:
             await self.app(scope, receiving, sending)
         except BaseException:
             # The route read the body before it raised, so the values are
-            # in the buffer now.
+            # in the buffer now. If the buffer is short, the app saw bytes
+            # the scrubber did not, so the message is logged without.
             carried.extend(_body_secrets(media, bytes(body)))
+            state["safe_traceback"] = truncated
             raise
         finally:
             _log_request(scope, request_id, path, status, started)

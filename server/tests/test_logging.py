@@ -273,6 +273,53 @@ def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     assert "Bruce Wayne" not in text
 
 
+def test_a_truncated_body_drops_the_exception_message(tmp_path, caplog, monkeypatch):
+    """The safe path for a body the scrubber could not inspect whole.
+
+    ``_BUFFERED_BODY_BYTES`` is shrunk so a small body exercises it. The
+    route raises with a value from a body the scrubber saw only in part,
+    so the frames are logged and the message is left out rather than
+    logged unscanned.
+    """
+    monkeypatch.setattr(app_logging, "_BUFFERED_BODY_BYTES", 64)
+    app = create_app(
+        tmp_path / "truncated.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom password={payload['password']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"padding": "x" * 200, "password": "hunter2"},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].exception_type == "RuntimeError"
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    # The frames survive; the message that could quote the unscanned body
+    # does not, and neither does the header ``format_exception`` adds.
+    assert ", in boom" in text
+    assert "Traceback" not in text
+    assert "RuntimeError: kaboom" not in text
+    assert "hunter2" not in text
+
+
 def test_query_string_is_redacted(client, caplog):
     caplog.set_level(logging.INFO)
     caplog.clear()
