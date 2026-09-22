@@ -38,6 +38,7 @@ from app import (
     teams,
 )
 from app import db as db_module
+from app.logging import RequestLogMiddleware, configure_logging
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -135,12 +136,19 @@ def create_app(
         read_conn.close()
         conn.close()
 
+    # One structured line per request, with bearer codes redacted and
+    # uvicorn's own raw-path access line dropped (app/logging.py).
+    configure_logging()
+
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
     # Middleware is added inner-to-outer: the last one added wraps the
     # rest. The body cap goes on first so an oversized request is refused
-    # before CSRF or any route touches it; CSRF sits just inside it.
+    # before CSRF or any route touches it; CSRF sits just inside it. The
+    # request log goes on last so it wraps both, logs the requests they
+    # reject, and measures the whole request.
     app.add_middleware(csrf.CsrfMiddleware)
     app.add_middleware(limits.BodyLimitMiddleware)
+    app.add_middleware(RequestLogMiddleware)
     app.include_router(events.router)
     app.include_router(players.router)
     app.include_router(state.router)
