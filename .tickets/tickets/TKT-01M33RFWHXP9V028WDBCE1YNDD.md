@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T14:52:02Z
+updated_at: 2026-09-22T14:56:22Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -115,3 +115,29 @@ Published on PR #6, run `cd11cbba-aaf2-4f3e-bdeb-a6f7aefbbf9b`, Actions run #99 
   unticked — there is no metrics or log seam in the server, and "Uploads
   accepted/rejected by reason" is owned by TKT-01M33S2WP0F879M8AKQXVS7HRZ
   (observability epic, still a draft), which this ticket now references.
+
+**agent:opencode/review-system-design** at 2026-09-22T14:56:22Z
+
+### Terva review 137 (head 4fcbab6) — one low, fixed; round 3 clean
+
+Review 137 (run `614933d1-a4d8-450d-8931-cd034854cd51`, Actions run #103 id 8573,
+request `tkt-01m33rfwhx-2`) confirmed all three findings from review 136
+resolved and raised one new `low`: the `process_upload` docstring still promised
+"exactly two failure modes and nothing else" while the narrowing deliberately
+lets post-decode faults propagate. Accepted and fixed in `620fada` — the
+docstring now says decode failures are normalized and post-decode faults
+propagate unchanged.
+
+Round 3 on head `620fada` came back **clean**: run
+`da12dc83-8da9-4ce1-adf2-acaba9003759`, Actions run #107 (id 8577), request
+`tkt-01m33rfwhx-3`, zero findings, review 137's `finding-1` resolved. A clean run
+creates no review object; it posts a "Terva review status" comment (PR #6 comment
+9520). "Stored clean runs: 1/32".
+
+Dispositions: review 136 findings 1–3 accepted (fixed `0c80198` / `4fcbab6`);
+review 137 finding-1 accepted (fixed `620fada`). Recorded as `/terva disposition`
+comments 9514 and 9518 plus hand-written records 9515 and 9519, because
+`/terva disposition` is still a no-op (TKT-01M33YG8AGGAW5VVVT3XY5FVS7).
+
+Gate on head `620fada`: `bash scripts/check-server.sh` — 150 passed, 94.80%
+coverage, Ruff clean. PR #6 open, awaiting merge authorization.
