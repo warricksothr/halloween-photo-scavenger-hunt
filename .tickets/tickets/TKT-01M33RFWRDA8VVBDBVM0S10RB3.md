@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWRDA8VVBDBVM0S10RB3
 title: Handle network failures in the client and never hang on boot
 type: bug
-status: in-progress
+status: review
 status_reason: null
 priority: urgent
 due_on: null
@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T07:01:54Z
+updated_at: 2026-09-22T07:33:37Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -42,9 +42,9 @@ api.request does a bare await fetch with no try/catch, and store.refresh has no 
 
 ## Acceptance criteria
 
-- [ ] A failed fetch surfaces an error state with a retry affordance instead of an infinite boot.
-- [ ] Transient failures retry with backoff; the UI never stays in a permanent busy state.
-- [ ] Covered by a unit test that rejects the fetch.
+- [x] A failed fetch surfaces an error state with a retry affordance instead of an infinite boot.
+- [x] Transient failures retry with backoff; the UI never stays in a permanent busy state.
+- [x] Covered by a unit test that rejects the fetch.
 
 ## Implementation plan
 
@@ -66,3 +66,36 @@ Tests: `api.test.js` — a rejected fetch resolves to the network error shape;
 `store.test.js` — fake timers, a transient failure retries four times and ends
 in `error`, and a transient failure then success recovers; a screen test that
 `ConnectionErrorScreen` calls `onRetry`.
+
+## Notes
+
+**agent:opencode/review-system-design** at 2026-09-22T07:33:37Z
+
+The implementation is complete and the quality gate is green (22 frontend tests,
+10 new). All three acceptance criteria are ticked.
+
+Five Terva rounds found real defects in this feature, each fixed on a new head:
+123 moderator probe skipped the retry helper (fixed 2be8b0f); 125 a slow failing
+refresh could overwrite a newer success (fixed a628add, refresh generation);
+126 a fetch that never settles stalled boot (fixed 9244d22, AbortController);
+127 the timeout was cleared before the body read (fixed 242e1ef); 128 a body
+dropped mid-stream was returned as an empty success and left boot stuck (fixed
+63011bb). All dispositions are on PR #4.
+
+Open item: the final head `63011bb` has no review. Six dispatches for
+`client-network-failures-6`/`-6b` failed in 22-35s with no review and no status
+description, which is the silent-failure mode filed as TKT-01M33YG8AGGAW5VVVT3XY5FVS7
+in the terva-action store. The work is done; the review just needs re-dispatching
+once the action is healthy.
+
+## Summary
+
+Landed on PR #4 (`t3code/client-network-failures`, head `63011bb`), open for
+review; not merged. The client now folds rejected and hung fetches into a
+network error, bounds every exchange with an AbortController (8s reads, 60s
+uploads, armed through the body read), retries transient boot reads with
+backoff through a shared helper, suppresses stale refreshes, and shows a
+retryable connection-error screen. `bash scripts/check-quality.sh` passes with
+22 frontend tests. Five Terva rounds each found and fixed a real hang or
+race path; the final head is unreviewed because the review action is failing
+silently (see the note and TKT-01M33YG8AGGAW5VVVT3XY5FVS7).
