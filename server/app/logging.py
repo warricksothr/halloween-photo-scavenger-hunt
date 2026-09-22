@@ -97,6 +97,33 @@ def current_redacted_path() -> str | None:
     return _redacted_path.get()
 
 
+def log_unhandled_exception(
+    exc: BaseException,
+    *,
+    request_id: str | None,
+    method: str | None,
+    path: str | None,
+) -> None:
+    """Log one correlated traceback for an exception nothing caught.
+
+    The values come from the scope, not the contextvars: the request
+    middleware resets those in its ``finally`` before
+    ``ServerErrorMiddleware`` reaches its handler. Only the method and the
+    redacted path are attached — headers, cookies, and the body are never
+    read, so a session cookie or a join code cannot reach the sink.
+    """
+    logging.getLogger(LOGGER_NAME).error(
+        "unhandled_exception",
+        extra={
+            "event": "unhandled_exception",
+            "request_id": request_id,
+            "method": method,
+            "path": path,
+        },
+        exc_info=exc,
+    )
+
+
 def redact_path(path: str) -> str:
     """Replace a bearer segment with ``<redacted>``; leave other paths be.
 
@@ -222,8 +249,11 @@ class RequestLogMiddleware:
 
         # ServerErrorMiddleware builds an unhandled exception's 500 outside
         # this middleware, so that response misses the ``sending`` wrapper
-        # below. The id rides the scope for the app's exception handler.
+        # below. The id and the redacted path ride the scope for the app's
+        # exception handler, which runs after this middleware's ``finally``
+        # has reset the contextvars.
         scope.setdefault("state", {})["request_id"] = request_id
+        scope.setdefault("state", {})["redacted_path"] = path
 
         id_token = _request_id.set(request_id)
         path_token = _redacted_path.set(path)

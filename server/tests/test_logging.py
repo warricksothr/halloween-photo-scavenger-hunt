@@ -8,6 +8,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from support import arm_csrf
 
 from app import logging as app_logging
 from app.main import create_app
@@ -135,6 +136,56 @@ def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
     line = _request_lines(caplog)[-1]
     assert line.status == 500
     assert line.request_id == resp.headers[app_logging.REQUEST_ID_HEADER]
+
+
+def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
+    """TKT-01M33S2WK: one traceback, tied to the request, without the
+    cookie, the Authorization header, or the body."""
+    app = create_app(
+        tmp_path / "boom.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(token: str, payload: dict):
+        raise RuntimeError("kaboom")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"display_name": "Bruce Wayne", "password": "hunter2"},
+            headers={"Authorization": "Bearer topsecrettoken"},
+        )
+
+    request_id = resp.headers[app_logging.REQUEST_ID_HEADER]
+    assert resp.status_code == 500
+    assert resp.json() == {
+        "error": "internal_error",
+        "message": "Something went wrong.",
+        "request_id": request_id,
+    }
+
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record.request_id == request_id
+    assert record.method == "POST"
+    assert record.path == "/api/team/invites/<redacted>/boom"
+
+    text = _rendered(caplog)
+    assert "kaboom" in text
+    assert "Traceback" in text
+    assert "SUPERSECRETCODE" not in text
+    assert "hunter2" not in text
+    assert "topsecrettoken" not in text
 
 
 def test_query_string_is_redacted(client, caplog):

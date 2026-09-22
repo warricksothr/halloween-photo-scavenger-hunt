@@ -39,6 +39,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Unhandled exceptions log one correlated traceback.**
+  TKT-01M33S2WK. The app's `Exception` handler now logs one `arkham` line
+  (`event="unhandled_exception"`) with the request id, method, and redacted
+  path plus the formatted traceback, and answers
+  `{"error": "internal_error", "message": "Something went wrong.",
+  "request_id": …}` with the id echoed in `X-Request-ID`. The id and
+  redacted path ride the scope, because the request middleware resets its
+  contextvars before `ServerErrorMiddleware` reaches the handler. Headers,
+  cookies, and the body are never read. 313 server tests pass; coverage
+  95.34%.
+
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`
   adds `GET /api/auth/oidc/login` and `/callback`: the authorization-code
