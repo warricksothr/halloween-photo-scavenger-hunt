@@ -23,11 +23,13 @@ jobs:
       - name: Check out repository
         uses: Actions-Mirrors/forgejo-actions-checkout@v6
 
-      # AGENTS.md says CI verifies the ticket store. Pin the tool to the
-      # version installed locally so the two agree. The main package lives
-      # under cmd/, so the module path alone has nothing to build.
+      # AGENTS.md says CI verifies the ticket store. The main package lives
+      # under cmd/, so the module path alone has nothing to build. Pin the
+      # commit, not the tag: v0.23.0 is fd32d73b1301f562215f66d567bfbe5670e1bf12
+      # (the revision the Go module proxy resolved for that tag), so a moved
+      # tag cannot change the code CI runs.
       - name: Install git ticket
-        run: go install github.com/terva-sh/git-ticket/cmd/git-ticket@v0.23.0
+        run: go install github.com/terva-sh/git-ticket/cmd/git-ticket@fd32d73b1301f562215f66d567bfbe5670e1bf12
 
       - name: Check the ticket store
         run: git ticket check --fix --dry-run --strict

@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:51Z
-updated_at: 2026-09-22T20:16:49Z
+updated_at: 2026-09-22T20:25:14Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -127,3 +127,28 @@ red since run 8763 (`49e418ef`), the merge of PR #12; the last green run is 8761
 Filed TKT-01M35C6QJ1AF1QW1FE30Q63TT4 (Fix GNU-only mktemp --suffix in deploy/backup.sh breaking CI)
 with the reproduction and the fix. The frontend steps pass in the same container (`npm ci`, 40 tests,
 `npm run build`), so the deploy tests are the only failure.
+
+**agent:opencode/agents-md-state** at 2026-09-22T20:25:14Z
+
+### Terva review 165 on PR #14 (head 315495c)
+
+One high finding, accepted and fixed in this commit.
+
+- **high: Pin the downloaded git-ticket tool by immutable commit or checksum.**
+  Correct. `.terva/checklist.md:3` requires every workflow action, image and
+  download to be pinned by full commit SHA, checksum or digest, and
+  `go install ...@v0.23.0` pinned only a mutable tag. Fixed by installing the
+  commit the Go module proxy resolved for that tag,
+  `fd32d73b1301f562215f66d567bfbe5670e1bf12` (from
+  `proxy.golang.org/.../@v/v0.23.0.info`'s `Origin.Hash`). Verified in the CI
+  container: that SHA installs, reports `git-ticket v0.23.0`, and
+  `git ticket check --fix --dry-run --strict` prints "No problems found."
+
+The same commit corrects the earlier wrong package path: the first attempt,
+`github.com/terva-sh/git-ticket@v0.23.0`, has no main package, which is what
+made run 8820's new step fail.
+
+Pre-existing, not touched here: `quality.yml:24` uses
+`Actions-Mirrors/forgejo-actions-checkout@v6`, also a tag rather than a SHA,
+so it has the same defect. Changing it is outside this ticket; noted for
+whoever next edits the workflow.
