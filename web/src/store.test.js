@@ -218,6 +218,29 @@ describe('store', () => {
     vi.useRealTimers();
   });
 
+  it('drops a stale retry that finishes after a newer refresh', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot
+      .mockResolvedValueOnce({ error: 'network_error', network: true })
+      .mockResolvedValueOnce(playerSnapshot)
+      .mockResolvedValueOnce({ error: 'network_error', network: true })
+      .mockResolvedValueOnce({ error: 'network_error', network: true })
+      .mockResolvedValueOnce({ error: 'network_error', network: true });
+
+    const slow = refresh();
+    const fast = refresh();
+    await fast;
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await slow;
+
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    vi.useRealTimers();
+  });
+
   it('retry returns to booting and refreshes to ready', async () => {    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
 
     const done = retry();

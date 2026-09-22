@@ -123,10 +123,23 @@ async function withRetry(request) {
 // deltas (increment 7). Role detection: the player snapshot 401s for a
 // mod-only cookie, so a 401 means "try the moderator probe" before
 // concluding the visitor is unauthenticated.
+//
+// Refresh retries for up to a few seconds, and it is called from boot, from
+// mutations, and from SSE deltas, so several can overlap. Each run takes a
+// generation and drops its result if a newer run started meanwhile — an
+// older run exhausting its retries must not overwrite newer good state with
+// the error phase.
+let refreshGeneration = 0;
+
 export async function refresh() {
+  const generation = ++refreshGeneration;
+  const stale = () => generation !== refreshGeneration;
+
   const result = await withRetry(api.snapshot);
+  if (stale()) return;
   if (result.unauthenticated) {
     const mod = await withRetry(api.modState);
+    if (stale()) return;
     if (mod.error) {
       // The probe failed too, so this is a connection problem, not an
       // unauthenticated visitor — do not drop them on the join screen.
@@ -138,6 +151,7 @@ export async function refresh() {
         state.copy && state.themeName === mod.event.theme
           ? state.copy
           : await loadTheme(mod.event.theme);
+      if (stale()) return;
       set({ phase: 'ready', role: 'moderator', modEvent: mod.event,
             moderator: mod.moderator, copy, themeName: mod.event.theme,
             snapshot: null });
@@ -157,6 +171,7 @@ export async function refresh() {
     state.themeName === result.event.theme && state.copy
       ? state.copy
       : await loadTheme(result.event.theme);
+  if (stale()) return;
   set({ phase: 'ready', role: 'player', snapshot: result, copy,
         themeName: result.event.theme, modEvent: null });
   startStream();
