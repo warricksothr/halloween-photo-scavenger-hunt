@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T19:53:24Z
+updated_at: 2026-09-22T19:57:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -242,3 +242,30 @@ judge spec conformance; the design reference for invite limits is
 `docs/design.md:517`. ADR 0015, `docs/impl/api.md`, and `docs/progress.md` are
 updated to match the global-cap and replay behavior. Gate: 227 server tests,
 94.25% coverage, Ruff clean, 40 web tests, deploy checks 19.
+
+**agent:opencode/csrf** at 2026-09-22T19:57:08Z
+
+Terva review `csrf-ratelimit-v2` (review id 164, state COMMENT, hash
+`11f3d1f4dde4a28dbf3da0530bcb70c8619643818a553f5300ac7a88a9c4b8f6`) on PR #13
+at head `3bbeb5b8f8bc5a54d3135b7de4c8db915da7e953`, base `main`
+`22198c9ee26422c83cca7b13a670e503c8274a6c`. Actions run #195 (id 8803),
+`817444ce-9677-48a0-94d7-29fd13340e92`. All four findings from review 162 are
+recorded resolved.
+
+One new finding, accepted and fixed:
+
+- medium — a non-ASCII CSRF cookie value raised out of signature validation
+  instead of being rejected. `_signature` did `nonce.encode("ascii")` on the
+  attacker-controlled nonce, and `verify` called `hmac.compare_digest` on two
+  `str` values, which refuses non-ASCII. So a malformed cookie 500'd on a safe
+  GET (and `_planting` never replaced it) and on an unsafe request, instead of
+  the documented 403. Fixed: compare cookie and header as UTF-8 bytes, and map
+  `UnicodeEncodeError` to an invalid token. Tests:
+  `test_valid_token_rejects_malformed_and_accepts_issued` (unit),
+  `test_a_non_ascii_cookie_is_replaced_on_a_safe_get`, and
+  `test_a_non_ascii_cookie_pair_is_a_403_not_a_500` (raw middleware scope, so
+  the malformed bytes are not filtered by httpx). All three fail against the
+  pre-fix code with `TypeError`.
+
+Gate after the fix: 229 server tests, 94.27% coverage, Ruff clean, 40 web
+tests, deploy checks 19.
