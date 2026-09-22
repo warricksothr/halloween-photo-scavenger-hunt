@@ -7,10 +7,10 @@
 # Layout note (the why): main.py derives DEFAULT_DB_PATH and
 # DEFAULT_STATIC_DIR from the package's __file__, assuming the repo
 # layout — server/app beside web/dist, data/ at the repo root. The
-# image keeps that layout exactly, with an editable install so `app`
-# resolves to /srv/arkham/server/app. That makes the runtime's data
-# directory /srv/arkham/data — the one path a volume must cover to
-# persist the night's state (DB + photos).
+# image keeps that layout exactly, and puts /srv/arkham/server on
+# PYTHONPATH so `app` resolves to /srv/arkham/server/app. That makes the
+# runtime's data directory /srv/arkham/data — the one path a volume must
+# cover to persist the night's state (DB + photos).
 
 # ── Stage 1: frontend build ──
 FROM node:20-alpine AS web
@@ -25,10 +25,15 @@ RUN npm run build
 FROM python:3.12-slim AS runtime
 WORKDIR /srv/arkham
 COPY server/ ./server/
-# Editable install: deps land in site-packages while `app` stays at
-# /srv/arkham/server/app, keeping the __file__-relative data/static
-# paths intact (see the layout note above).
-RUN pip install --no-cache-dir -e ./server
+# Runtime deps come from the hash-pinned export of uv.lock, so the image
+# and CI resolve the same versions (Pillow behavior is load-bearing).
+ENV PYTHONPATH=/srv/arkham/server
+# `app` is deliberately not installed as a package: PYTHONPATH above puts
+# it on the import path straight from the source tree, keeping the
+# __file__-relative data/static paths intact (see the layout note). That
+# also skips a setuptools build — python:3.12 dropped setuptools from
+# ensurepip, so pip's build isolation would fetch an unpinned copy.
+RUN pip install --no-cache-dir --require-hashes -r ./server/requirements.lock
 COPY --from=web /build/web/dist ./web/dist
 # Run unprivileged; the data dir must be writable by the app user.
 RUN useradd --system --uid 1000 --home /srv/arkham arkham \
