@@ -22,12 +22,11 @@ Size is bounded twice: the route rejects uploads over ``MAX_BYTES``
 dimensions (``MAX_PIXELS``) so a tiny-but-huge bomb (a 10 KB JPEG that
 inflates to 50 000×50 000) is refused without allocating the image.
 
-Pillow's own failures are translated into the two errors above, so the
-module keeps its promise of exactly two failure modes and nothing it
-decodes escapes as a 500: an unreadable file (``UnidentifiedImageError``,
-or the ``OSError`` a truncated file raises) is ``NotAnImageError``, and a
-bomb (``DecompressionBombError``, or the warning Pillow raises instead
-when it is between its own ceiling and twice it) is
+Pillow's own decode failures are translated into the two errors above, so
+nothing the decoder cannot read escapes as a 500: an unreadable file
+(``UnidentifiedImageError``, or the ``OSError`` a truncated file raises) is
+``NotAnImageError``, and a bomb (``DecompressionBombError``, or the warning
+Pillow raises instead when it is between its own ceiling and twice it) is
 ``TooManyPixelsError``.
 
 Result of processing one upload: ``ProcessedPhoto(derivative_bytes,
@@ -108,8 +107,10 @@ def average_hash(img: Image.Image) -> str:
 def process_upload(data: bytes) -> ProcessedPhoto:
     """Blocking pipeline — call via run_in_threadpool, never in async code.
 
-    Raises ``NotAnImageError`` or ``TooManyPixelsError`` and nothing else,
-    so the route can answer 415/413 instead of faulting on hostile bytes.
+    Input the decoder cannot read becomes ``NotAnImageError`` (415) or
+    ``TooManyPixelsError`` (413), so hostile bytes answer 4xx instead of
+    faulting. A failure after decode — EXIF, hashing, resizing, encoding —
+    is ours, not the upload's, and propagates unchanged.
     """
     sniff_format(data)  # raises NotAnImageError on anything else
     # Only the decode is translated: a failure past this point is ours
