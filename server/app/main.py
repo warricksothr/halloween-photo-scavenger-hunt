@@ -92,10 +92,15 @@ def create_app(
     async def lifespan(app: FastAPI) -> Iterator[None]:
         conn = db_module.connect(db_path)
         db_module.apply_migrations(conn)
+        # A second connection for reads (ADR 0013): WAL isolates
+        # connections, not statements, so an unlocked SELECT on the writer
+        # could still observe another request's open transaction.
+        read_conn = db_module.connect(db_path)
         app.state.db = conn
-        # Sync endpoints share one SQLite connection. Race-sensitive mutation
-        # handlers hold this reentrant lock for the full request, then acquire
-        # it again around their transaction blocks.
+        app.state.read_db = read_conn
+        # Sync endpoints share one writer. Race-sensitive mutation
+        # handlers hold this reentrant lock for the full request, then
+        # acquire it again around their transaction blocks.
         app.state.db_lock = threading.RLock()
         app.state.admin_config = admin_config
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
@@ -111,6 +116,7 @@ def create_app(
         # reconnect regardless.
         app.state.leaderboard_last_sent = {}
         yield
+        read_conn.close()
         conn.close()
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
@@ -126,7 +132,7 @@ def create_app(
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:
-        conn: sqlite3.Connection = request.app.state.db
+        conn: sqlite3.Connection = db_module.reader(request)
         version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[
             0
         ]
