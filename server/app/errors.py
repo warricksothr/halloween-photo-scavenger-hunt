@@ -20,13 +20,20 @@ server log line and the error event for one request name the same id.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import sentry_sdk
+from sentry_sdk.utils import BadDsn
 
-from app.logging import REDACTED, current_request_id, redact_path
+from app.logging import (
+    LOGGER_NAME,
+    REDACTED,
+    current_request_id,
+    redact_path,
+)
 
 # Sentry keys a credential can hide in. A URL's path is redacted rather
 # than dropped, because it still names the route; a query is collapsed to
@@ -167,22 +174,32 @@ def init_error_reporting(
 
     Returns whether the SDK was initialized. No DSN is the normal local
     and test case: the app runs, nothing is sent, and no global SDK state
-    is touched.
+    is touched. A DSN that is present but malformed is the same — the SDK
+    rejects it with ``BadDsn``, which must not reach ``create_app`` and
+    stop the server; the value is reported as ignored and no warning names
+    it, because a DSN carries a key.
     """
     if not dsn:
         return False
-    scrubber = Scrubber.for_dsn(dsn)
-    sentry_sdk.init(
-        dsn=dsn,
-        release=release,
-        environment=environment,
-        # The self-hosted guidance says True; this app carries bearer
-        # codes in paths and cookies in headers, so it stays off. The
-        # scrubber is the second line for whatever the flag does not
-        # cover.
-        send_default_pii=False,
-        traces_sample_rate=0.0,
-        before_send=scrubber.scrub_event,
-        before_breadcrumb=scrubber.scrub_breadcrumb,
-    )
+    try:
+        scrubber = Scrubber.for_dsn(dsn)
+        sentry_sdk.init(
+            dsn=dsn,
+            release=release,
+            environment=environment,
+            # The self-hosted guidance says True; this app carries bearer
+            # codes in paths and cookies in headers, so it stays off. The
+            # scrubber is the second line for whatever the flag does not
+            # cover.
+            send_default_pii=False,
+            traces_sample_rate=0.0,
+            before_send=scrubber.scrub_event,
+            before_breadcrumb=scrubber.scrub_breadcrumb,
+        )
+    except BadDsn:
+        logging.getLogger(LOGGER_NAME).warning(
+            "error_reporting_disabled",
+            extra={"event": "error_reporting_disabled", "reason": "malformed DSN"},
+        )
+        return False
     return True

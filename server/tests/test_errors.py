@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app import errors
 from app import logging as app_logging
 from app.errors import Scrubber, init_error_reporting
+from app.main import create_app
+from app.security import hash_password
 
 DSN = "https://public-key:secret-key@bugsink.example/1"
 JOIN_CODE = "JOIN234"
@@ -18,6 +22,37 @@ JOIN_CODE = "JOIN234"
 @pytest.mark.parametrize("dsn", [None, ""])
 def test_init_is_inert_without_a_dsn(dsn):
     assert init_error_reporting(dsn) is False
+
+
+@pytest.mark.parametrize("dsn", ["not a dsn", "ftp://key@host/1"])
+def test_init_is_inert_with_a_malformed_dsn(dsn, caplog):
+    """A typo in the DSN is a misconfiguration, not a crash."""
+    caplog.set_level(logging.WARNING)
+    caplog.clear()
+
+    assert init_error_reporting(dsn) is False
+
+    text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "error_reporting_disabled" in text
+    # The reason is recorded; the DSN, which carries a key, is not.
+    assert dsn not in text
+
+
+def test_malformed_dsn_does_not_stop_the_app(tmp_path, monkeypatch):
+    """The finding: an unguarded ``sentry_sdk.init`` would raise ``BadDsn``
+    through ``create_app`` and the server would never start."""
+    monkeypatch.setenv("ARKHAM_ERROR_DSN", "not a dsn")
+
+    app = create_app(
+        tmp_path / "bad-dsn.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/api/health").status_code == 200
 
 
 def test_dsn_wires_the_scrubbers(monkeypatch):
