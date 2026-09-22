@@ -1,18 +1,23 @@
 // Service worker: network-first shell, cache-first hashed assets,
-// network-only /api.
+// everything else left alone.
 //
 // Why this split: the party runs on venue wifi that *will* hiccup, so
-// the shell (HTML/JS/CSS/fonts) must still load offline — but a phone
-// must never run an old shell against a new API after a redeploy. A
+// the shell (HTML/JS/CSS) must still load offline — but a phone must
+// never run an old shell against a new API after a redeploy. A
 // navigation therefore goes to the network first and only falls back to
 // the cache when the network is down, so a deploy takes effect without
 // anyone bumping a cache name by hand. Hashed bundles
 // (assets/index-<hash>.js) keep the cache-first path: the name changes
 // with the content, so a cache hit is always the build that shipped it.
-// /api always goes to the network — the snapshot contract (ADR 0003)
-// owns resync and game state must never be served stale.
+//
+// Only those two cases are intercepted. /api always goes to the network
+// (the snapshot contract, ADR 0003, owns resync and game state must
+// never be served stale), and so does everything unhashed or
+// cross-origin: the server already sends `Cache-Control: no-cache` for
+// sw.js, index.html, and the manifest (server/app/main.py:156-187), so
+// serving those from here could only make them stale.
 const SHELL_CACHE = 'arkham-shell-v2';
-const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest'];
+const SHELL_ASSETS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -34,15 +39,16 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/')) {
-    return; // network only — no respondWith means default fetch
-  }
   if (event.request.method !== 'GET') return;
+  if (url.pathname.startsWith('/api/')) return; // network only
+  if (url.origin !== self.location.origin) return; // leave to the network
   if (event.request.mode === 'navigate') {
     event.respondWith(networkFirst(event.request));
     return;
   }
-  event.respondWith(cacheFirst(event.request));
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(cacheFirst(event.request));
+  }
 });
 
 // A navigation is the request whose freshness decides whether the phone
@@ -55,7 +61,9 @@ async function networkFirst(request) {
     const resp = await fetch(request);
     if (resp.ok) {
       const cache = await caches.open(SHELL_CACHE);
-      cache.put(request, resp.clone());
+      // Awaited: once this promise settles the browser may stop the
+      // worker, and a cache write left in flight would be lost.
+      await cache.put(request, resp.clone());
     }
     return resp;
   } catch (err) {
@@ -71,9 +79,9 @@ async function cacheFirst(request) {
   const hit = await caches.match(request);
   if (hit) return hit;
   const resp = await fetch(request);
-  if (resp.ok && new URL(request.url).origin === self.location.origin) {
+  if (resp.ok) {
     const cache = await caches.open(SHELL_CACHE);
-    cache.put(request, resp.clone());
+    await cache.put(request, resp.clone());
   }
   return resp;
 }

@@ -83,7 +83,6 @@ describe('service worker shell policy', () => {
     expect([...worker.entries.keys()].sort()).toEqual([
       `${ORIGIN}/`,
       `${ORIGIN}/index.html`,
-      `${ORIGIN}/manifest.webmanifest`,
     ]);
   });
 
@@ -120,6 +119,33 @@ describe('service worker shell policy', () => {
 
     expect(worker.request('/api/state')).toBeUndefined();
     expect(worker.fetch).not.toHaveBeenCalled();
+  });
+
+  it('leaves unhashed and cross-origin requests to the network', () => {
+    const worker = loadWorker();
+
+    expect(worker.request('/manifest.webmanifest')).toBeUndefined();
+    expect(worker.request('https://fonts.googleapis.com/css?family=Spectral'))
+      .toBeUndefined();
+  });
+
+  it('commits the refreshed shell before the navigation response settles', async () => {
+    const worker = loadWorker();
+    let release;
+    worker.cache.put.mockReturnValue(
+      new Promise((resolve) => { release = resolve; }),
+    );
+    worker.fetch.mockResolvedValue(response('new shell'));
+
+    let settled = false;
+    const pending = worker.request('/index.html', 'navigate')
+      .then((resp) => { settled = true; return resp; });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    release();
+    expect((await pending).body).toBe('new shell');
   });
 
   it('serves hashed assets from the cache without a network read', async () => {
