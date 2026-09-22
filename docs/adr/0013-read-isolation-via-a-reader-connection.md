@@ -51,6 +51,13 @@ also makes their read-then-write atomic across the two connections: no other
 writer can commit between the reader's SELECT and the writer's transaction
 while the lock is held.
 
+`db.resolve_dsn` resolves the configured path once in the lifespan and both
+connections open that same value. This matters for the supported `:memory:`
+configuration: a plain `:memory:` is a private database per connection, so the
+reader would otherwise open an empty database with no tables. The resolver maps
+it to a named shared-cache URI (`file:arkham-memory-<uuid>?mode=memory&cache=shared`)
+with a name unique per app, so two in-memory apps in one process never share.
+
 A guard test asserts that no module under `app/` except `db.py` and `main.py`
 names `state.db` or `state.read_db` directly, so the split stays greppable and
 a new handler cannot quietly reintroduce a read on the writer.

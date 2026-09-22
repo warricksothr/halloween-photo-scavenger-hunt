@@ -27,6 +27,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import Request
 
@@ -79,18 +80,35 @@ def reader(request: Request) -> sqlite3.Connection:
     return request.app.state.read_db
 
 
+def resolve_dsn(db_path: Path | str) -> str:
+    """One DSN that both connections can open.
+
+    A plain ``:memory:`` is a *private* database per connection, so the
+    reader would open a fresh empty database with no tables. Give it a
+    stable shared-cache URI instead: both connections then reach the same
+    in-memory database, which lives while either is open. The name is
+    unique per app so two in-memory apps in one process never share
+    (ADR 0013).
+    """
+    if str(db_path) == ":memory:":
+        return f"file:arkham-memory-{uuid4().hex}?mode=memory&cache=shared"
+    return str(db_path)
+
+
 def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """Open a connection with the schema's required pragmas applied.
 
     ``foreign_keys`` must be ON on *every* connection — SQLite silently
     ignores FK violations otherwise. WAL lets the reader connection and
     the single writer coexist, which is what makes read isolation possible
-    (ADR 0013).
+    (ADR 0013). ``db_path`` may be a ``file:`` URI (see ``resolve_dsn``);
+    those are opened with ``uri=True``.
     """
-    db_path = Path(db_path)
-    if str(db_path) != ":memory:":
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    dsn = str(db_path)
+    is_uri = dsn.startswith("file:")
+    if not is_uri and dsn != ":memory:":
+        Path(dsn).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(dsn, check_same_thread=False, uri=is_uri)
     # check_same_thread=False: FastAPI runs sync endpoints in a worker
     # threadpool, so a connection created during lifespan (main thread)
     # would otherwise refuse to run queries there. Both connections are

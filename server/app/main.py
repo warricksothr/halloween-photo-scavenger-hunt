@@ -90,12 +90,15 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Iterator[None]:
-        conn = db_module.connect(db_path)
+        # Resolve once so both connections open the *same* database: a
+        # plain ":memory:" is private per connection (db.resolve_dsn).
+        dsn = db_module.resolve_dsn(db_path)
+        conn = db_module.connect(dsn)
         db_module.apply_migrations(conn)
         # A second connection for reads (ADR 0013): WAL isolates
         # connections, not statements, so an unlocked SELECT on the writer
         # could still observe another request's open transaction.
-        read_conn = db_module.connect(db_path)
+        read_conn = db_module.connect(dsn)
         app.state.db = conn
         app.state.read_db = read_conn
         # Sync endpoints share one writer. Race-sensitive mutation
