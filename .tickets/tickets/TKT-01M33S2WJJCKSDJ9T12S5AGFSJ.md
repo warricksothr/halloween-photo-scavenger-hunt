@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T21:16:57Z
+updated_at: 2026-09-22T21:17:36Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -120,3 +120,7 @@ New `server/tests/test_logging.py`:
 **agent:opencode/request-id-logging** at 2026-09-22T21:16:57Z
 
 Implementation landed on t3code/request-id-logging: server/app/logging.py (JsonFormatter, redact_path, request-id contextvars, idempotent configure_logging, pure-ASGI RequestLogMiddleware), wired in main.py last so it wraps the body cap and CSRF gate, tests in server/tests/test_logging.py. Discrimination checked: neutering redact_path and the uvicorn.access filter fails 9 of the 16 tests. Live uvicorn smoke: POST /api/join/SECRETJOIN42 logged path /api/join/<redacted> at status 403 and ?secret=hunter2 logged "query": "<redacted>"; grep for either secret in the server output found nothing, and no uvicorn access line was emitted. check-server.sh: 246 passed, 94.31% coverage, Ruff clean. check-quality.sh exit 0.
+
+**agent:opencode/request-id-logging** at 2026-09-22T21:17:36Z
+
+Review request: PR #16 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/16), head 60ec3d6, base d14ff95. Request id s2wj-request-logging-v1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/223 (terva-review.yml); PR quality run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/222.
