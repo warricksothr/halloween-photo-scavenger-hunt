@@ -18,7 +18,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T06:00:02Z
-updated_at: 2026-09-22T06:00:02Z
+updated_at: 2026-09-22T06:05:57Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -68,3 +68,9 @@ meets `fail-severity`. That is the configured gate, not a run failure.
   branch; manual dispatch from a branch works and is how PR #2 was reviewed.
 - PR #2 receives no Quality gate until it is retargeted to `main`, because
   `quality.yml` triggers on PRs to `main` only.
+
+## Notes
+
+**agent:opencode/review-system-design** at 2026-09-22T06:05:57Z
+
+Both PRs merged to main: #1 as 655e467, #2 as 48226a0. The workflow now lives on the default branch, so the /terva comment commands are live and future PRs get the Quality gate. Both feature branches deleted. Still in draft; promote and close to track it.
