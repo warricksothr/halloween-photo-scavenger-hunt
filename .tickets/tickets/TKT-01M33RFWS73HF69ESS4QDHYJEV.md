@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:19:43Z
+updated_at: 2026-09-22T18:21:09Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,8 +43,8 @@ The service worker caches navigation responses and uses a manually bumped cache 
 
 ## Acceptance criteria
 
-- [ ] A deploy invalidates the old shell; navigation is network-first or the cache is build-stamped.
-- [ ] A test or smoke proves the new build is served after a version change.
+- [x] A deploy invalidates the old shell; navigation is network-first or the cache is build-stamped.
+- [x] A test or smoke proves the new build is served after a version change.
 
 ## Implementation plan
 
@@ -157,3 +157,45 @@ Actions run #162 (id 8730).
   response is returned; it fails on the previous head.
 
 Fixed in `0edf5e1`. Re-requesting review.
+
+## Summary
+
+### Result
+The service worker no longer answers a same-origin GET from the cache while the
+network is reachable. Every same-origin GET is network-first with the cache as
+the offline fallback (a navigation also falls back to `/index.html`), and `/api/`
+and cross-origin requests are left alone. The shell cache moves to
+`arkham-shell-v2`, so this deploy's install evicts the stale v1 shell. No server
+change was needed: `server/app/main.py` already sends `Cache-Control: no-cache`
+for `sw.js` and `index.html`.
+
+### Evidence
+- `web/src/service-worker.test.js` — 10 tests over the worker source with fake
+  `self`/`caches`/`fetch`; the load-bearing ones fail on the pre-fix worker.
+- `web/e2e/service-worker.spec.js` — real browser smoke that rewrites the built
+  `dist/index.html` to stand in for a deploy and asserts the new markup is
+  served; fails on the pre-fix worker.
+- `playwright.config.js` — `workers: 1` so the smoke's rewrite cannot race the
+  game-loop spec.
+- `bash scripts/check-quality.sh` exit 0; `npm --prefix web test` 36 pass;
+  `npm run test:e2e` 2 pass.
+
+### Review
+Four rounds, three of which found something, all accepted and fixed:
+- round 1 (review 153, run `2da0d6ef…`, request `sw-deploy-safe-1`): cache-first
+  applied to every non-API GET; cache writes not awaited. Both fixed in
+  `1c1989f`.
+- round 2 (review 154, run `2dfb557c…`, request `sw-deploy-safe-2`): awaited
+  writes resolved; the `/assets/` predicate still could not tell a hashed bundle
+  from any other file, so the cache-first path was removed in `bd9ddec`.
+- round 3 (review 155, run `3f1ffd0a…`, request `sw-deploy-safe-3`): a failed
+  cache write fell into the offline fallback; given its own error boundary in
+  `0edf5e1`.
+- round 4 (request `sw-deploy-safe-4`, run `19825b98-3aad-4c42-84d3-f93433cd9aa8`,
+  Actions run #164 (id 8732)): **clean** at head
+  `a00c75930c33f8f6c7bf60bdf8fe208aa2cee999`, base
+  `7c04c4912631c3fc477f3d75c259c02eb53e69b5`; PR comment 9711 records it and
+  marks all prior findings resolved.
+
+### Acceptance criteria
+Both ticked; the clean round-4 review covers the head that carries them.
