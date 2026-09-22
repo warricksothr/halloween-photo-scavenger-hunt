@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T17:52:39Z
+updated_at: 2026-09-22T17:58:58Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -64,3 +64,26 @@ Extend `web/src/screens/screens.test.jsx`: mock `api.inviteInfo` to return invit
 
 - Stay returns the player to a usable state — observable as the invite path clearing and the snapshot refreshing.
 - The path is covered by a vitest case.
+
+## Notes
+
+**agent:opencode/teamjoin-dead-end** at 2026-09-22T17:58:58Z
+
+### Review round 1
+
+- PR #10, request `ready-teamjoin-1`, review id 152, Actions run #149 (id 8711), run `6d7f3f93-ee93-4796-b632-c91faf1f4bca`.
+- Reviewed head `f269f1ade8b491dd37ff5320a6a83904933a83a6`, base `209fbe187ac8f1af8cfacabd80960a1be7015ccf`.
+- Model `gpt-5.6-sol`, thinking `low`, 19s; 4259 input / 547 output tokens. The run concluded `failure` because `fail-severity: medium` (`.forgejo/workflows/terva-review.yml:75`) and the review posted one medium finding.
+
+### finding-1 — accepted
+
+"Stay remains permanently disabled when refresh rejects" (`web/src/screens/TeamJoin.jsx:82`, medium).
+
+Accepted as hardening: `setBusy(false)` now sits in a `finally`, and a `catch` absorbs the unexpected rejection so the store stays the error owner. Fix commit `5dff79d`.
+
+The reachable trigger is narrower than the finding states, which is worth recording because the reviewer had only the diff. `refresh()` does not reject on a read failure: `api.request` folds a dropped connection and a timeout into a value (`{ error: 'network_error', network: true }`, `web/src/api.js:60-65`), `withRetry` only awaits that, and the store renders the connection-error screen on `result.error` (`web/src/store.js:165-167`) — the "consistent with the application's connection-error behavior" the finding asked for already happens there. A rejection can only come from `loadTheme`'s CSS import or a store subscriber throwing, not from the snapshot read. The finding's secondary point is also covered: because `set({ phase: 'error' })` notifies subscribers, the cleared path re-renders the error screen even when the read fails, so the player is not left looking at the invite.
+
+### Evidence
+
+- New case `re-enables the warning controls when the refresh fails` rejects the refresh and asserts Stay comes back enabled; it fails on `f269f1a` and passes on `5dff79d`.
+- `bash scripts/check-quality.sh` — exit 0 (backend 172 passed, Ruff clean, frontend 26 passed, production build).
