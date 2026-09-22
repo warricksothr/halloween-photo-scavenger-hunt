@@ -13,6 +13,7 @@ import json
 import time
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 
 
@@ -48,7 +49,7 @@ def _party(admin, client, riddles=("Find it",)):
 def _mod(client, mod_code, label_client=None):
     """A moderator in their own cookie jar. ``label_client`` lets a test
     hold two distinct moderators."""
-    mod_client = label_client or TestClient(client.app)
+    mod_client = label_client or arm_csrf(TestClient(client.app))
     resp = mod_client.post(f"/api/mod/join/{mod_code}")
     assert resp.status_code == 201, resp.text
     return mod_client
@@ -66,14 +67,14 @@ def _submit(client, riddle_id, evidence_id):
 class TestModJoin:
     def test_join_sets_cookie_and_returns_event(self, admin, client):
         p = _party(admin, client)
-        resp = TestClient(client.app).post(f"/api/mod/join/{p['mod_code']}")
+        resp = arm_csrf(TestClient(client.app)).post(f"/api/mod/join/{p['mod_code']}")
         assert resp.status_code == 201
         assert resp.json()["event"]["id"] == p["event_id"]
         assert "arkham_mod" in resp.cookies
 
     def test_bad_code_404_and_closed_event_409(self, admin, client):
         p = _party(admin, client)
-        mod = TestClient(client.app)
+        mod = arm_csrf(TestClient(client.app))
         assert mod.post("/api/mod/join/nope").status_code == 404
         admin.post(f"/api/admin/events/{p['event_id']}/close")
         resp = mod.post(f"/api/mod/join/{p['mod_code']}")
@@ -81,7 +82,7 @@ class TestModJoin:
 
     def test_queue_requires_auth(self, admin, client):
         _party(admin, client)
-        resp = TestClient(client.app).get("/api/mod/queue")
+        resp = arm_csrf(TestClient(client.app)).get("/api/mod/queue")
         assert resp.status_code == 401
         # A player cookie is not a moderator cookie.
         assert client.get("/api/mod/queue").status_code == 401
@@ -231,7 +232,7 @@ class TestVerdict:
         p = _party(admin, client)
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         other_event = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = TestClient(client.app)
+        other_mod = arm_csrf(TestClient(client.app))
         other_mod.post(f"/api/mod/join/{other_event['mod_code']}")
         assert other_mod.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 404
         resp = other_mod.post(
@@ -247,7 +248,7 @@ class TestDuplicateFlagResolution:
         """Two teams upload byte-identical photos → one open flag on the
         second team's evidence."""
         p = _party(admin, client)
-        other = TestClient(client.app)
+        other = arm_csrf(TestClient(client.app))
         other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         resp = other.post(
             "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
@@ -286,7 +287,7 @@ class TestDuplicateFlagResolution:
         """When the flagged team submits the flagged photo, its queue
         item carries the flag details (the '⚠ SHARED?' mock row)."""
         p = _party(admin, client)
-        robin = TestClient(client.app)
+        robin = arm_csrf(TestClient(client.app))
         robin.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         up = robin.post(
             "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
@@ -344,7 +345,7 @@ class TestPlayerHistory:
     def test_history_scoped_to_event(self, admin, client):
         p = _party(admin, client)
         other = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = TestClient(client.app)
+        other_mod = arm_csrf(TestClient(client.app))
         other_mod.post(f"/api/mod/join/{other['mod_code']}")
         resp = other_mod.get(f"/api/mod/players/{p['player_id']}")
         assert resp.status_code == 404

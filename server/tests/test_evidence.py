@@ -10,6 +10,7 @@ import time
 
 import pytest
 from PIL import Image
+from support import arm_csrf
 
 from app import evidence as evidence_module
 from app.images import (
@@ -265,7 +266,7 @@ class TestUploadEndpoint:
         # Second player: fresh cookie jar via a new client on the same app.
         from fastapi.testclient import TestClient
 
-        other = TestClient(client.app)
+        other = arm_csrf(TestClient(client.app))
         other.post(f"/api/join/{join_code}", json={"display_name": "Robin"})
         resp = other.get(photo_url)
         assert resp.status_code == 404  # existence not confirmed

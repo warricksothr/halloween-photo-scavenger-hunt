@@ -10,6 +10,7 @@ import json
 import time
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 
 
@@ -98,7 +99,7 @@ class TestSubmit:
     def test_scoping_and_lifecycle_errors(self, admin, client):
         p = _party(admin, client, riddles=("R1",))
         # Other team's evidence: 404, existence not confirmed.
-        other = TestClient(client.app)
+        other = arm_csrf(TestClient(client.app))
         other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         resp = _submit(other, p["riddle_ids"][0], p["evidence_id"])
         assert resp.status_code == 404
@@ -228,7 +229,7 @@ class TestDuplicateFlag:
         # the client's session cookie, so a second team needs its own
         # TestClient with an independent cookie jar.
         p = _party(admin, client)
-        other = TestClient(client.app)
+        other = arm_csrf(TestClient(client.app))
         other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         # Robin uploads the identical image bytes from a different team.
         resp = other.post(

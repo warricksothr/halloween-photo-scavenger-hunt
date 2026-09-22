@@ -18,6 +18,7 @@ event + player + one upload).
 import time
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 from test_mod import _mod, _party, _submit
 
@@ -125,7 +126,7 @@ class TestInappropriateAction:
         p = _party(admin, client)
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         other = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = _mod(client, other["mod_code"], TestClient(client.app))
+        other_mod = _mod(client, other["mod_code"], arm_csrf(TestClient(client.app)))
         assert _inappropriate(other_mod, sub["id"]).status_code == 404
 
     def test_requires_moderator(self, admin, client):
@@ -273,7 +274,7 @@ class TestStrikeLadder:
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         assert _inappropriate(mod, sub["id"]).status_code == 200
 
-        other = TestClient(client.app)
+        other = arm_csrf(TestClient(client.app))
         other.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         r = other.get("/api/state").json()["me"]["restriction"]
         assert r == {"level": 0, "cooldown_until": None, "pending_notice": False}
@@ -392,7 +393,7 @@ class TestStrikeReversal:
             mod.post(f"/api/admin/strikes/{strike_id}/reverse", json={}).status_code
             == 401
         )
-        player_only = TestClient(client.app)
+        player_only = arm_csrf(TestClient(client.app))
         player_only.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
         assert (
             player_only.post(
