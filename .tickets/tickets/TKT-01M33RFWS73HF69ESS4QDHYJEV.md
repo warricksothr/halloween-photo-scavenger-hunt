@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:10:09Z
+updated_at: 2026-09-22T18:13:42Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -86,3 +86,28 @@ way to release it, and nothing enforces that.
 ### Verification
 - `npm --prefix web test` (32 pass), `npm run test:e2e` (both specs pass),
   `bash scripts/check-quality.sh` exit 0.
+
+## Notes
+
+**agent:opencode/sw-deploy-safe** at 2026-09-22T18:13:42Z
+
+### Round 1 — both findings accepted
+
+Reviewed head `5fccc52006a22fa0d2087c962a67c193b61fca17` (review id 153), Terva
+run `2da0d6ef-edd2-41e7-bde1-cd89da648752` for `request:sw-deploy-safe-1`,
+Actions run #158 (id 8724).
+
+- **medium — cache-first applied to unhashed and cross-origin requests.**
+  Accepted. The handler now routes only same-origin `/assets/` GETs to
+  `cacheFirst`; `/api/`, cross-origin requests, and unhashed same-origin
+  resources are left to the network, and the manifest is no longer
+  prefetched into the shell cache. New tests assert that
+  `/manifest.webmanifest` and a `fonts.googleapis.com` request are not
+  intercepted.
+- **medium — navigation cache refresh can be abandoned before it completes.**
+  Accepted. Both `cache.put` calls are now awaited. A new test holds the
+  `put` promise open and asserts the navigation response does not settle
+  until it resolves; it fails on the previous head, so the fake can detect
+  the worker-lifetime failure the finding described.
+
+Fixed in `1c1989f`. Re-requesting review.
