@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:50:37Z
+updated_at: 2026-09-22T18:54:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -219,6 +219,31 @@ script dies before the `mv`.
 `mktemp` to a fixed work directory (`…-WORKSU`) and archive (`…-ARCHSU.tar.gz`)
 and asserts the archive carries `ARCHSU`. It fails on `ee1a473` (the archive
 came out as `…-WORKSU.tar.gz`) and passes on the fix.
+
+Gate: `bash scripts/check-quality.sh` exit 0 — 182 backend tests, Ruff clean,
+19 deploy tests, 36 frontend tests, production build.
+
+**agent:opencode/backup-restore** at 2026-09-22T18:54:08Z
+
+Terva round 6 (review 161, head `49e418e`, run
+`7e4fb4c5-1a44-41a5-aeb8-e6d3e9653549`, Actions run #184 id 8762) reported the
+round-5 finding resolved and raised one new medium.
+
+### medium — archive-reservation test does not reserve (accepted)
+
+Correct: the `mktemp_sequence` stub only echoed the canned path. The work
+directory got created by the script's own `mkdir -p`, and `mv` created the
+archive, so the test proved the two suffixes differed but not that `mktemp` was
+asked to reserve the archive path. A regression to non-atomic name construction
+would have kept it green.
+
+Fixed in `70f827c`: the stub now honours the mode it was called with (`mkdir -p`
+for `-d`, exclusive file create otherwise) and appends its arguments to
+`mktemp.args`. The test asserts the two recorded templates, including
+`--suffix=.tar.gz …/arkham-backup-20260101-000000-XXXXXX`, and then opens the
+archive to prove the reserved empty file was replaced by the finished tarball.
+It still fails on `ee1a473` (the pre-fix script), so the reservation regression
+is now guarded.
 
 Gate: `bash scripts/check-quality.sh` exit 0 — 182 backend tests, Ruff clean,
 19 deploy tests, 36 frontend tests, production build.
