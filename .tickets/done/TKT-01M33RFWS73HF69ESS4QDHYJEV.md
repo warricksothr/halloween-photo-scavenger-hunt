@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWS73HF69ESS4QDHYJEV
 title: Make the service worker deploy-safe
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/sw-deploy-safe
-  branch: t3code/sw-deploy-safe
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: 7c04c4912631c3fc477f3d75c259c02eb53e69b5
-  session: sw-deploy-safe
-  claimed_at: 2026-09-22T18:03:55Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:21:09Z
+updated_at: 2026-09-22T18:22:43Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
