@@ -1257,3 +1257,52 @@ def test_notice_ack_derives_the_pending_strike_on_the_writer(
         ).fetchone()[0]
         == 1
     )
+
+
+def test_rename_after_a_concurrent_rename_applies_the_requested_name(
+    admin, client, monkeypatch
+):
+    """The rename no-op check must decide on the writer (ADR 0013): the
+    reader snapshot can name the requested value while a concurrent
+    rename commits a different one, so returning early would report
+    success without applying the name the caller asked for."""
+    party = _party(admin, client)
+    batman = party["players"]["Batman"]["client"]
+    team_id = party["players"]["Batman"]["team_id"]
+    conn = client.app.state.db
+
+    assert batman.post("/api/team/rename", json={"name": "Alpha"}).status_code == 200
+
+    real_reader = teams.reader
+
+    class _StaleCursor:
+        def __init__(self, row):
+            self._row = row
+
+        def fetchone(self):
+            return self._row
+
+    def stale_reader(request):
+        real = real_reader(request)
+
+        class _StaleReader:
+            def execute(self, sql, params=()):
+                row = real.execute(sql, params).fetchone()
+                conn.execute("UPDATE team SET name = 'Beta' WHERE id = ?", (team_id,))
+                conn.commit()
+                return _StaleCursor(row)
+
+        return _StaleReader()
+
+    monkeypatch.setattr(teams, "reader", stale_reader)
+
+    response = batman.post("/api/team/rename", json={"name": "Alpha"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "Alpha"
+    assert (
+        conn.execute("SELECT name FROM team WHERE id = ?", (team_id,)).fetchone()[
+            "name"
+        ]
+        == "Alpha"
+    ), "the requested name was reported but not applied"

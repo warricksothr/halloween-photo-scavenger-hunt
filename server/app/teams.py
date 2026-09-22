@@ -128,18 +128,16 @@ def rename_team(
     row keeps the old name (team.renamed, audit-actions.md). The
     leaderboard label picks the name up immediately (leaderboard.py
     COALESCEs team.name before the display-name fallback)."""
-    conn: sqlite3.Connection = reader(request)
-    old = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()[
-        "name"
-    ]
-    if body.name == old:
-        return {"ok": True, "name": old}
     with locked_transaction(request) as writer:
-        # Re-read on the writer (ADR 0013): the reader serves the last
-        # committed snapshot, so the audit's old_name can be stale.
+        # Read the current name on the writer (ADR 0013): the reader
+        # serves the last committed snapshot, so a concurrent rename can
+        # commit between the check above and this transaction. Both the
+        # no-op decision and the audit's old_name must come from here.
         old = writer.execute(
             "SELECT name FROM team WHERE id = ?", (ctx.team_id,)
         ).fetchone()["name"]
+        if body.name == old:
+            return {"ok": True, "name": old}
         writer.execute(
             "UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id)
         )
