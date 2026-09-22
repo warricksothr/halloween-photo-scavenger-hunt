@@ -179,17 +179,22 @@ def patch_event(
     if row is None:
         return _err(404, "event_not_found", "No such event.")
     updates = body.model_dump(exclude_none=True)
-    if updates:
-        assignments = ", ".join(f"{k} = ?" for k in updates)
-        # A locked transaction, not a bare execute + commit: an
-        # unlocked commit here could land mid-mutation in another
-        # handler (ADR 0004).
-        with locked_transaction(request) as writer:
+    with locked_transaction(request) as writer:
+        if _get_event(writer, event_id) is None:
+            # The event can be purged between the reader check and this
+            # transaction (ADR 0013).
+            return _err(404, "event_not_found", "No such event.")
+        if updates:
+            assignments = ", ".join(f"{k} = ?" for k in updates)
+            # A locked transaction, not a bare execute + commit: an
+            # unlocked commit here could land mid-mutation in another
+            # handler (ADR 0004).
             writer.execute(
                 f"UPDATE event SET {assignments} WHERE id = ?",
                 (*updates.values(), event_id),
             )
-    return _event_json(_get_event(conn, event_id))
+        updated = _get_event(writer, event_id)
+    return _event_json(updated)
 
 
 @router.post("/events/{event_id}/open")
@@ -204,18 +209,30 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
             "bad_transition",
             f"Event is {row['status']}; only a lobby event can open.",
         )
-    riddles = conn.execute(
-        "SELECT COUNT(*) FROM riddle WHERE event_id = ?", (event_id,)
-    ).fetchone()[0]
-    if riddles == 0:
-        # Mocking surfaced this gate (ui.md): an open round with no
-        # riddles is a broken party, so the server enforces what the
-        # admin UI only hints at with a disabled button.
-        return _err(
-            409, "no_riddles", "Add at least one riddle before opening the round."
-        )
     now = int(time.time())
     with locked_transaction(request) as writer:
+        # Re-check the state on the writer: the reader serves the last
+        # committed snapshot, so the event can be purged or opened between
+        # the reads above and this transaction (ADR 0013).
+        row = _get_event(writer, event_id)
+        if row is None:
+            return _err(404, "event_not_found", "No such event.")
+        if row["status"] != "lobby":
+            return _err(
+                409,
+                "bad_transition",
+                f"Event is {row['status']}; only a lobby event can open.",
+            )
+        riddles = writer.execute(
+            "SELECT COUNT(*) FROM riddle WHERE event_id = ?", (event_id,)
+        ).fetchone()[0]
+        if riddles == 0:
+            # Mocking surfaced this gate (ui.md): an open round with no
+            # riddles is a broken party, so the server enforces what the
+            # admin UI only hints at with a disabled button.
+            return _err(
+                409, "no_riddles", "Add at least one riddle before opening the round."
+            )
         writer.execute(
             "UPDATE event SET status = 'open', opened_at = ? WHERE id = ?",
             (now, event_id),
@@ -229,12 +246,13 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
             entity_type="event",
             entity_id=event_id,
         )
+        opened = _get_event(writer, event_id)
     # After the commit: everyone (lobby screens especially) refetches
     # the snapshot. This delta is what lets the lobby drop its 5s poll.
     sse.publish(request, event_id, "event_status", {"status": "open"})
     # Standings appear the moment a live-visibility round opens.
     publish_leaderboard(request, event_id, force=True)
-    return _event_json(_get_event(conn, event_id))
+    return _event_json(opened)
 
 
 @router.post(
@@ -407,6 +425,12 @@ def create_riddle(
         return _err(404, "event_not_found", "No such event.")
     riddle_id = ids.new_id()
     with locked_transaction(request) as writer:
+        if _get_event(writer, event_id) is None:
+            # Re-check on the writer: the reader deliberately serves the
+            # last committed snapshot (ADR 0013), so the host can purge the
+            # event between the read above and this transaction. Without
+            # this the INSERT would fail its foreign key.
+            return _err(404, "event_not_found", "No such event.")
         writer.execute(
             "INSERT INTO riddle (id, event_id, text, sort_order, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
@@ -422,7 +446,8 @@ def create_riddle(
             entity_id=riddle_id,
             details={"text": body.text, "sort_order": body.sort_order},
         )
-    return _riddle_json(_get_riddle(conn, event_id, riddle_id))
+        created = _get_riddle(writer, event_id, riddle_id)
+    return _riddle_json(created)
 
 
 @router.patch("/events/{event_id}/riddles/{riddle_id}")
@@ -438,8 +463,14 @@ def patch_riddle(
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
     updates = body.model_dump(exclude_none=True)
-    if updates:
-        with locked_transaction(request) as writer:
+    with locked_transaction(request) as writer:
+        row = _get_riddle(writer, event_id, riddle_id)
+        if row is None:
+            # The reader serves the last committed snapshot (ADR 0013); the
+            # host can delete the riddle between the read and this
+            # transaction.
+            return _err(404, "riddle_not_found", "No such riddle on this event.")
+        if updates:
             assignments = ", ".join(f"{k} = ?" for k in updates)
             writer.execute(
                 f"UPDATE riddle SET {assignments} WHERE id = ?",
@@ -464,7 +495,8 @@ def patch_riddle(
                     else row["sort_order"],
                 },
             )
-    return _riddle_json(_get_riddle(conn, event_id, riddle_id))
+        updated = _get_riddle(writer, event_id, riddle_id)
+    return _riddle_json(updated)
 
 
 @router.delete("/events/{event_id}/riddles/{riddle_id}")
@@ -478,16 +510,22 @@ def delete_riddle(
     row = _get_riddle(conn, event_id, riddle_id)
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
-    referenced = conn.execute(
-        "SELECT 1 FROM submission WHERE riddle_id = ? LIMIT 1", (riddle_id,)
-    ).fetchone()
-    if referenced:
-        # A deleted riddle would orphan its submissions and rewrite the
-        # night's history; the host edits text instead.
-        return _err(
-            409, "riddle_in_use", "Submissions reference this riddle; edit it instead."
-        )
     with locked_transaction(request) as writer:
+        row = _get_riddle(writer, event_id, riddle_id)
+        if row is None:
+            # Reader snapshot, then write (ADR 0013): re-check on the writer.
+            return _err(404, "riddle_not_found", "No such riddle on this event.")
+        referenced = writer.execute(
+            "SELECT 1 FROM submission WHERE riddle_id = ? LIMIT 1", (riddle_id,)
+        ).fetchone()
+        if referenced:
+            # A deleted riddle would orphan its submissions and rewrite the
+            # night's history; the host edits text instead.
+            return _err(
+                409,
+                "riddle_in_use",
+                "Submissions reference this riddle; edit it instead.",
+            )
         writer.execute("DELETE FROM riddle WHERE id = ?", (riddle_id,))
         log_action(
             writer,

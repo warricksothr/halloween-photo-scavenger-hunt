@@ -19,7 +19,8 @@ from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
 from app import db as db_module
-from app import mod, submissions
+from app import events, mod, players, submissions
+from app.audit import Action
 from app.main import create_app
 from app.sse import SseBroker, _stream
 
@@ -403,6 +404,160 @@ def test_only_db_and_main_touch_the_connections_directly():
         if path.name not in {"db.py", "main.py"}
     }
     assert {name: hits for name, hits in offenders.items() if hits} == {}
+
+
+def test_write_after_a_session_revocation_commits_is_rejected(
+    admin, client, monkeypatch
+):
+    """A write authenticated from the pre-revocation snapshot must not land
+    after the revocation commits (ADR 0013).
+
+    Auth reads the session on the reader, which serves the last committed
+    snapshot: a logout that commits after that read is invisible there. The
+    logout is parked inside its transaction (holding the writer) while a
+    submission authenticates; when logout commits, the submission's writer
+    transaction re-checks the session and refuses the write."""
+    party = mod_party(admin, client)
+
+    revoke_written = threading.Event()
+    release = threading.Event()
+    real_revoke = players.auth.revoke_player_session
+
+    def blocking_revoke(conn, session_id):
+        real_revoke(conn, session_id)
+        revoke_written.set()
+        assert release.wait(timeout=5), "logout was never released"
+
+    monkeypatch.setattr(players.auth, "revoke_player_session", blocking_revoke)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        cookies = dict(client.cookies)
+        async with (
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as revoker,
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as writer,
+        ):
+            logout = asyncio.create_task(revoker.post("/api/logout"))
+            assert await asyncio.to_thread(revoke_written.wait, 5)
+
+            submission = asyncio.create_task(
+                writer.post(
+                    "/api/submissions",
+                    json={
+                        "riddle_id": party["riddle_ids"][0],
+                        "evidence_item_id": party["evidence_id"],
+                    },
+                )
+            )
+            # The submission authenticates against the pre-revocation
+            # snapshot (the reader cannot see the open logout) and then
+            # parks on the writer lock the logout holds.
+            await asyncio.sleep(0.3)
+            assert not submission.done(), "submission did not wait for the writer"
+
+            release.set()
+            logout_response = await logout
+            return logout_response, await submission
+
+    logout_response, submission_response = asyncio.run(interleave())
+
+    assert logout_response.status_code == 200, logout_response.text
+    assert submission_response.status_code == 401, submission_response.text
+    assert (
+        client.app.state.db.execute(
+            "SELECT COUNT(*) FROM submission WHERE submitted_by = ?",
+            (party["player_id"],),
+        ).fetchone()[0]
+        == 0
+    )
+
+
+def test_create_riddle_after_the_event_is_purged_is_not_a_500(
+    admin, client, monkeypatch
+):
+    """The reader serves committed state, so an event can vanish before a
+    dependent write's transaction. ``create_riddle`` re-checks the event on
+    the writer and answers 404, where an unchecked INSERT would fail its
+    foreign key and surface as a server error (ADR 0013)."""
+    event = admin.post("/api/admin/events", json={"name": "Purge Race"}).json()
+    riddle = admin.post(
+        f"/api/admin/events/{event['id']}/riddles",
+        json={"text": "Q1", "sort_order": 1},
+    )
+    assert riddle.status_code == 201, riddle.text
+    assert admin.post(f"/api/admin/events/{event['id']}/open").status_code == 200
+    assert admin.post(f"/api/admin/events/{event['id']}/close").status_code == 200
+
+    purge_written = threading.Event()
+    release_purge = threading.Event()
+    real_log_action = events.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.EVENT_PURGED:
+            purge_written.set()
+            assert release_purge.wait(timeout=5), "purge was never released"
+        return real_log_action(*args, **kwargs)
+
+    reader_read = threading.Event()
+    release_create = threading.Event()
+    gate = {"open": False}
+    real_get_event = events._get_event
+
+    def gated_get_event(conn, event_id):
+        row = real_get_event(conn, event_id)
+        if gate["open"]:
+            gate["open"] = False
+            reader_read.set()
+            assert release_create.wait(timeout=5), "create was never released"
+        return row
+
+    monkeypatch.setattr(events, "log_action", blocking_log_action)
+    monkeypatch.setattr(events, "_get_event", gated_get_event)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        cookies = dict(admin.cookies)
+        async with (
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as purger,
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as creator,
+        ):
+            purge = asyncio.create_task(
+                purger.post(
+                    f"/api/admin/events/{event['id']}/purge",
+                    json={"confirm": event["name"]},
+                )
+            )
+            assert await asyncio.to_thread(purge_written.wait, 5)
+
+            # create_riddle's reader check sees the event (purge is still
+            # uncommitted) and parks before its write transaction.
+            gate["open"] = True
+            create = asyncio.create_task(
+                creator.post(
+                    f"/api/admin/events/{event['id']}/riddles",
+                    json={"text": "Q2", "sort_order": 2},
+                )
+            )
+            assert await asyncio.to_thread(reader_read.wait, 5)
+
+            release_purge.set()
+            purge_response = await purge
+            release_create.set()
+            return purge_response, await create
+
+    purge_response, create_response = asyncio.run(interleave())
+
+    assert purge_response.status_code == 200, purge_response.text
+    assert create_response.status_code == 404, create_response.text
+    assert create_response.json()["error"] == "event_not_found"
 
 
 def test_event_close_and_verdict_leave_one_terminal_submission(admin, client):

@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction, now
-from app.db import locked_transaction, reader
+from app.db import locked_transaction
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -45,47 +45,52 @@ def submit(
     request: Request,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = reader(request)
-
-    event = conn.execute(
-        "SELECT status FROM event WHERE id = ?", (ctx.event_id,)
-    ).fetchone()
-    if event["status"] != "open":
-        return _err(
-            409,
-            "event_not_open",
-            f"The round is {event['status']}; submissions are closed.",
-        )
-
-    riddle = conn.execute(
-        "SELECT 1 FROM riddle WHERE id = ? AND event_id = ?",
-        (body.riddle_id, ctx.event_id),
-    ).fetchone()
-    if riddle is None:
-        return _err(404, "riddle_not_found", "No such riddle on this event.")
-
-    evidence = conn.execute(
-        "SELECT team_id, quarantined FROM evidence_item WHERE id = ?",
-        (body.evidence_item_id,),
-    ).fetchone()
-    if (
-        evidence is None
-        or evidence["team_id"] != ctx.team_id
-        or evidence["quarantined"]
-    ):
-        return _err(404, "evidence_not_found", "No such photo in your drawer.")
-
-    restriction = derive_restriction(conn, ctx.player_id)
-    if restriction.blocks_submissions(now()):
-        return _err(
-            403,
-            "submission_restricted",
-            "Submissions are disabled for the rest of this event.",
-        )
-
     submission_id = ids.new_id()
     try:
         with locked_transaction(request) as writer:
+            # Every check runs on the writer, inside the same transaction as
+            # the INSERT. The reader would serve the last committed snapshot,
+            # so the riddle, the evidence, or the event status could change
+            # between a reader check and this write (ADR 0013); reading here
+            # makes the check-then-insert atomic.
+            event = writer.execute(
+                "SELECT status FROM event WHERE id = ?", (ctx.event_id,)
+            ).fetchone()
+            if event is None:
+                return _err(404, "event_not_found", "No such event.")
+            if event["status"] != "open":
+                return _err(
+                    409,
+                    "event_not_open",
+                    f"The round is {event['status']}; submissions are closed.",
+                )
+
+            riddle = writer.execute(
+                "SELECT 1 FROM riddle WHERE id = ? AND event_id = ?",
+                (body.riddle_id, ctx.event_id),
+            ).fetchone()
+            if riddle is None:
+                return _err(404, "riddle_not_found", "No such riddle on this event.")
+
+            evidence = writer.execute(
+                "SELECT team_id, quarantined FROM evidence_item WHERE id = ?",
+                (body.evidence_item_id,),
+            ).fetchone()
+            if (
+                evidence is None
+                or evidence["team_id"] != ctx.team_id
+                or evidence["quarantined"]
+            ):
+                return _err(404, "evidence_not_found", "No such photo in your drawer.")
+
+            restriction = derive_restriction(writer, ctx.player_id)
+            if restriction.blocks_submissions(now()):
+                return _err(
+                    403,
+                    "submission_restricted",
+                    "Submissions are disabled for the rest of this event.",
+                )
+
             writer.execute(
                 "INSERT INTO submission (id, riddle_id, team_id, submitted_by,"
                 " evidence_item_id, created_at)"
@@ -112,6 +117,9 @@ def submit(
                     "evidence_item_id": body.evidence_item_id,
                 },
             )
+            row = writer.execute(
+                "SELECT * FROM submission WHERE id = ?", (submission_id,)
+            ).fetchone()
     except sqlite3.IntegrityError:
         # The partial unique index fired: this team already has a PENDING
         # submission for this riddle (double-tap or two devices racing).
@@ -131,9 +139,6 @@ def submit(
         to="moderators",
     )
 
-    row = conn.execute(
-        "SELECT * FROM submission WHERE id = ?", (submission_id,)
-    ).fetchone()
     return {
         "id": row["id"],
         "riddle_id": row["riddle_id"],

@@ -66,10 +66,33 @@ def locked_transaction(request: Request) -> Iterator[sqlite3.Connection]:
     the transaction makes each request's commit boundary its own. The lock
     is reentrant, so a handler that already holds it for the full request
     (``hold_request_lock``) nests safely.
+
+    The request's session is re-checked on the writer before the caller
+    can mutate (``_revalidate_session``), because auth read it on the
+    reader's committed snapshot (ADR 0013).
     """
     conn: sqlite3.Connection = request.app.state.db
     with request.app.state.db_lock, conn:
+        _revalidate_session(request, conn)
         yield conn
+
+
+def _revalidate_session(request: Request, conn: sqlite3.Connection) -> None:
+    """Re-run the request's session check on the writer.
+
+    Auth resolves the session on the reader, which serves the last
+    committed snapshot: a revocation (logout, invite redeem, ban) that
+    commits between that read and a handler's write would not be seen, so
+    a request could write after its session was revoked. ``auth`` leaves
+    its check on ``request.state`` and the writer transaction repeats it.
+    The guard raises ``HTTPException(401)``, which FastAPI turns into the
+    same response a stale cookie always got. A handler that also holds
+    ``hold_request_lock`` re-checks the same row needlessly, which costs
+    one SELECT and never a false rejection.
+    """
+    guard = getattr(request.state, "session_guard", None)
+    if guard is not None:
+        guard(conn)
 
 
 def reader(request: Request) -> sqlite3.Connection:
