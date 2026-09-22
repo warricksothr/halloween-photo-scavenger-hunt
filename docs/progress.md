@@ -39,6 +39,19 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Every write transaction now holds the connection lock.**
+  `server/app/db.py` gains `locked_transaction(request)`, which acquires
+  `app.state.db_lock` around `with conn:`. Every mutation handler plus the
+  throttled `last_seen_at` writes in `current_player`/`current_moderator` and
+  `patch_event`'s bare commit now use it, so a request's commit can no longer
+  publish a peer's mutation without its audit row (ADR 0004). The three
+  check-then-act handlers keep their full-request `hold_request_lock`; reads
+  stay unlocked under WAL. A new regression test parks a submission between its
+  INSERT and `log_action`, runs an interleaved auth read, and asserts the
+  mutation is invisible until both commit; it fails on the unlocked code. ADR
+  0011 records the decision. The quality gate passes 141 tests with 94.52%
+  coverage.
+
 - **2026-09-10 — Shared fast quality gate and CI workflow added.**
   `scripts/check-quality.sh` installs `server/uv.lock` with `uv sync --locked`,
   runs the server and deployment checks, installs `web/package-lock.json` with

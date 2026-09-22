@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
+from app.db import locked_transaction
 
 router = APIRouter(prefix="/api", tags=["player"])
 
@@ -56,7 +57,7 @@ def join(join_code: str, body: JoinBody, request: Request):
     now = int(time.time())
     team_id, player_id = ids.new_id(), ids.new_id()
     user_agent = request.headers.get("user-agent", "")
-    with conn:
+    with locked_transaction(request):
         # Team-of-one first: player.team_id is NOT NULL, so the team row
         # must exist before the player references it. Unnamed in MVP
         # (name arrives with the teams stretch goal).
@@ -121,7 +122,7 @@ def join(join_code: str, body: JoinBody, request: Request):
 @router.post("/logout")
 def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     conn: sqlite3.Connection = request.app.state.db
-    with conn:
+    with locked_transaction(request):
         auth.revoke_player_session(conn, ctx.session_id)
         log_action(
             conn,
@@ -155,7 +156,7 @@ def notice_ack(
     restriction = derive_restriction(conn, ctx.player_id)
     if restriction.pending_notice_strike_id is None:
         return {"ok": True}
-    with conn:
+    with locked_transaction(request):
         log_action(
             conn,
             event_id=ctx.event_id,

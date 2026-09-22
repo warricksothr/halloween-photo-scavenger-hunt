@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
-from app.db import hold_request_lock
+from app.db import hold_request_lock, locked_transaction
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api", tags=["teams"])
@@ -134,7 +134,7 @@ def rename_team(
     ]
     if body.name == old:
         return {"ok": True, "name": old}
-    with conn:
+    with locked_transaction(request):
         conn.execute("UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id))
         log_action(
             conn,
@@ -165,7 +165,7 @@ def create_invite(
     now = int(time.time())
     token = ids.new_code(10)
     expires_at = now + INVITE_TTL_SECONDS
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "INSERT INTO team_invite (token, team_id, created_by,"
             " expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -202,7 +202,7 @@ def revoke_invite(
         return _err(404, "not_found", "No such invite.")
     if invite["redeemed_by"] is not None or invite["revoked_at"] is not None:
         return _err(409, "invite_closed", "That invite is already used or revoked.")
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "UPDATE team_invite SET revoked_at = ? WHERE token = ?",
             (int(time.time()), token),
@@ -350,7 +350,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
         switched_from = player_ctx.team_id
         player_id = player_ctx.player_id
 
-    with request.app.state.db_lock, conn:
+    with locked_transaction(request):
         if joining_fresh:
             conn.execute(
                 "INSERT INTO player (id, team_id, display_name, created_at)"

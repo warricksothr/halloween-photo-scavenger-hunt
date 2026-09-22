@@ -31,6 +31,7 @@ from app import auth, ids
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.conduct import now as conduct_now
+from app.db import locked_transaction
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -138,7 +139,7 @@ async def upload(
     (photos_dir / "originals").mkdir(parents=True, exist_ok=True)
 
     now = int(time.time())
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
             " photo_path, phash, created_at)"
