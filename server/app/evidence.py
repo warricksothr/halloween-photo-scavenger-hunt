@@ -31,7 +31,7 @@ from app import auth, ids
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.conduct import now as conduct_now
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -87,7 +87,7 @@ async def upload(
     riddle_id: str | None = None,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
 
     # Strike ladder gate (derived state, ADR 0001): level 2 blocks until
     # cooldown_until; level 3 blocks for the rest of the event.
@@ -139,8 +139,8 @@ async def upload(
     (photos_dir / "originals").mkdir(parents=True, exist_ok=True)
 
     now = int(time.time())
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
             " photo_path, phash, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -155,7 +155,7 @@ async def upload(
             ),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -174,7 +174,7 @@ async def upload(
         # scale, spec). A flag is an audit row only; moderators see it
         # on the queue from increment 7 and resolve it there. The upload
         # itself always succeeds — the player did nothing actionable.
-        other_rows = conn.execute(
+        other_rows = writer.execute(
             "SELECT e.id, e.phash, e.team_id FROM evidence_item e"
             " JOIN team t ON t.id = e.team_id"
             " WHERE t.event_id = ? AND e.team_id != ? AND e.id != ?",
@@ -184,7 +184,7 @@ async def upload(
             distance = _hamming(processed.phash, other["phash"])
             if distance <= PHASH_FLAG_THRESHOLD:
                 log_action(
-                    conn,
+                    writer,
                     event_id=ctx.event_id,
                     actor_type=ActorType.SYSTEM,
                     actor_id=None,
@@ -213,7 +213,7 @@ async def upload(
 
 @router.get("")
 def drawer(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     # Team-scoped from day one (design.md): the drawer IS the team's
     # shared pool — a multi-member team sees every member's photos,
     # each labeled with who shot it.
@@ -234,7 +234,7 @@ def photo(
     request: Request,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = conn.execute(
         "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
     ).fetchone()

@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
-from app.db import hold_request_lock, locked_transaction
+from app.db import hold_request_lock, locked_transaction, reader
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -116,9 +116,11 @@ class EventPatch(BaseModel):
 
 @router.get("/events")
 def list_events(request: Request, _: str = Depends(auth.require_admin)):
-    rows = request.app.state.db.execute(
-        "SELECT * FROM event ORDER BY created_at DESC"
-    ).fetchall()
+    rows = (
+        reader(request)
+        .execute("SELECT * FROM event ORDER BY created_at DESC")
+        .fetchall()
+    )
     return [_event_json(r) for r in rows]
 
 
@@ -126,12 +128,12 @@ def list_events(request: Request, _: str = Depends(auth.require_admin)):
 def create_event(
     body: EventCreate, request: Request, _: str = Depends(auth.require_admin)
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     now = int(time.time())
     event_id = ids.new_id()
     join_code, mod_code = ids.new_code(), ids.new_code()
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "INSERT INTO event (id, name, theme, leaderboard_visibility,"
             " team_size_limit, join_code, mod_code, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -147,7 +149,7 @@ def create_event(
             ),
         )
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -172,7 +174,7 @@ def patch_event(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -182,8 +184,8 @@ def patch_event(
         # A locked transaction, not a bare execute + commit: an
         # unlocked commit here could land mid-mutation in another
         # handler (ADR 0004).
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 f"UPDATE event SET {assignments} WHERE id = ?",
                 (*updates.values(), event_id),
             )
@@ -192,7 +194,7 @@ def patch_event(
 
 @router.post("/events/{event_id}/open")
 def open_event(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -213,13 +215,13 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
             409, "no_riddles", "Add at least one riddle before opening the round."
         )
     now = int(time.time())
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "UPDATE event SET status = 'open', opened_at = ? WHERE id = ?",
             (now, event_id),
         )
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -240,7 +242,7 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
     dependencies=[Depends(hold_request_lock)],
 )
 def close_event(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -251,24 +253,24 @@ def close_event(event_id: str, request: Request, _: str = Depends(auth.require_a
             f"Event is {row['status']}; only an open event can close.",
         )
     now = int(time.time())
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
         # One transaction (spec): flip status, stamp closed_at, expire
         # pending submissions, log with the expired count. Pending subs
         # become EXPIRED — moderators can no longer race verdicts in
         # after close because the conditional verdict UPDATE matches
         # only status='pending' rows (ADR 0002).
-        conn.execute(
+        writer.execute(
             "UPDATE event SET status = 'closed', closed_at = ? WHERE id = ?",
             (now, event_id),
         )
-        cur = conn.execute(
+        cur = writer.execute(
             "UPDATE submission SET status = 'expired'"
             " WHERE status = 'pending' AND riddle_id IN"
             "   (SELECT id FROM riddle WHERE event_id = ?)",
             (event_id,),
         )
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -308,7 +310,7 @@ def reverse_strike(
     not the evidence. The flagged photo stays out of the drawer — the
     dispute was about the strike, and a host who also wants the photo
     back does that socially, not in data."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     strike = conn.execute(
         "SELECT id, player_id, event_id, level, reversed_at FROM strike WHERE id = ?",
         (strike_id,),
@@ -317,15 +319,15 @@ def reverse_strike(
         return _err(404, "not_found", "No such strike.")
 
     now = int(time.time())
-    with locked_transaction(request):
-        cur = conn.execute(
+    with locked_transaction(request) as writer:
+        cur = writer.execute(
             "UPDATE strike SET reversed_at = ? WHERE id = ? AND reversed_at IS NULL",
             (now, strike_id),
         )
         if cur.rowcount == 0:
             return _err(409, "already_reversed", "That strike was already reversed.")
         log_action(
-            conn,
+            writer,
             event_id=strike["event_id"],
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -383,7 +385,7 @@ def _get_riddle(
 
 @router.get("/events/{event_id}/riddles")
 def list_riddles(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     rows = conn.execute(
@@ -400,18 +402,18 @@ def create_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     riddle_id = ids.new_id()
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "INSERT INTO riddle (id, event_id, text, sort_order, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
             (riddle_id, event_id, body.text, body.sort_order, int(time.time())),
         )
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -431,22 +433,22 @@ def patch_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = _get_riddle(conn, event_id, riddle_id)
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
     updates = body.model_dump(exclude_none=True)
     if updates:
-        with locked_transaction(request):
+        with locked_transaction(request) as writer:
             assignments = ", ".join(f"{k} = ?" for k in updates)
-            conn.execute(
+            writer.execute(
                 f"UPDATE riddle SET {assignments} WHERE id = ?",
                 (*updates.values(), riddle_id),
             )
             # Before/after in details: riddle rows carry no updated_at,
             # because the audit log *is* the history (schema.md).
             log_action(
-                conn,
+                writer,
                 event_id=event_id,
                 actor_type=ActorType.ADMIN,
                 actor_id=None,
@@ -472,7 +474,7 @@ def delete_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = _get_riddle(conn, event_id, riddle_id)
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
@@ -485,10 +487,10 @@ def delete_riddle(
         return _err(
             409, "riddle_in_use", "Submissions reference this riddle; edit it instead."
         )
-    with locked_transaction(request):
-        conn.execute("DELETE FROM riddle WHERE id = ?", (riddle_id,))
+    with locked_transaction(request) as writer:
+        writer.execute("DELETE FROM riddle WHERE id = ?", (riddle_id,))
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -529,7 +531,7 @@ def purge_event(
     The event.purged audit row is written (with the pre-delete counts,
     audit-actions.md) and then deleted with the rest of the log — the
     purge is total; the counts also come back in the response."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = _get_event(conn, event_id)
     if event is None:
         return _err(404, "event_not_found", "No such event.")
@@ -556,11 +558,11 @@ def purge_event(
         "evidence": len(evidence_rows),
     }
 
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
         # The final audit row: the purge records what it destroyed,
         # then disappears with the event's log.
         log_action(
-            conn,
+            writer,
             event_id=event_id,
             actor_type=ActorType.ADMIN,
             actor_id=None,
@@ -572,18 +574,18 @@ def purge_event(
         sub_scope = (
             "submission WHERE riddle_id IN (SELECT id FROM riddle WHERE event_id = ?)"
         )
-        conn.execute(
+        writer.execute(
             "DELETE FROM verdict WHERE submission_id IN"
             " (SELECT id FROM %s)" % sub_scope,
             (event_id,),
         )
-        conn.execute("DELETE FROM strike WHERE event_id = ?", (event_id,))
-        conn.execute("DELETE FROM %s" % sub_scope, (event_id,))
-        conn.execute("DELETE FROM audit_event WHERE event_id = ?", (event_id,))
+        writer.execute("DELETE FROM strike WHERE event_id = ?", (event_id,))
+        writer.execute("DELETE FROM %s" % sub_scope, (event_id,))
+        writer.execute("DELETE FROM audit_event WHERE event_id = ?", (event_id,))
         # The event row: cascades sweep riddle, team (and through it
         # player, session, evidence_item), moderator (+ sessions), and
         # team_invite.
-        conn.execute("DELETE FROM event WHERE id = ?", (event_id,))
+        writer.execute("DELETE FROM event WHERE id = ?", (event_id,))
 
     # After the commit: unlink the photo files. A missing file is not
     # an error — the rows are gone either way (a partial upload failure

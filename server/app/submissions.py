@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction, now
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -45,7 +45,7 @@ def submit(
     request: Request,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
 
     event = conn.execute(
         "SELECT status FROM event WHERE id = ?", (ctx.event_id,)
@@ -85,8 +85,8 @@ def submit(
 
     submission_id = ids.new_id()
     try:
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 "INSERT INTO submission (id, riddle_id, team_id, submitted_by,"
                 " evidence_item_id, created_at)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
@@ -100,7 +100,7 @@ def submit(
                 ),
             )
             log_action(
-                conn,
+                writer,
                 event_id=ctx.event_id,
                 actor_type=ActorType.PLAYER,
                 actor_id=ctx.player_id,

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request
 
 from app import ids
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 
 COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
@@ -150,7 +150,7 @@ def current_player(request: Request) -> PlayerContext | None:
     token = request.cookies.get(PLAYER_COOKIE_NAME)
     if not token:
         return None
-    conn: sqlite3.Connection = request.app.state.db
+    conn = reader(request)
     row = conn.execute(
         "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
         "       p.id AS player_id, p.display_name, p.team_id, t.event_id"
@@ -166,8 +166,8 @@ def current_player(request: Request) -> PlayerContext | None:
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         # Locked: this write must never commit another request's open
         # transaction (ADR 0004 atomicity — see locked_transaction).
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 "UPDATE session SET last_seen_at = ? WHERE id = ?",
                 (now, row["session_id"]),
             )
@@ -239,7 +239,7 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     token = request.cookies.get(MOD_COOKIE_NAME)
     if not token:
         return None
-    conn: sqlite3.Connection = request.app.state.db
+    conn = reader(request)
     row = conn.execute(
         "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
         "       m.id AS moderator_id, m.event_id, m.label"
@@ -254,8 +254,8 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         # Same lock rule as current_player: never commit a peer's
         # in-flight mutation (ADR 0004).
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
                 (now, row["session_id"]),
             )

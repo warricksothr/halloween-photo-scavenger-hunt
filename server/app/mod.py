@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
-from app.db import hold_request_lock, locked_transaction
+from app.db import hold_request_lock, locked_transaction, reader
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/mod", tags=["moderation"])
@@ -41,7 +41,7 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 
 @router.post("/join/{mod_code}", status_code=201)
 def join(mod_code: str, request: Request):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE mod_code = ?", (mod_code,)
     ).fetchone()
@@ -54,13 +54,13 @@ def join(mod_code: str, request: Request):
 
     now = int(time.time())
     moderator_id = ids.new_id()
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "INSERT INTO moderator (id, event_id, label, created_at)"
             " VALUES (?, ?, ?, ?)",
             (moderator_id, event["id"], f"moderator-{moderator_id[:4]}", now),
         )
-        token = auth.issue_moderator_session(conn, moderator_id=moderator_id)
+        token = auth.issue_moderator_session(writer, moderator_id=moderator_id)
         # No audit row for the join itself: audit-actions.md has no
         # moderator.joined — moderator presence is not a state mutation
         # the recap or forensics need (the verdicts they issue are).
@@ -99,7 +99,7 @@ def mod_state(
     """The moderator's boot probe: the client learns its role by trying
     the player snapshot first (401 for a mod-only cookie) and then this
     — one cheap endpoint rather than an ambiguous 401 on the queue."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT id, name, status, theme FROM event WHERE id = ?",
         (ctx.event_id,),
@@ -140,7 +140,7 @@ def queue(
     """Pending submissions, oldest first (design.md), each with photo
     URL, player, riddle, claim state, and any open duplicate flag on
     the submitted evidence."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     rows = conn.execute(
         "SELECT s.id, s.created_at, s.claimed_by, s.team_id,"
         "       r.id AS riddle_id, r.text AS riddle_text,"
@@ -194,9 +194,8 @@ def claim(
     """Soft-claim a pending submission (ADR 0002). Advisory only: it
     never blocks another moderator, is overwritten by the latest viewer,
     and is never audited (audit-actions.md: high-churn advisory)."""
-    conn: sqlite3.Connection = request.app.state.db
-    with locked_transaction(request):
-        cur = conn.execute(
+    with locked_transaction(request) as writer:
+        cur = writer.execute(
             "UPDATE submission SET claimed_by = ?, claimed_at = ?"
             " WHERE id = ? AND status = 'pending'"
             "   AND riddle_id IN (SELECT id FROM riddle WHERE event_id = ?)",
@@ -231,7 +230,7 @@ def verdict(
             422, "bad_verdict", f"Verdict must be one of {sorted(GAME_VERDICTS)}."
         )
 
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     sub = conn.execute(
         "SELECT s.id, s.status, s.team_id, s.riddle_id FROM submission s"
         " JOIN riddle r ON r.id = s.riddle_id"
@@ -242,8 +241,8 @@ def verdict(
         return _err(404, "not_found", "No such submission.")
 
     now = int(time.time())
-    with locked_transaction(request):
-        cur = conn.execute(
+    with locked_transaction(request) as writer:
+        cur = writer.execute(
             "UPDATE submission SET status = ? WHERE id = ? AND status = 'pending'",
             (body.verdict, submission_id),
         )
@@ -253,7 +252,7 @@ def verdict(
             return _err(
                 409, "already_resolved", "That submission was already resolved."
             )
-        conn.execute(
+        writer.execute(
             "INSERT INTO verdict (id, submission_id, moderator_id,"
             " verdict, flavor_text, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -267,7 +266,7 @@ def verdict(
             ),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,
@@ -343,7 +342,7 @@ def inappropriate(
     player's photos would otherwise both read the same level and write
     the same rung — the conditional UPDATE is per-submission, so it
     cannot catch that, and the ladder would skip."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     sub = conn.execute(
         "SELECT s.id, s.status, s.team_id, s.riddle_id, s.submitted_by,"
         "       s.evidence_item_id FROM submission s"
@@ -357,14 +356,14 @@ def inappropriate(
     player_id = sub["submitted_by"]
     strike_id = ids.new_id()
     now = int(time.time())
-    with locked_transaction(request):
-        level = min(derive_restriction(conn, player_id).level + 1, 3)
+    with locked_transaction(request) as writer:
+        level = min(derive_restriction(writer, player_id).level + 1, 3)
         cooldown_until = None
         if level == 2:
             minutes = body.cooldown_minutes or DEFAULT_COOLDOWN_MINUTES
             cooldown_until = now + minutes * 60
 
-        cur = conn.execute(
+        cur = writer.execute(
             "UPDATE submission SET status = 'inappropriate'"
             " WHERE id = ? AND status = 'pending'",
             (submission_id,),
@@ -377,17 +376,17 @@ def inappropriate(
             return _err(
                 409, "already_resolved", "That submission was already resolved."
             )
-        conn.execute(
+        writer.execute(
             "INSERT INTO verdict (id, submission_id, moderator_id,"
             " verdict, flavor_text, created_at)"
             " VALUES (?, ?, ?, 'inappropriate', '', ?)",
             (ids.new_id(), submission_id, ctx.moderator_id, now),
         )
-        conn.execute(
+        writer.execute(
             "UPDATE evidence_item SET quarantined = 1 WHERE id = ?",
             (sub["evidence_item_id"],),
         )
-        conn.execute(
+        writer.execute(
             "INSERT INTO strike (id, player_id, event_id, level,"
             " submission_id, issued_by, note, cooldown_until, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -404,7 +403,7 @@ def inappropriate(
             ),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,
@@ -414,7 +413,7 @@ def inappropriate(
             details={"verdict": "inappropriate", "flavor_text": ""},
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,
@@ -424,7 +423,7 @@ def inappropriate(
             details={"submission_id": submission_id},
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,
@@ -486,7 +485,7 @@ def evidence_photo(
     """Moderator photo access (api.md: derivative only; owner team or
     moderator). The queue needs to show any team's photo, including
     quarantined items — moderators are exactly who quarantine is FOR."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = conn.execute(
         "SELECT e.photo_path FROM evidence_item e"
         " JOIN team t ON t.id = e.team_id"
@@ -528,15 +527,15 @@ def resolve_flag(
             422, "bad_resolution", "Resolution must be 'cleared' or 'confirmed'."
         )
 
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     # The flag must exist, belong to this event, and still be open.
     open_flags = _open_flags(conn, ctx.event_id)
     if evidence_id not in open_flags:
         return _err(404, "not_found", "No open flag for that evidence.")
 
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,
@@ -561,7 +560,7 @@ def player_history(
     (design.md): their submissions with verdicts, their strikes, and
     their sessions (UA + last_seen — the multi-teaming heuristic from
     api.md). Read-only; reads are never audited (ADR 0004)."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     player = conn.execute(
         "SELECT p.id, p.display_name, p.created_at, p.team_id"
         " FROM player p JOIN team t ON t.id = p.team_id"
@@ -631,7 +630,7 @@ def mod_teams(
     (device label + last-seen, the multi-teaming heuristics), pending
     invites, and the effective size limit. Read-only — never audited
     (ADR 0004)."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     teams = conn.execute(
         "SELECT t.id, t.name, t.size_limit, e.team_size_limit"
         " FROM team t JOIN event e ON e.id = t.event_id"
@@ -706,7 +705,7 @@ def remove_member(
     empty (score stays queryable — verified submissions still
     reference it). Players never remove members; the audit actor is
     the moderator."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = conn.execute(
         "SELECT p.team_id FROM player p JOIN team t ON t.id = p.team_id"
         " WHERE p.id = ? AND t.event_id = ?",
@@ -718,22 +717,22 @@ def remove_member(
         return _err(404, "not_found", "That player is not on that team.")
 
     now = int(time.time())
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
         new_team_id = ids.new_id()
-        conn.execute(
+        writer.execute(
             "INSERT INTO team (id, event_id, created_at) VALUES (?, ?, ?)",
             (new_team_id, ctx.event_id, now),
         )
-        conn.execute(
+        writer.execute(
             "UPDATE player SET team_id = ? WHERE id = ?", (new_team_id, player_id)
         )
-        conn.execute(
+        writer.execute(
             "UPDATE session SET revoked_at = ?"
             " WHERE player_id = ? AND revoked_at IS NULL",
             (now, player_id),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.MODERATOR,
             actor_id=ctx.moderator_id,

@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from app import auth, sse
+from app.db import reader
 
 router = APIRouter(prefix="/api", tags=["leaderboard"])
 
@@ -82,7 +83,7 @@ def leaderboard(request: Request):
     event_id = mod.event_id if mod else player.event_id
     team_id = None if mod else player.team_id
 
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT status, leaderboard_visibility FROM event WHERE id = ?",
         (event_id,),
@@ -122,7 +123,7 @@ def publish_leaderboard(
     sse.publish). ``force`` bypasses the throttle for the moments that
     must land immediately — event open (standings appear) and close
     (final reveal)."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT status, leaderboard_visibility FROM event WHERE id = ?",
         (event_id,),
@@ -285,7 +286,7 @@ def recap(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
     """The final standings + the night's timeline (mock: "Case Closed"
     banner + intel trail). Players only, and only after close — a live
     recap would spoil the final-reveal toggle it shares the log with."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT status, name FROM event WHERE id = ?", (ctx.event_id,)
     ).fetchone()
@@ -315,7 +316,7 @@ def mod_audit(
     included. This is the moderators' side of the conduct wall — the
     player recap is a strict subset. Read-only; reads are never
     audited (ADR 0004)."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     rows = conn.execute(
         "SELECT id, actor_type, actor_id, action, entity_type,"
         "       entity_id, details, created_at"
