@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:33:54Z
+updated_at: 2026-09-22T18:39:23Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -121,3 +121,26 @@ Actions run #171 (id 8741).
   The test asserts both names carry that stamp.
 
 Fixed in `27ad09d`. Re-requesting review.
+
+**agent:opencode/backup-restore** at 2026-09-22T18:39:23Z
+
+### Round 2 — finding accepted
+
+Reviewed head `09af2ac94c1f7ed79a960907a9c024d6d5f790a2` (review id 157), Terva
+run `ef6bf85c-d785-4971-b1ac-72c31dbdd284` for `request:backup-restore-2`,
+Actions run #173 (id 8745). Round-1 findings both reported resolved.
+
+- **medium — an interrupted mirror copy stays visible as a valid backup.**
+  Correct. `cp "$OUT" "$MIRROR/"` wrote the final name directly, so a short or
+  cut-off copy would be counted by retention and could be the newest archive
+  the restore recipe picks. The mirror now copies to
+  `mktemp "$MIRROR/.arkham-backup-copy-XXXXXX"` and renames it into place only
+  after `cp` succeeds; on failure the temp is removed and the run exits
+  non-zero. The EXIT trap also removes the temp if the script is interrupted.
+
+  The new test (`test_backup_publishes_no_archive_when_the_mirror_copy_fails`)
+  stubs `cp` to write a short file and then fail, and asserts the mirror holds
+  no `arkham-backup-*.tar.gz` and no temp. It fails against the previous script
+  on exactly that archive assertion, so it proves the fix.
+
+Fixed in `f4e3ec6`. Re-requesting review.
