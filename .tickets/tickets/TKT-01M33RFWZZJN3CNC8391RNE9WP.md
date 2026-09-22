@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:54:08Z
+updated_at: 2026-09-22T18:55:51Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,9 +43,9 @@ backup.sh's header restores into <repo-root>, but the app reads <repo-root>/data
 
 ## Acceptance criteria
 
-- [ ] The restore instructions match RUNBOOK section 1 and restore into data/.
-- [ ] Backups are copied off-host and pruned to a bounded count.
-- [ ] Archive names cannot collide within one second.
+- [x] The restore instructions match RUNBOOK section 1 and restore into data/.
+- [x] Backups are copied off-host and pruned to a bounded count.
+- [x] Archive names cannot collide within one second.
 
 ## Implementation plan
 
@@ -247,3 +247,31 @@ is now guarded.
 
 Gate: `bash scripts/check-quality.sh` exit 0 — 182 backend tests, Ruff clean,
 19 deploy tests, 36 frontend tests, production build.
+
+## Summary
+
+Landed on branch `t3code/backup-restore`, PR #12, head `1981bab`, base `a44be87`.
+
+`deploy/backup.sh` now extracts the restore recipe into `<repo-root>/data` and
+points at RUNBOOK §1, matching what the app reads. Backups copy to the optional
+`ARKHAM_BACKUP_MIRROR` directory before either prune and retention keeps the
+newest `ARKHAM_BACKUP_KEEP` (default 14) in both the local destination and the
+mirror. Archive names are reserved with `mktemp --suffix=.tar.gz` from a
+`mktemp -d` work directory, so two runs in the same second cannot collide, and
+the mirror copy is published with a temp name plus `mv` so an interrupted copy
+never leaves a truncated archive under a final name. ADR 0014 records the
+mirror-directory choice and the naming, publish, and retention rules.
+
+All three acceptance criteria are ticked. `bash scripts/check-quality.sh` exits
+0: 182 backend tests at the coverage floor, Ruff clean, 19 deployment tests, 36
+frontend tests, production build.
+
+Terva reviewed the head seven times. Rounds 1-6 findings were all accepted and
+fixed (single-archive restore recipe, pinned-clock collision test, atomic mirror
+publish, error-path regression tests, decimal `KEEP`, and a test that actually
+reserves the archive name). Round 7 is clean: PR comment 9753
+(`<!-- terva-clean:v1 -->`) for head `1981bab`, base `a44be87`, run
+`0bde74eb-cf11-4d6c-9f7d-50a6339b9903`, Actions run #186 (id 8764).
+
+The ticket stays open pending merge authorization; the progress entry and the
+move to done land after the merge.
