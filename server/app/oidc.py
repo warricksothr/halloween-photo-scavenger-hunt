@@ -45,6 +45,7 @@ from http.cookies import SimpleCookie
 from typing import Any
 
 import httpx2
+from authlib.integrations.base_client import OAuthError
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -401,11 +402,15 @@ def _disabled() -> JSONResponse:
     return _err(503, "oidc_disabled", "Single sign-on is not configured.")
 
 
-def _failure(status: int, code: str, message: str) -> JSONResponse:
+def _failure(
+    status: int, code: str, message: str, *, clear_transaction: bool = True
+) -> JSONResponse:
     response = _err(status, code, message)
-    # The transaction is single-use: whatever happened, the cookie must not
-    # survive to be replayed.
-    response.delete_cookie(TXN_COOKIE_NAME, path="/")
+    # A correlated attempt is single-use: whatever happened, the cookie must
+    # not survive to be replayed. An uncorrelated one must not touch it —
+    # otherwise a cross-site navigation could cancel a login in flight.
+    if clear_transaction:
+        response.delete_cookie(TXN_COOKIE_NAME, path="/")
     return response
 
 
@@ -528,9 +533,6 @@ async def callback(
     if provider is None:
         return _disabled()
 
-    if error:
-        return _failure(401, "oidc_denied", "Sign-in was cancelled or refused.")
-
     txn = _decode_txn(
         request.app.state.csrf_secret, request.cookies.get(TXN_COOKIE_NAME)
     )
@@ -541,14 +543,27 @@ async def callback(
     expected_state = txn.get("state")
     nonce = txn.get("nonce")
     verifier = txn.get("verifier")
+    # Correlate before acting on anything the provider sent. An error
+    # callback carries state too, and an uncorrelated one must not be able
+    # to clear the transaction cookie of a login already in flight.
     if (
-        not code
-        or not state
+        not state
         or not isinstance(expected_state, str)
         or not isinstance(nonce, str)
         or not isinstance(verifier, str)
         or not _same(state, expected_state)
     ):
+        return _failure(
+            401,
+            "oidc_bad_state",
+            "The sign-in attempt could not be verified.",
+            clear_transaction=False,
+        )
+
+    if error:
+        return _failure(401, "oidc_denied", "Sign-in was cancelled or refused.")
+
+    if not code:
         return _failure(
             401, "oidc_bad_state", "The sign-in attempt could not be verified."
         )
@@ -565,6 +580,14 @@ async def callback(
                 "oidc_bad_token", "The identity provider returned no identity token."
             )
         claims = await provider.claims_from(id_token, nonce=nonce)
+    except OAuthError as exc:
+        # A 4xx from the token endpoint (invalid_grant, a reused code) is a
+        # rejected sign-in, not a provider outage.
+        logger.warning(
+            "oidc token exchange rejected",
+            extra={"event": "oidc.token_rejected", "reason": exc.error},
+        )
+        return _failure(401, "oidc_bad_token", "The sign-in could not be completed.")
     except OidcFlowError as exc:
         logger.warning(
             "oidc callback rejected",

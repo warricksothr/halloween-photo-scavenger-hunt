@@ -62,6 +62,7 @@ class StubIdp:
         self.discovery_payload: dict[str, object] | None = None
         self.jwks_payload: dict[str, object] | None = None
         self.token_status = 200
+        self.token_error = "server_error"
         self.token_payload: dict[str, object] | None = None
         self.transport = httpx2.MockTransport(self._handle)
 
@@ -113,7 +114,7 @@ class StubIdp:
         if path == urlparse(TOKEN_ENDPOINT).path:
             if self.token_status != 200:
                 return httpx2.Response(
-                    self.token_status, json={"error": "server_error"}
+                    self.token_status, json={"error": self.token_error}
                 )
             body = (
                 self.token_payload
@@ -260,6 +261,17 @@ def test_bad_state_is_rejected(oidc_client, stub):
     assert oidc_client.cookies.get(auth.COOKIE_NAME) is None
 
 
+def test_missing_code_with_valid_state_is_rejected(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    response = oidc_client.get(
+        f"/api/auth/oidc/callback?state={query['state'][0]}",
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_state"
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
+
+
 def test_missing_transaction_cookie_is_rejected(oidc_client, stub):
     _, query = start_login(oidc_client)
     oidc_client.cookies.delete(oidc.TXN_COOKIE_NAME)
@@ -328,11 +340,47 @@ def test_provider_outage_during_callback_is_502(oidc_client, stub):
 
 
 def test_denied_callback_is_refused(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    response = oidc_client.get(
+        f"/api/auth/oidc/callback?error=access_denied&state={query['state'][0]}",
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_denied"
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
+
+
+def test_error_callback_without_state_is_rejected(oidc_client, stub):
+    start_login(oidc_client)
     response = oidc_client.get(
         "/api/auth/oidc/callback?error=access_denied", follow_redirects=False
     )
     assert response.status_code == 401
-    assert response.json()["error"] == "oidc_denied"
+    assert response.json()["error"] == "oidc_bad_state"
+    # An uncorrelated request must not be able to cancel a login in flight.
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is not None
+
+
+def test_error_callback_with_wrong_state_is_rejected(oidc_client, stub):
+    start_login(oidc_client)
+    response = oidc_client.get(
+        "/api/auth/oidc/callback?error=access_denied&state=not-the-state",
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_state"
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is not None
+
+
+def test_token_endpoint_protocol_error_is_401(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    stub.nonce = query["nonce"][0]
+    stub.token_status = 400
+    stub.token_error = "invalid_grant"
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_token"
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
 
 
 def test_missing_id_token_is_rejected(oidc_client, stub):
@@ -410,14 +458,15 @@ def test_metadata_and_keys_are_cached_between_flows(oidc_client, stub):
     )
 
 
-def test_failed_callback_clears_the_transaction_cookie(oidc_client, stub):
+def test_uncorrelated_callback_leaves_the_transaction_cookie(oidc_client, stub):
     _, query = start_login(oidc_client)
     response = oidc_client.get(
         "/api/auth/oidc/callback?code=auth-code&state=wrong",
         follow_redirects=False,
     )
     assert response.status_code == 401
-    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
+    assert response.json()["error"] == "oidc_bad_state"
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is not None
 
 
 @pytest.mark.parametrize(
