@@ -23,16 +23,29 @@ curl -s https://<host>/api/health     # {"status":"ok",...}
 
 A backup you have never restored is a rumor, not a backup.
 
+Point the script at a second disk first — an archive beside the data is not a
+backup. Export these (or put them in `~/.config/arkham-hunt.env`):
+
 ```sh
-~/arkham/deploy/backup.sh                      # → backups/arkham-backup-<stamp>.tar.gz
+export ARKHAM_BACKUP_MIRROR=/mnt/usb/arkham   # another disk, not ~/arkham
+export ARKHAM_BACKUP_KEEP=14                  # newest archives retained
+```
+
+```sh
+~/arkham/deploy/backup.sh                      # → backups/arkham-backup-*.tar.gz, copied to the mirror
 # Prove it restores:
 systemctl --user stop arkham-hunt
 mv ~/arkham/data ~/arkham/data.saved
 mkdir -p ~/arkham/data
-tar -xzf ~/arkham/backups/arkham-backup-<stamp>.tar.gz -C ~/arkham/data
+tar -xzf ~/arkham/backups/arkham-backup-*.tar.gz -C ~/arkham/data
 systemctl --user start arkham-hunt
 curl -s https://<host>/api/health              # ok → the backup is real
 ```
+
+The script copies the archive to `ARKHAM_BACKUP_MIRROR` and prunes both
+directories to the newest `ARKHAM_BACKUP_KEEP`. It warns if the mirror is
+unset or lands on the same device as `data/`, and fails if the mirror is not a
+directory (an unmounted mount point).
 
 ## 2. Set up the night's event
 
@@ -77,7 +90,8 @@ If all eight pass, the night is ready.
 ## 4. During the night
 
 - Re-run `~/arkham/deploy/backup.sh` at a natural break (it is an
-  online backup — safe while the game is live).
+  online backup — safe while the game is live). Each run mirrors off-host and
+  prunes, so no manual cleanup is needed.
 - If a phone shows stale state: reload the page. The snapshot is the
   resync point; SSE reconnects refetch everything.
 

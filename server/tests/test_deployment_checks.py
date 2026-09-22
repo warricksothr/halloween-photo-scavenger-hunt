@@ -182,11 +182,56 @@ def _restricted_path_without_sqlite_cli(root: Path) -> str:
 
     bin_dir = root / "bin"
     bin_dir.mkdir()
-    for name in ("cp", "date", "dirname", "gzip", "mkdir", "rm", "tar"):
+    for name in (
+        "cp",
+        "date",
+        "dirname",
+        "gzip",
+        "mkdir",
+        "mktemp",
+        "rm",
+        "stat",
+        "tar",
+    ):
         source = shutil.which(name)
         assert source is not None, f"test host lacks {name}"
         (bin_dir / name).symlink_to(source)
     return str(bin_dir)
+
+
+def _live_data(root: Path) -> Path:
+    """A data directory with a migrated database and one photo."""
+
+    source = root / "live-data"
+    source.mkdir()
+    (source / "photos" / "originals").mkdir(parents=True)
+    (source / "photos" / "originals" / "evidence.jpg").write_bytes(b"photo-bytes")
+    conn = db_module.connect(source / "arkham.db")
+    db_module.apply_migrations(conn)
+    conn.close()
+    return source
+
+
+def _backup_env(source: Path, root: Path, **extra: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "ARKHAM_DATA_DIR": str(source),
+            "PATH": _restricted_path_without_sqlite_cli(root),
+        }
+    )
+    env.update(extra)
+    return env
+
+
+def _run_backup(destination: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["/bin/sh", str(BACKUP_SCRIPT), str(destination)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_backup_archive_restores_live_database_and_photos(tmp_path):
@@ -267,3 +312,77 @@ def test_backup_archive_restores_live_database_and_photos(tmp_path):
     assert (
         restored / "photos" / "originals" / "evidence.jpg"
     ).read_bytes() == photo_bytes
+
+
+def test_backup_restore_recipe_extracts_into_data():
+    """The header recipe must match RUNBOOK §1, or the restore is empty."""
+
+    header = BACKUP_SCRIPT.read_text()
+    runbook = RUNBOOK.read_text()
+    assert "tar -xzf" in header
+    assert "-C <repo-root>/data" in header
+    # No recipe that extracts into the repo root itself.
+    assert not re.search(r"-C <repo-root>(?!\S)", header)
+    assert (
+        "tar -xzf ~/arkham/backups/arkham-backup-*.tar.gz -C ~/arkham/data" in runbook
+    )
+
+
+def test_backups_in_the_same_second_do_not_collide(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(source, tmp_path)
+
+    for _ in range(2):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    archives = sorted(destination.glob("arkham-backup-*.tar.gz"))
+    assert len(archives) == 2, [archive.name for archive in archives]
+    assert not list(destination.glob(".backup-work-*"))
+
+
+def test_backup_mirrors_off_host_and_prunes_both_directories(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    env = _backup_env(
+        source,
+        tmp_path,
+        ARKHAM_BACKUP_MIRROR=str(mirror),
+        ARKHAM_BACKUP_KEEP="2",
+    )
+
+    for _ in range(3):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    local = sorted(destination.glob("arkham-backup-*.tar.gz"))
+    mirrored = sorted(mirror.glob("arkham-backup-*.tar.gz"))
+    assert len(local) == 2, [archive.name for archive in local]
+    assert len(mirrored) == 2, [archive.name for archive in mirrored]
+    assert {archive.name for archive in local} == {archive.name for archive in mirrored}
+
+
+def test_backup_warns_when_no_mirror_is_configured(tmp_path):
+    source = _live_data(tmp_path)
+    env = _backup_env(source, tmp_path)
+    env.pop("ARKHAM_BACKUP_MIRROR", None)
+
+    result = _run_backup(tmp_path / "backups", env)
+
+    assert result.returncode == 0, result.stderr
+    assert "ARKHAM_BACKUP_MIRROR is unset" in result.stderr
+
+
+def test_backup_refuses_an_unmounted_mirror(tmp_path):
+    source = _live_data(tmp_path)
+    env = _backup_env(
+        source, tmp_path, ARKHAM_BACKUP_MIRROR=str(tmp_path / "not-mounted")
+    )
+
+    result = _run_backup(tmp_path / "backups", env)
+
+    assert result.returncode != 0
+    assert "not a directory" in result.stderr
