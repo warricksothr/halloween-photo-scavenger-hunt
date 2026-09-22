@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M35C6QJ1AF1QW1FE30Q63TT4
 title: Fix GNU-only mktemp --suffix in deploy/backup.sh breaking CI
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/fix-mktemp-portability
-  branch: t3code/fix-mktemp-portability
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-mktemp-fix
-  commit: d73ff1f30132775b0e380875006378fad3694b48
-  session: null
-  claimed_at: 2026-09-22T20:36:02Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T20:16:36Z
-updated_at: 2026-09-22T20:41:12Z
+updated_at: 2026-09-22T20:52:16Z
 created_by:
   id: agent:opencode/agents-md-state
   name: ""
@@ -96,10 +89,10 @@ property and update the argument the test asserts on.
 
 ## Acceptance criteria
 
-- [ ] `deploy/backup.sh` uses no GNU-only `mktemp` option.
-- [ ] `server/tests/test_deployment_checks.py` passes with BusyBox `mktemp`
+- [x] `deploy/backup.sh` uses no GNU-only `mktemp` option.
+- [x] `server/tests/test_deployment_checks.py` passes with BusyBox `mktemp`
       first on `PATH` (reproduction above).
-- [ ] The Quality workflow on `main` goes green again.
+- [x] The Quality workflow on `main` goes green again.
 
 ## Implementation plan
 
@@ -143,3 +136,11 @@ workflow has been red on `main` and on PRs since PR #12 (run 8763,
 **agent:opencode/fix-mktemp-portability** at 2026-09-22T20:41:12Z
 
 Fix pushed: branch t3code/fix-mktemp-portability, PR #15, head c7f0b2c60303443b8734bf7669def0fd5a62e9d2, base main d73ff1f30132775b0e380875006378fad3694b48. Terva request id mktemp-portability-v1, dispatch run 8841. Verified in the CI container (golang:1.25-alpine, BusyBox mktemp): check-server.sh 229 passed, coverage 94.27%, Ruff clean; BusyBox-mktemp repro on the host 19 passed; test discrimination confirmed against the pre-fix script.
+
+**agent:opencode/fix-mktemp-portability** at 2026-09-22T20:51:42Z
+
+Terva round v1 (review 169, request mktemp-portability-v1, run 8841/#212, head c7f0b2c): one high finding accepted — the suffixed .tar.gz path was not itself reserved, so mv could clobber an earlier archive. Fixed in 5fbe990 (suffixed name created under noclobber, retry on collision) with regression test test_backup_keeps_an_archive_whose_suffixed_name_is_already_taken, which fails against the clobbering version. Round v2 (request mktemp-portability-v2, run 8845/#214, head 5fbe990): clean, finding-1 resolved, clean comment 9873. PR #15 merged to main as 287a255; Quality run 8843 green at 5fbe990.
+
+## Summary
+
+Landed on main as 287a255 (PR #15, head 5fbe990, Terva-clean). deploy/backup.sh takes the random suffix from mktemp and creates the suffixed .tar.gz name under noclobber, retrying on collision, so the archive name itself stays reserved and an earlier archive is never overwritten. ADR 0014 and docs/progress.md updated; two deploy tests cover the reservation and the collision. Verified with BusyBox mktemp first on PATH (20 passed) and in the CI container golang:1.25-alpine (check-server.sh: 230 passed, coverage 94.27%, Ruff clean). Main's Quality run 8848 is green again.
