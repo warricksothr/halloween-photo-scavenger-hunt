@@ -96,6 +96,6 @@ If all eight pass, the night is ready.
 | Symptom | Check |
 | --- | --- |
 | Queue/tiles don't update live | `proxy_buffering off` on the SSE location; `curl -N https://<host>/api/events/stream` should stream heartbeats |
-| Players can't upload big photos | nginx `client_max_body_size 12m` matches the app's cap |
+| Players can't upload big photos | nginx `client_max_body_size 16m` sits above the app's 15 MB cap, so the app owns the 413 |
 | 502 after reboot | `loginctl enable-linger "$USER"`; `systemctl --user status arkham-hunt` |
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |

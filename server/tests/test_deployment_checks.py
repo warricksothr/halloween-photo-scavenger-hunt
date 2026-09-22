@@ -1,20 +1,180 @@
-"""Fast checks for the disposable backup and restore path."""
+"""Fast checks for the deployment path: backup/restore and pinned runtime."""
 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
 import tarfile
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from app import db as db_module
+from app.images import MAX_BYTES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKUP_SCRIPT = REPO_ROOT / "deploy" / "backup.sh"
+REQUIREMENTS_LOCK = REPO_ROOT / "server" / "requirements.lock"
+UV_LOCK = REPO_ROOT / "server" / "uv.lock"
+CONTAINERFILE = REPO_ROOT / "Containerfile"
+NGINX_CONF = REPO_ROOT / "deploy" / "nginx.conf"
+RUNBOOK = REPO_ROOT / "deploy" / "RUNBOOK.md"
+SYSTEMD_UNIT = REPO_ROOT / "deploy" / "arkham-hunt.service"
+
+
+def _canonical(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _pinned_requirements(text: str) -> dict[str, tuple[str, str, tuple[str, ...]]]:
+    """Parse a `--require-hashes` requirements file into name → (version, marker, hashes).
+
+    The hashes are kept, not dropped, so a drift check can compare the artifact
+    digests rather than just the versions.
+    """
+
+    pinned: dict[str, tuple[str, str]] = {}
+    hashes: dict[str, list[str]] = {}
+    current: str | None = None
+    for raw in text.splitlines():
+        # Only requirement lines start at column zero; hashes and `# via`
+        # comments are indented continuations.
+        if raw and raw[0].isspace():
+            if current is not None:
+                hashes[current].extend(re.findall(r"--hash=sha256:([0-9a-f]{64})", raw))
+            continue
+        if not raw or raw.startswith("#"):
+            continue
+        line = raw.rstrip("\\").strip()
+        match = re.fullmatch(r"([A-Za-z0-9._-]+)==([^\s;]+)\s*(?:;\s*(.*))?", line)
+        assert match, f"not a fully pinned requirement: {raw!r}"
+        name, version, marker = match.groups()
+        current = _canonical(name)
+        pinned[current] = (version, (marker or "").strip())
+        hashes.setdefault(current, [])
+    return {
+        name: (version, marker, tuple(hashes[name]))
+        for name, (version, marker) in pinned.items()
+    }
+
+
+def _uv_lock_versions(text: str) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for package in tomllib.loads(text).get("package", []):
+        versions[_canonical(package["name"])] = package["version"]
+    return versions
+
+
+def test_requirements_lock_is_fully_pinned():
+    pinned = _pinned_requirements(REQUIREMENTS_LOCK.read_text())
+    assert pinned, "requirements.lock is empty"
+    assert len(pinned) > 10, "requirements.lock looks truncated"
+    for name, (version, _, hashes) in pinned.items():
+        assert version, f"{name} is not pinned to a version"
+        assert hashes, f"{name} has no --hash entries"
+
+
+def test_requirements_lock_versions_match_uv_lock():
+    pinned = _pinned_requirements(REQUIREMENTS_LOCK.read_text())
+    locked = _uv_lock_versions(UV_LOCK.read_text())
+    assert set(pinned) <= set(locked), set(pinned) - set(locked)
+    for name, (version, _, _) in pinned.items():
+        assert version == locked[name], f"{name}: {version} != uv.lock {locked[name]}"
+
+
+def test_requirements_lock_matches_fresh_uv_export():
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv not on PATH; scripts/check-quality.sh enforces this in CI")
+    result = subprocess.run(
+        [
+            uv,
+            "export",
+            "--project",
+            "server",
+            "--locked",
+            "--no-dev",
+            "--no-emit-project",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert _pinned_requirements(REQUIREMENTS_LOCK.read_text()) == (
+        _pinned_requirements(result.stdout)
+    ), "server/requirements.lock is stale; regenerate it from uv.lock"
+
+
+def test_containerfile_installs_the_hash_pinned_lock():
+    containerfile = CONTAINERFILE.read_text()
+    assert "--require-hashes -r ./server/requirements.lock" in containerfile
+    assert "pip install --no-cache-dir -e" not in containerfile
+
+
+def test_containerfile_base_images_are_digest_pinned():
+    images = re.findall(
+        r"^FROM\s+(\S+)(?:\s+AS\s+\S+)?", CONTAINERFILE.read_text(), re.MULTILINE
+    )
+    assert images, "Containerfile has no FROM lines"
+    for image in images:
+        assert "@sha256:" in image, f"base image is a mutable tag: {image}"
+
+
+def test_nginx_upload_limit_sits_above_the_app_cap():
+    match = re.search(r"client_max_body_size\s+(\d+)m;", NGINX_CONF.read_text())
+    assert match, "nginx.conf has no client_max_body_size"
+    proxy_bytes = int(match.group(1)) * 1024 * 1024
+    assert proxy_bytes > MAX_BYTES, "nginx would cut off a body the app accepts"
+    assert f"client_max_body_size {match.group(1)}m" in RUNBOOK.read_text()
+
+
+def _tls_server_block(text: str) -> str:
+    """Return the body of the `server { … }` block that listens on 443."""
+
+    for match in re.finditer(r"server\s*\{", text):
+        depth = 1
+        cursor = match.end()
+        while cursor < len(text) and depth:
+            if text[cursor] == "{":
+                depth += 1
+            elif text[cursor] == "}":
+                depth -= 1
+            cursor += 1
+        block = text[match.end() : cursor - 1]
+        if re.search(r"^\s*listen\s+443\b", block, re.MULTILINE):
+            return block
+    raise AssertionError("nginx.conf has no server block listening on 443")
+
+
+def test_nginx_https_block_sends_security_headers():
+    block = _tls_server_block(NGINX_CONF.read_text())
+    csp = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline';"
+        " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+        " font-src 'self' https://fonts.gstatic.com; img-src 'self';"
+        " connect-src 'self'; worker-src 'self'; manifest-src 'self';"
+        " object-src 'none'; base-uri 'self'; form-action 'self';"
+        " frame-ancestors 'none'"
+    )
+    for directive in (
+        'add_header Strict-Transport-Security "max-age=31536000" always;',
+        'add_header X-Content-Type-Options "nosniff" always;',
+        'add_header X-Frame-Options "DENY" always;',
+        f'add_header Content-Security-Policy "{csp}" always;',
+    ):
+        assert directive in block, f"missing or weakened directive: {directive}"
+
+
+def test_systemd_unit_hardens_the_data_dir():
+    unit = SYSTEMD_UNIT.read_text()
+    assert "ProtectSystem=strict" in unit
+    assert "ProtectHome=read-only" in unit
+    assert "ReadWritePaths=%h/arkham/data" in unit
 
 
 def _restricted_path_without_sqlite_cli(root: Path) -> str:

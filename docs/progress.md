@@ -39,6 +39,21 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Container runtime pinned, nginx and systemd hardened.**
+  The `Containerfile` now installs `server/requirements.lock`, the hash-pinned
+  export of `uv.lock`, with `pip install --require-hashes`, and puts `app` on
+  `PYTHONPATH` instead of an editable install, so no unpinned build-isolation
+  download remains, and both base images are pinned by their multi-arch index
+  digest (ADR 0012). `deploy/nginx.conf` raises
+  `client_max_body_size` to `16m` so the app—not nginx—owns oversize uploads
+  (§5 `deploy/RUNBOOK.md` corrected), and the 443 block sends HSTS, nosniff,
+  `X-Frame-Options`, and a CSP scoped to the built PWA. The user unit adds
+  `ProtectSystem=strict`, `ProtectHome=read-only`, and
+  `ReadWritePaths=%h/arkham/data`. New checks in
+  `server/tests/test_deployment_checks.py` guard the lock against `uv.lock`
+  drift and the nginx/systemd config. The image builds and serves `/api/health`
+  under podman; the quality gate passes 157 tests at 94.80% coverage.
+
 - **2026-09-22 — Every write transaction now holds the connection lock.**
   `server/app/db.py` gains `locked_transaction(request)`, which acquires
   `app.state.db_lock` around `with conn:`. Every mutation handler plus the

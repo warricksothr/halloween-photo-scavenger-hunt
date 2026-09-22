@@ -55,12 +55,15 @@ podman image inspect arkham-hunt:local \
 ```
 
 The build is multi-stage: stage 1 runs `npm ci && npm run build` in
-`node:20-alpine`, stage 2 is `python:3.12-slim` with the server
-installed editable and `web/dist` copied in. The editable install is
-load-bearing: `main.py` derives the DB and static paths from the
-package's `__file__`, so the image keeps the repo layout and the
-runtime data dir lands at `/srv/arkham/data` — the one path a volume
-must cover.
+`node:20-alpine`, stage 2 is `python:3.12-slim` with `web/dist` copied
+in. Runtime dependencies install from `server/requirements.lock`, the
+hash-pinned export of `server/uv.lock`, so the image resolves exactly
+the versions CI tests. `app` is not installed as a distribution:
+`PYTHONPATH=/srv/arkham/server` puts it on the import path from the
+source tree. That is load-bearing — `main.py` derives the DB and static
+paths from the package's `__file__`, so the image keeps the repo layout
+and the runtime data dir lands at `/srv/arkham/data` — the one path a
+volume must cover.
 
 Then run it:
 

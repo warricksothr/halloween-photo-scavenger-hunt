@@ -43,9 +43,14 @@ ExecStart=%h/arkham/server/.venv/bin/uvicorn app.main:create_app \
 Restart=always
 RestartSec=2
 
-# Light hardening (compatible with a user unit):
+# Hardening (compatible with a user unit). The whole filesystem is
+# read-only except the data directory — the DB, its WAL/SHM files, and
+# the photos are the only state this process writes.
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/arkham/data
 
 [Install]
 WantedBy=default.target
