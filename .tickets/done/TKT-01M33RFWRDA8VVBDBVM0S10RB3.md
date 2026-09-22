@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWRDA8VVBDBVM0S10RB3
 title: Handle network failures in the client and never hang on boot
 type: bug
-status: review
+status: done
 status_reason: null
 priority: urgent
 due_on: null
@@ -16,17 +16,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/review-system-design
-  branch: t3code/client-network-failures
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-e28f1e35
-  commit: 09ae754dc529db0cfc73d25000fbc154cbb73b7c
-  session: null
-  claimed_at: 2026-09-22T07:00:28Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T14:19:26Z
+updated_at: 2026-09-22T14:22:45Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
