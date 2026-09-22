@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app import errors
 from app import logging as app_logging
-from app.errors import Scrubber, init_error_reporting
+from app.errors import REDACTED, Scrubber, init_error_reporting
 from app.main import create_app
 from app.security import hash_password
 
@@ -118,6 +118,32 @@ def test_dsn_secret_and_local_variables_never_serialize():
     assert "public-key" not in blob
     assert "secret-key" not in blob
     assert JOIN_CODE not in blob
+
+
+def test_secrets_in_mapping_keys_never_serialize():
+    """A mapping's keys serialize too, so a secret used as one must go.
+
+    Collapsing two secret keys onto ``<redacted>`` keeps the first and
+    drops the second; the point of the test is that neither leaks.
+    """
+    event = {
+        "extra": {
+            DSN: {"nested": "kept"},
+            "public-key": "kept too",
+        },
+        "contexts": {"secret-key": {"value": f"prefix {DSN}"}},
+    }
+
+    scrubbed = Scrubber.for_dsn(DSN).scrub_event(event)
+    blob = json.dumps(scrubbed)
+
+    assert DSN not in blob
+    assert "public-key" not in blob
+    assert "secret-key" not in blob
+    # Both secret keys in ``extra`` collapse onto the same redaction, so
+    # the first survives and its value is kept.
+    assert scrubbed["extra"][REDACTED]["nested"] == "kept"
+    assert scrubbed["contexts"][REDACTED]["value"] == f"prefix {REDACTED}"
 
 
 def test_request_id_becomes_a_tag():

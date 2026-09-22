@@ -162,7 +162,17 @@ class Scrubber:
                 value = value.replace(secret, REDACTED)
             return value
         if isinstance(value, dict):
-            return {key: self._scrub_strings(item) for key, item in value.items()}
+            # A mapping's keys serialize too, and app-provided ``extra``
+            # can hold a secret as one. Scrub both; two keys that collapse
+            # onto ``<redacted>`` collide, and the event keeps the first,
+            # because losing a field is better than sending a secret.
+            scrubbed: dict[Any, Any] = {}
+            for key, item in value.items():
+                new_key = self._scrub_strings(key) if isinstance(key, str) else key
+                if new_key in scrubbed:
+                    continue
+                scrubbed[new_key] = self._scrub_strings(item)
+            return scrubbed
         if isinstance(value, list):
             return [self._scrub_strings(item) for item in value]
         return value
