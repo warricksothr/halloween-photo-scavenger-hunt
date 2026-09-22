@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:29:36Z
+updated_at: 2026-09-22T23:39:55Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -221,3 +221,35 @@ test and coverage counts. The ADR was updated to match.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 329
 tests, coverage 95.47%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:39:55Z
+
+Supersedes the note at head 559dfa55.
+
+### high (review 195, run #284, request unparsable-body-fix)
+Terva resolved both previous findings (malformed bodies and mapping keys; the
+progress note). The same review opened a high.
+
+**high: percent-encoded secrets bypassed the scrub set.** `parse_qsl`
+percent-decodes and turns `+` into a space, so a form body
+`password=top%2Fsecret` produced the candidate `top/secret` only. A route that
+read and quoted the raw bytes still contained `top%2Fsecret`, and because the
+body parsed, `safe_traceback` stayed false and the message was logged. The same
+gap existed for a raw query string.
+
+Accepted, as "scrub both representations" rather than fail closed: encoded form
+and query text is ordinary, so dropping the message for it would cost real
+diagnostics. `_raw_query_tokens` yields the undecoded text and each
+`&`/`=`-separated piece, and both `_body_secrets` (form branch) and
+`_request_secrets` (query string) add those tokens beside the decoded names and
+values. A route that quotes the raw body or the raw query is now covered, and
+the message survives. JSON keeps the fail-closed path: a body that does not
+parse returns `None` and drops the message.
+
+Tests: the body-secrets unit test now holds both `top/secret` and
+`top%2Fsecret`; `test_a_raw_encoded_query_is_scrubbed` raises with
+`request.url.query` and `test_a_raw_encoded_form_body_is_scrubbed` raises with
+the raw body, both asserting the encoded and decoded forms are absent.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 331
+tests, coverage 95.50%, Ruff clean (45 files formatted). Re-review requested.
