@@ -107,12 +107,14 @@ function isTransient(result) {
   return result.network === true || result.status >= 500;
 }
 
-async function loadSnapshot() {
-  let result = await api.snapshot();
+// Both boot reads (the player snapshot and the moderator probe) go through
+// this, so neither is less resilient than the other.
+async function withRetry(request) {
+  let result = await request();
   for (const delay of RETRY_DELAYS_MS) {
     if (!isTransient(result)) return result;
     await sleep(delay);
-    result = await api.snapshot();
+    result = await request();
   }
   return result;
 }
@@ -122,9 +124,9 @@ async function loadSnapshot() {
 // mod-only cookie, so a 401 means "try the moderator probe" before
 // concluding the visitor is unauthenticated.
 export async function refresh() {
-  const result = await loadSnapshot();
+  const result = await withRetry(api.snapshot);
   if (result.unauthenticated) {
-    const mod = await api.modState();
+    const mod = await withRetry(api.modState);
     if (mod.error) {
       // The probe failed too, so this is a connection problem, not an
       // unauthenticated visitor — do not drop them on the join screen.

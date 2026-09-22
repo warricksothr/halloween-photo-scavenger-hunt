@@ -182,8 +182,43 @@ describe('store', () => {
     vi.useRealTimers();
   });
 
-  it('retry returns to booting and refreshes to ready', async () => {
-    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+  it('retries a transient moderator-probe failure before giving up', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({ unauthenticated: true });
+    mocks.api.modState
+      .mockResolvedValueOnce({ error: 'network_error', network: true })
+      .mockResolvedValueOnce({ event: null });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await done;
+
+    expect(mocks.api.modState).toHaveBeenCalledTimes(2);
+    expect(getState()).toMatchObject({ phase: 'join' });
+    vi.useRealTimers();
+  });
+
+  it('shows the error phase when the moderator probe stays down', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({ unauthenticated: true });
+    mocks.api.modState.mockResolvedValue({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(mocks.api.modState).toHaveBeenCalledTimes(4);
+    expect(getState()).toMatchObject({ phase: 'error' });
+    vi.useRealTimers();
+  });
+
+  it('retry returns to booting and refreshes to ready', async () => {    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
 
     const done = retry();
     expect(getState().phase).toBe('booting');
