@@ -6,6 +6,7 @@ import asyncio
 import shutil
 import sqlite3
 import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,6 +78,37 @@ def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
     )
 
 
+class _ObservedLock:
+    """The app's reentrant lock, reporting how many threads are parked on
+    it. A test can then tell "the lock serialized my peer" from "my peer
+    never showed up" — the difference between a real race and a
+    rendezvous that quietly timed out."""
+
+    def __init__(self, lock):
+        self._lock = lock
+        self._local = threading.local()
+        self._guard = threading.Lock()
+        self.waiting = 0
+
+    def __enter__(self):
+        depth = getattr(self._local, "depth", 0)
+        if depth == 0:
+            with self._guard:
+                self.waiting += 1
+        try:
+            self._lock.acquire()
+        finally:
+            if depth == 0:
+                with self._guard:
+                    self.waiting -= 1
+        self._local.depth = depth + 1
+        return self
+
+    def __exit__(self, *exc):
+        self._local.depth -= 1
+        return self._lock.release()
+
+
 def test_concurrent_inappropriate_verdicts_advance_one_rung_each(
     admin, client, monkeypatch
 ):
@@ -87,8 +119,14 @@ def test_concurrent_inappropriate_verdicts_advance_one_rung_each(
     conditional UPDATE is per-submission — so without the request lock
     both moderators read the same strike count and both insert the same
     level, skipping a rung of the ladder. The barrier makes both
-    derivations land before either write, which is exactly the
-    interleaving the lock rules out.
+    derivations land before either write, which is the interleaving the
+    lock rules out.
+
+    The lock serializes the two requests, so the peer can never reach the
+    barrier. That is the expected outcome, but a peer that simply never
+    arrived would look the same, so the timeout path confirms the peer is
+    parked on the request lock before proceeding: a rendezvous that never
+    happened fails the test instead of passing it.
     """
     party = mod_party(admin, client, riddles=("R1", "R2"))
     second_evidence = client.post(
@@ -100,17 +138,26 @@ def test_concurrent_inappropriate_verdicts_advance_one_rung_each(
     mod_a = _mod(client, party["mod_code"])
     mod_b = _mod(client, party["mod_code"])
 
+    observed_lock = _ObservedLock(client.app.state.db_lock)
+    monkeypatch.setattr(client.app.state, "db_lock", observed_lock)
+
     real_derive = mod.derive_restriction
-    arrived = threading.Barrier(2, timeout=2)
+    arrived = threading.Barrier(2, timeout=1)
+    serialized = threading.Event()
 
     def blocking_derive(conn, player_id):
-        try:
-            arrived.wait()
-        except threading.BrokenBarrierError:
-            # The locked path serializes: the first derivation times out
-            # waiting for a peer that is parked on the lock, and the
-            # second proceeds on a barrier that already broke.
-            pass
+        if not serialized.is_set():
+            try:
+                arrived.wait()
+            except threading.BrokenBarrierError:
+                deadline = time.monotonic() + 5
+                while observed_lock.waiting == 0 and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                assert observed_lock.waiting >= 1, (
+                    "the peer neither reached the barrier nor parked on the"
+                    " request lock: the race was not exercised"
+                )
+                serialized.set()
         return real_derive(conn, player_id)
 
     monkeypatch.setattr(mod, "derive_restriction", blocking_derive)
