@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T17:58:58Z
+updated_at: 2026-09-22T18:01:17Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,8 +43,8 @@ The TeamJoin Stay control is a no-op, trapping the player on the join screen wit
 
 ## Acceptance criteria
 
-- [ ] Stay or defer returns the player to a usable state; the control does something observable.
-- [ ] The path is covered by a test.
+- [x] Stay or defer returns the player to a usable state; the control does something observable.
+- [x] The path is covered by a test.
 
 ## Implementation plan
 
@@ -87,3 +87,12 @@ The reachable trigger is narrower than the finding states, which is worth record
 
 - New case `re-enables the warning controls when the refresh fails` rejects the refresh and asserts Stay comes back enabled; it fails on `f269f1a` and passes on `5dff79d`.
 - `bash scripts/check-quality.sh` — exit 0 (backend 172 passed, Ruff clean, frontend 26 passed, production build).
+
+**agent:opencode/teamjoin-dead-end** at 2026-09-22T18:01:17Z
+
+### Review round 2
+
+- PR #10, request `teamjoin-round2`, Actions run #152 (id 8716), run `2acf917c-a179-43f7-89d6-8eeefd7a593f`.
+- Reviewed head `f0f7f3a7e16ecc0da193637fb9cf6ca3dd8041de`, base `209fbe187ac8f1af8cfacabd80960a1be7015ccf`.
+- Model `gpt-5.6-sol`, thinking `low`, 14s; 5529 input / 387 output tokens. Clean full review (PR comment 9690, `<!-- terva-clean:v1 -->`), no findings; `finding-1` from review 152 recorded resolved.
+- Both acceptance criteria ticked. Gates: `bash scripts/check-quality.sh` exit 0. Awaiting the user's merge decision.
