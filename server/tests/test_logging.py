@@ -226,6 +226,18 @@ def test_body_secrets_skips_binary_and_malformed_bodies():
     # A body that does not parse is not a body the scrub set can stand
     # for: ``None`` tells the caller to drop the message.
     assert app_logging._body_secrets("application/json", b"{not json") is None
+    # A number or boolean formats to text no string candidate covers, so
+    # the body is not representable either, at any depth.
+    assert (
+        app_logging._body_secrets("application/json", b'{"recovery_code": 12345678}')
+        is None
+    )
+    assert (
+        app_logging._body_secrets(
+            "application/json", b'{"a": {"b": [true]}, "c": "ok"}'
+        )
+        is None
+    )
 
 
 def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
@@ -393,7 +405,7 @@ def test_a_json_key_quoted_by_route_code_is_scrubbed(tmp_path, caplog):
         caplog.clear()
         resp = c.post(
             "/api/team/invites/SUPERSECRETCODE/boom",
-            json={"topsecretkey": None},
+            json={"topsecretkey": "topsecretvalue"},
         )
 
     assert resp.status_code == 500
@@ -441,6 +453,45 @@ def test_a_malformed_json_body_drops_the_exception_message(tmp_path, caplog):
 
     text = _rendered(caplog)
     assert "topsecret" not in text
+    assert "RuntimeError: kaboom" not in text
+
+
+def test_a_numeric_json_value_drops_the_exception_message(tmp_path, caplog):
+    """A number is a value the scrub set cannot hold, so the message goes.
+
+    The route formats the number with an f-string, which the string
+    candidates never see.
+    """
+    app = create_app(
+        tmp_path / "numeric-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom code={payload['recovery_code']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"recovery_code": 12345678},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    assert "12345678" not in text
     assert "RuntimeError: kaboom" not in text
 
 

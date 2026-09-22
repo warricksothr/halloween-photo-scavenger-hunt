@@ -82,11 +82,13 @@ bytes are dropped when the request ends. The scrub set is mutated in place
 across the request so the exception handler — which runs after the middleware's
 `finally` resets the contextvars — still sees what the body added.
 
-Two cases cannot be represented by the scrub set, and both drop the message
+Three cases cannot be represented by the scrub set, and all drop the message
 rather than log a value the set never saw. A body larger than the buffer is the
 first: the app reads the whole request while the scrubber holds the first
 `_BUFFERED_BODY_BYTES`. The second is a body that does not parse — malformed
-JSON — where the route's raw read and the scrub set's parse disagree.
+JSON — where the route's raw read and the scrub set's parse disagree. The third
+is a JSON body holding a number, boolean, or null: an f-string renders it to
+text no string candidate covers, so it is treated the same way.
 
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same

@@ -207,15 +207,18 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
     binary and yields nothing. The bytes this parses are dropped when the
     request ends and are never logged.
 
-    ``None`` means the body did not parse, so the app may have read a
-    value this set does not hold. The caller then treats the message as
-    unsafe rather than log it unscanned.
+    ``None`` means the body is not fully represented by this set — it did
+    not parse, or it held a scalar that formats to text no string covers.
+    The caller then treats the message as unsafe rather than log it
+    unscanned.
     """
     if media not in _PARSED_MEDIA:
         return ()
     try:
         if media == _JSON_MEDIA:
             parsed: Any = json.loads(body)
+            if _unrepresentable(parsed):
+                return None
             strings = _strings_in(parsed)
         else:
             # Pairs, not a dict: a form can repeat a field name, and the
@@ -228,6 +231,25 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
     except ValueError:
         return None
     return tuple(value for value in strings if len(value) >= _MIN_SECRET)
+
+
+def _unrepresentable(value: Any) -> bool:
+    """Whether a decoded JSON body holds a scalar no string candidate covers.
+
+    A number, boolean, or null serializes to text a route can quote —
+    ``12345678``, ``True``, ``None`` — that the scrub set cannot hold, so
+    the caller drops the message rather than log the value unscanned.
+    """
+    if isinstance(value, str):
+        return False
+    if isinstance(value, Mapping):
+        return any(
+            _unrepresentable(key) or _unrepresentable(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_unrepresentable(item) for item in value)
+    return True
 
 
 def _raw_query_tokens(text: str) -> Iterator[str]:
