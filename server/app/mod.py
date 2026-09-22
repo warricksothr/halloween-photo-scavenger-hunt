@@ -55,6 +55,19 @@ def join(mod_code: str, request: Request):
     now = int(time.time())
     moderator_id = ids.new_id()
     with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so a purge or a close can land between the
+        # read above and this transaction. Without this the moderator
+        # INSERT would fail the event foreign key after a purge.
+        event = writer.execute(
+            "SELECT * FROM event WHERE id = ?", (event["id"],)
+        ).fetchone()
+        if event is None:
+            return _err(
+                404, "bad_mod_code", "That moderator link doesn't match any event."
+            )
+        if event["status"] == "closed":
+            return _err(409, "event_closed", "This event has already ended.")
         writer.execute(
             "INSERT INTO moderator (id, event_id, label, created_at)"
             " VALUES (?, ?, ?, ?)",
@@ -534,6 +547,10 @@ def resolve_flag(
         return _err(404, "not_found", "No open flag for that evidence.")
 
     with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): another moderator can resolve
+        # the same flag between the read above and this transaction.
+        if evidence_id not in _open_flags(writer, ctx.event_id):
+            return _err(404, "not_found", "No open flag for that evidence.")
         log_action(
             writer,
             event_id=ctx.event_id,
@@ -718,6 +735,16 @@ def remove_member(
 
     now = int(time.time())
     with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so the player's team can change between the
+        # read above and this transaction.
+        row = writer.execute(
+            "SELECT p.team_id FROM player p JOIN team t ON t.id = p.team_id"
+            " WHERE p.id = ? AND t.event_id = ?",
+            (player_id, ctx.event_id),
+        ).fetchone()
+        if row is None or row["team_id"] != team_id:
+            return _err(404, "not_found", "That player is not on that team.")
         new_team_id = ids.new_id()
         writer.execute(
             "INSERT INTO team (id, event_id, created_at) VALUES (?, ?, ?)",

@@ -19,7 +19,8 @@ from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
 from app import db as db_module
-from app import events, mod, players, submissions
+from app import events, mod, players, submissions, teams
+from app import evidence as evidence_module
 from app.audit import Action
 from app.main import create_app
 from app.sse import SseBroker, _stream
@@ -785,3 +786,474 @@ def test_cross_event_and_cross_team_reads_hide_foreign_data(admin, client):
     second_player.close()
     first_mod.close()
     second_mod.close()
+
+
+def test_upload_after_a_strike_commits_is_rejected(admin, client, monkeypatch):
+    """A strike committed after the upload's reader check must still block
+    the write (ADR 0013).
+
+    The upload reads the restriction on the reader, then does its slow
+    Pillow work, then re-reads the restriction on the writer before the
+    INSERT. The reader call here commits a level-3 strike behind it, so
+    the writer re-check is the only gate left standing."""
+    party = mod_party(admin, client)
+    submission = _submit(client, party["riddle_ids"][0], party["evidence_id"])
+    moderator = _mod(client, party["mod_code"])
+    conn = client.app.state.db
+    moderator_id = conn.execute(
+        "SELECT id FROM moderator WHERE event_id = ?", (party["event_id"],)
+    ).fetchone()["id"]
+
+    real_derive = evidence_module.derive_restriction
+
+    def strike_after_the_reader_read(c, player_id):
+        restriction = real_derive(c, player_id)
+        if c is client.app.state.read_db:
+            conn.execute(
+                "INSERT INTO strike (id, player_id, event_id, level,"
+                " submission_id, issued_by, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "strike-banned",
+                    party["player_id"],
+                    party["event_id"],
+                    3,
+                    submission["id"],
+                    moderator_id,
+                    int(time.time()),
+                ),
+            )
+            conn.commit()
+        return restriction
+
+    monkeypatch.setattr(
+        evidence_module, "derive_restriction", strike_after_the_reader_read
+    )
+
+    try:
+        response = client.post(
+            "/api/evidence", files={"photo": ("c.jpg", make_jpeg(), "image/jpeg")}
+        )
+    finally:
+        moderator.close()
+
+    assert response.status_code == 403, response.text
+    assert response.json()["error"] == "upload_restricted"
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM evidence_item WHERE uploaded_by = ?",
+            (party["player_id"],),
+        ).fetchone()[0]
+        == 1
+    )
+
+
+def _join_after_the_event_vanishes(client, monkeypatch, path, payload, event_id):
+    """Fire a join that reads the event, delete the event before the join's
+    writer transaction runs, and return the response.
+
+    The join's reader read happens before it parks on the writer lock, so
+    holding that lock from this thread pins the stale snapshot while the
+    event row goes away (a purge that committed after the read). Without
+    the writer-side re-check the dependent INSERT fails its event foreign
+    key and surfaces as a server error."""
+    observed = _ObservedLock(client.app.state.db_lock)
+    monkeypatch.setattr(client.app.state, "db_lock", observed)
+    observed.__enter__()
+    released = False
+
+    def release():
+        nonlocal released
+        if not released:
+            released = True
+            observed.__exit__(None, None, None)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with AsyncClient(transport=transport, base_url="http://test") as joiner:
+            join = asyncio.create_task(joiner.post(path, json=payload))
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 5
+            while observed.waiting == 0 and loop.time() < deadline:
+                await asyncio.sleep(0.01)
+            assert observed.waiting >= 1, "the join never parked on the writer"
+            # A purge deletes the event's audit rows first (no cascade);
+            # the join read the event while it was still open.
+            db = client.app.state.db
+            db.execute("DELETE FROM audit_event WHERE event_id = ?", (event_id,))
+            db.execute("DELETE FROM event WHERE id = ?", (event_id,))
+            db.commit()
+            release()
+            return await join
+
+    try:
+        return asyncio.run(interleave())
+    finally:
+        release()
+
+
+def test_player_join_after_the_event_is_purged_is_not_a_500(admin, client, monkeypatch):
+    """A player join that read an open event re-checks it on the writer, so
+    a purge that commits first answers 404 instead of a foreign-key 500."""
+    party = mod_party(admin, client)
+    response = _join_after_the_event_vanishes(
+        client,
+        monkeypatch,
+        f"/api/join/{party['join_code']}",
+        {"display_name": "Robin"},
+        party["event_id"],
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"] == "bad_join_code"
+
+
+def test_mod_join_after_the_event_is_purged_is_not_a_500(admin, client, monkeypatch):
+    """The moderator join shares the player join's re-check: a purged event
+    answers 404 rather than failing the moderator INSERT's foreign key."""
+    party = mod_party(admin, client)
+    response = _join_after_the_event_vanishes(
+        client,
+        monkeypatch,
+        f"/api/mod/join/{party['mod_code']}",
+        {},
+        party["event_id"],
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"] == "bad_mod_code"
+
+
+def test_revoke_after_a_concurrent_redemption_is_closed(admin, client, monkeypatch):
+    """A revoke that read an open invite must not stamp a token that was
+    redeemed before its transaction (ADR 0013).
+
+    The redemption commits while the revoke is parked on the writer, so
+    the revoke's conditional UPDATE finds the invite closed and answers
+    409 rather than writing a revoked_at onto a used token."""
+    party = _party(admin, client)
+    batman = party["players"]["Batman"]["client"]
+    token = _invite(batman)
+
+    redeemed_written = threading.Event()
+    release = threading.Event()
+    real_log_action = teams.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.TEAM_INVITE_REDEEMED:
+            redeemed_written.set()
+            assert release.wait(timeout=5), "redemption was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(teams, "log_action", blocking_log_action)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(transport=transport, base_url="http://test") as robin,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(batman.cookies),
+            ) as owner,
+        ):
+            redeem = asyncio.create_task(
+                robin.post(
+                    f"/api/team/invites/{token}/redeem",
+                    json={"display_name": "Robin"},
+                )
+            )
+            assert await asyncio.to_thread(redeemed_written.wait, 5)
+
+            revoke = asyncio.create_task(
+                owner.post(f"/api/team/invites/{token}/revoke")
+            )
+            await asyncio.sleep(0.3)
+            assert not revoke.done(), "revoke did not wait for the writer"
+
+            release.set()
+            return await redeem, await revoke
+
+    redeem_response, revoke_response = asyncio.run(interleave())
+
+    assert redeem_response.status_code == 201, redeem_response.text
+    assert revoke_response.status_code == 409, revoke_response.text
+    assert revoke_response.json()["error"] == "invite_closed"
+    invite = client.app.state.db.execute(
+        "SELECT redeemed_by, revoked_at FROM team_invite WHERE token = ?", (token,)
+    ).fetchone()
+    assert invite["redeemed_by"] is not None
+    assert invite["revoked_at"] is None
+
+
+def test_purge_after_a_concurrent_purge_is_not_a_second_delete(
+    admin, client, monkeypatch
+):
+    """A second purge that read a closed event re-checks it on the writer:
+    the first purge commits while the second is parked, and the second
+    answers 404 instead of logging an audit row for a deleted event (whose
+    foreign key would fail, surfacing as a 500)."""
+    event = admin.post("/api/admin/events", json={"name": "Double Purge"}).json()
+    assert (
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Q1", "sort_order": 1},
+        ).status_code
+        == 201
+    )
+    assert admin.post(f"/api/admin/events/{event['id']}/open").status_code == 200
+    assert admin.post(f"/api/admin/events/{event['id']}/close").status_code == 200
+
+    purged_written = threading.Event()
+    release = threading.Event()
+    real_log_action = events.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.EVENT_PURGED:
+            purged_written.set()
+            assert release.wait(timeout=5), "purge was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(events, "log_action", blocking_log_action)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        cookies = dict(admin.cookies)
+        async with (
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as first,
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as second,
+        ):
+            purge_one = asyncio.create_task(
+                first.post(
+                    f"/api/admin/events/{event['id']}/purge",
+                    json={"confirm": event["name"]},
+                )
+            )
+            assert await asyncio.to_thread(purged_written.wait, 5)
+
+            purge_two = asyncio.create_task(
+                second.post(
+                    f"/api/admin/events/{event['id']}/purge",
+                    json={"confirm": event["name"]},
+                )
+            )
+            await asyncio.sleep(0.3)
+            assert not purge_two.done(), "second purge did not wait for the writer"
+
+            release.set()
+            return await purge_one, await purge_two
+
+    first_response, second_response = asyncio.run(interleave())
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 404, second_response.text
+    assert second_response.json()["error"] == "event_not_found"
+
+
+def test_resolve_flag_after_a_concurrent_resolve_is_not_found(
+    admin, client, monkeypatch
+):
+    """Two moderators resolving one open flag: the second re-checks the
+    flag on the writer and answers 404, so the audit log holds exactly one
+    resolution (ADR 0013)."""
+    party = mod_party(admin, client)
+    other = TestClient(client.app)
+    other.post(f"/api/join/{party['join_code']}", json={"display_name": "Robin"})
+    flagged = other.post(
+        "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+    ).json()["id"]
+
+    mod_a = _mod(client, party["mod_code"])
+    mod_b = _mod(client, party["mod_code"])
+
+    resolved_written = threading.Event()
+    release = threading.Event()
+    real_log_action = mod.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.DUPLICATE_FLAG_RESOLVED:
+            resolved_written.set()
+            assert release.wait(timeout=5), "resolve was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(mod, "log_action", blocking_log_action)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(mod_a.cookies),
+            ) as api_a,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(mod_b.cookies),
+            ) as api_b,
+        ):
+            first = asyncio.create_task(
+                api_a.post(
+                    f"/api/mod/flags/{flagged}/resolve",
+                    json={"resolution": "cleared"},
+                )
+            )
+            assert await asyncio.to_thread(resolved_written.wait, 5)
+
+            second = asyncio.create_task(
+                api_b.post(
+                    f"/api/mod/flags/{flagged}/resolve",
+                    json={"resolution": "cleared"},
+                )
+            )
+            await asyncio.sleep(0.3)
+            assert not second.done(), "second resolve did not wait for the writer"
+
+            release.set()
+            return await first, await second
+
+    try:
+        first_response, second_response = asyncio.run(interleave())
+    finally:
+        mod_a.close()
+        mod_b.close()
+        other.close()
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 404, second_response.text
+    assert (
+        client.app.state.db.execute(
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'duplicate_flag.resolved'"
+        ).fetchone()[0]
+        == 1
+    )
+
+
+def test_remove_member_after_a_concurrent_remove_is_not_found(
+    admin, client, monkeypatch
+):
+    """Two moderators removing one player: the second re-checks the
+    player's team on the writer and answers 404, so only one parking team
+    and one audit row are created (ADR 0013)."""
+    party = mod_party(admin, client)
+    moderator_a = _mod(client, party["mod_code"])
+    moderator_b = _mod(client, party["mod_code"])
+    team_id = client.app.state.db.execute(
+        "SELECT team_id FROM player WHERE id = ?", (party["player_id"],)
+    ).fetchone()["team_id"]
+
+    removed_written = threading.Event()
+    release = threading.Event()
+    real_log_action = mod.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.TEAM_MEMBER_REMOVED:
+            removed_written.set()
+            assert release.wait(timeout=5), "remove was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(mod, "log_action", blocking_log_action)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(moderator_a.cookies),
+            ) as api_a,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(moderator_b.cookies),
+            ) as api_b,
+        ):
+            first = asyncio.create_task(
+                api_a.post(f"/api/mod/teams/{team_id}/remove/{party['player_id']}")
+            )
+            assert await asyncio.to_thread(removed_written.wait, 5)
+
+            second = asyncio.create_task(
+                api_b.post(f"/api/mod/teams/{team_id}/remove/{party['player_id']}")
+            )
+            await asyncio.sleep(0.3)
+            assert not second.done(), "second remove did not wait for the writer"
+
+            release.set()
+            return await first, await second
+
+    try:
+        first_response, second_response = asyncio.run(interleave())
+    finally:
+        moderator_a.close()
+        moderator_b.close()
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 404, second_response.text
+    conn = client.app.state.db
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'team.member_removed'"
+        ).fetchone()[0]
+        == 1
+    )
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM team WHERE event_id = ?", (party["event_id"],)
+        ).fetchone()[0]
+        == 2
+    )
+
+
+def test_notice_ack_derives_the_pending_strike_on_the_writer(
+    admin, client, monkeypatch
+):
+    """The ack must derive its pending strike in the same transaction that
+    writes the acknowledgement (ADR 0013): a reader read could name a
+    strike that a concurrent reversal had already cleared."""
+    party = mod_party(admin, client)
+    submission = _submit(client, party["riddle_ids"][0], party["evidence_id"])
+    moderator = _mod(client, party["mod_code"])
+    conn = client.app.state.db
+    moderator_id = conn.execute(
+        "SELECT id FROM moderator WHERE event_id = ?", (party["event_id"],)
+    ).fetchone()["id"]
+    conn.execute(
+        "INSERT INTO strike (id, player_id, event_id, level, submission_id,"
+        " issued_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "strike-warned",
+            party["player_id"],
+            party["event_id"],
+            1,
+            submission["id"],
+            moderator_id,
+            int(time.time()),
+        ),
+    )
+    conn.commit()
+
+    seen_on = []
+    real_derive = players.derive_restriction
+
+    def recording_derive(c, player_id):
+        seen_on.append(c is conn)
+        return real_derive(c, player_id)
+
+    monkeypatch.setattr(players, "derive_restriction", recording_derive)
+
+    try:
+        response = client.post("/api/me/notice-ack")
+    finally:
+        moderator.close()
+
+    assert response.status_code == 200, response.text
+    assert seen_on == [True], "the ack derived the pending strike off the writer"
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'notice.acknowledged'"
+        ).fetchone()[0]
+        == 1
+    )

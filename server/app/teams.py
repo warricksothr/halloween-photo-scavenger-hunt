@@ -135,6 +135,11 @@ def rename_team(
     if body.name == old:
         return {"ok": True, "name": old}
     with locked_transaction(request) as writer:
+        # Re-read on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so the audit's old_name can be stale.
+        old = writer.execute(
+            "SELECT name FROM team WHERE id = ?", (ctx.team_id,)
+        ).fetchone()["name"]
         writer.execute(
             "UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id)
         )
@@ -163,7 +168,6 @@ def create_invite(
     """Mint a single-use invite token for the caller's team. Any member
     may invite — the size limit is enforced at redemption, so creating
     one more invite than there are seats is harmless."""
-    conn: sqlite3.Connection = reader(request)
     now = int(time.time())
     token = ids.new_code(10)
     expires_at = now + INVITE_TTL_SECONDS
@@ -183,7 +187,11 @@ def create_invite(
             entity_id=token,
             details={"expires_at": expires_at},
         )
-    row = conn.execute("SELECT * FROM team_invite WHERE token = ?", (token,)).fetchone()
+        # Build the response from the writer (ADR 0013): the row exists in
+        # this transaction, and the reader's snapshot need not include it.
+        row = writer.execute(
+            "SELECT * FROM team_invite WHERE token = ?", (token,)
+        ).fetchone()
     return _invite_json(row)
 
 
@@ -205,10 +213,17 @@ def revoke_invite(
     if invite["redeemed_by"] is not None or invite["revoked_at"] is not None:
         return _err(409, "invite_closed", "That invite is already used or revoked.")
     with locked_transaction(request) as writer:
-        writer.execute(
-            "UPDATE team_invite SET revoked_at = ? WHERE token = ?",
-            (int(time.time()), token),
+        # Conditional on the open state (ADR 0013): the reader check above
+        # is the committed snapshot, and a redemption can commit between
+        # it and this UPDATE. Redeemed tokens are history, not revocable.
+        cur = writer.execute(
+            "UPDATE team_invite SET revoked_at = ?"
+            " WHERE token = ? AND team_id = ?"
+            " AND redeemed_by IS NULL AND revoked_at IS NULL",
+            (int(time.time()), token, ctx.team_id),
         )
+        if cur.rowcount == 0:
+            return _err(409, "invite_closed", "That invite is already used or revoked.")
         log_action(
             writer,
             event_id=ctx.event_id,

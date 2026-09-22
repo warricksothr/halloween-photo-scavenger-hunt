@@ -128,7 +128,6 @@ def list_events(request: Request, _: str = Depends(auth.require_admin)):
 def create_event(
     body: EventCreate, request: Request, _: str = Depends(auth.require_admin)
 ):
-    conn: sqlite3.Connection = reader(request)
     now = int(time.time())
     event_id = ids.new_id()
     join_code, mod_code = ids.new_code(), ids.new_code()
@@ -163,7 +162,9 @@ def create_event(
                 "team_size_limit": body.team_size_limit,
             },
         )
-    row = _get_event(conn, event_id)
+        # Build the response from the writer (ADR 0013): the row exists in
+        # this transaction, and the reader's snapshot need not include it.
+        row = _get_event(writer, event_id)
     return _event_json(row, with_codes=True)
 
 
@@ -580,23 +581,35 @@ def purge_event(
             409, "confirm_mismatch", "Type the event's name exactly to purge it."
         )
 
-    # Photo files are named by evidence id (originals/{id} + the
-    # derivative at photo_path) — collect them before the rows vanish.
-    evidence_rows = conn.execute(
-        "SELECT e.id, e.photo_path FROM evidence_item e"
-        " JOIN team t ON t.id = e.team_id WHERE t.event_id = ?",
-        (event_id,),
-    ).fetchall()
-    counts = {
-        "submissions": conn.execute(
-            "SELECT COUNT(*) FROM submission WHERE riddle_id IN"
-            " (SELECT id FROM riddle WHERE event_id = ?)",
-            (event_id,),
-        ).fetchone()[0],
-        "evidence": len(evidence_rows),
-    }
-
     with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so a concurrent purge (or a reopen) can land
+        # between the checks above and this transaction. The counts and
+        # the photo list must come from the rows this transaction deletes.
+        event = _get_event(writer, event_id)
+        if event is None:
+            return _err(404, "event_not_found", "No such event.")
+        if event["status"] != "closed":
+            return _err(409, "event_not_closed", "Close the event before purging it.")
+        if body.confirm != event["name"]:
+            return _err(
+                409, "confirm_mismatch", "Type the event's name exactly to purge it."
+            )
+        # Photo files are named by evidence id (originals/{id} + the
+        # derivative at photo_path) — collect them before the rows vanish.
+        evidence_rows = writer.execute(
+            "SELECT e.id, e.photo_path FROM evidence_item e"
+            " JOIN team t ON t.id = e.team_id WHERE t.event_id = ?",
+            (event_id,),
+        ).fetchall()
+        counts = {
+            "submissions": writer.execute(
+                "SELECT COUNT(*) FROM submission WHERE riddle_id IN"
+                " (SELECT id FROM riddle WHERE event_id = ?)",
+                (event_id,),
+            ).fetchone()[0],
+            "evidence": len(evidence_rows),
+        }
         # The final audit row: the purge records what it destroyed,
         # then disappears with the event's log.
         log_action(

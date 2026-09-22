@@ -58,6 +58,29 @@ def join(join_code: str, body: JoinBody, request: Request):
     team_id, player_id = ids.new_id(), ids.new_id()
     user_agent = request.headers.get("user-agent", "")
     with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so a purge or a close can land between the
+        # read above and this transaction. Without this the team INSERT
+        # would fail the event foreign key after a purge.
+        event = writer.execute(
+            "SELECT * FROM event WHERE id = ?", (event["id"],)
+        ).fetchone()
+        if event is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "bad_join_code",
+                    "message": "That join link doesn't match any event.",
+                },
+            )
+        if event["status"] == "closed":
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "event_closed",
+                    "message": "This event has already ended.",
+                },
+            )
         # Team-of-one first: player.team_id is NOT NULL, so the team row
         # must exist before the player references it. Unnamed in MVP
         # (name arrives with the teams stretch goal).
@@ -151,11 +174,13 @@ def notice_ack(
 
     Idempotent: acking with no pending notice is a no-op 200 — a
     double-tap must not be an error."""
-    conn: sqlite3.Connection = reader(request)
-    restriction = derive_restriction(conn, ctx.player_id)
-    if restriction.pending_notice_strike_id is None:
-        return {"ok": True}
     with locked_transaction(request) as writer:
+        # Derive on the writer (ADR 0013): a strike can be added or
+        # reversed between a reader read and this write, and the ack must
+        # name the strike this transaction can see.
+        restriction = derive_restriction(writer, ctx.player_id)
+        if restriction.pending_notice_strike_id is None:
+            return {"ok": True}
         log_action(
             writer,
             event_id=ctx.event_id,

@@ -140,6 +140,34 @@ async def upload(
 
     now = int(time.time())
     with locked_transaction(request) as writer:
+        # Re-check the gates on the writer (ADR 0013): the reader serves
+        # the last committed snapshot, and the Pillow work above is slow,
+        # so a strike, a purge, or a burst of uploads can land in between.
+        # The reader checks above are only a fast-fail before that work.
+        restriction = derive_restriction(writer, ctx.player_id)
+        if restriction.blocks_uploads(conduct_now()):
+            return _err(
+                403,
+                "upload_restricted",
+                "Uploads are temporarily disabled for your team.",
+            )
+        if riddle_id is not None:
+            riddle = writer.execute(
+                "SELECT 1 FROM riddle WHERE id = ? AND event_id = ?",
+                (riddle_id, ctx.event_id),
+            ).fetchone()
+            if riddle is None:
+                return _err(404, "riddle_not_found", "No such riddle on this event.")
+        recent = writer.execute(
+            "SELECT COUNT(*) FROM evidence_item WHERE team_id = ? AND created_at > ?",
+            (ctx.team_id, cutoff),
+        ).fetchone()[0]
+        if recent >= RATE_LIMIT_UPLOADS:
+            return _err(
+                429,
+                "rate_limited",
+                "Too many uploads — give it a minute and try again.",
+            )
         writer.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
             " photo_path, phash, created_at)"
@@ -199,15 +227,18 @@ async def upload(
                 )
                 break  # one flag per upload is enough to review
 
+        # Build the response from the writer (ADR 0013): the row exists in
+        # this transaction, and the reader's snapshot need not include it.
+        row = writer.execute(
+            "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
+        ).fetchone()
+
     # Files written after the row commits: a DB failure leaves no orphan
     # files, and a file-write failure here leaves a row whose 404-on-serve
     # the moderator can see (and the player simply re-uploads).
     (photos_dir / derivative_rel).write_bytes(processed.derivative_bytes)
     (photos_dir / original_rel).write_bytes(data)
 
-    row = conn.execute(
-        "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
-    ).fetchone()
     return _item_json(row)
 
 
