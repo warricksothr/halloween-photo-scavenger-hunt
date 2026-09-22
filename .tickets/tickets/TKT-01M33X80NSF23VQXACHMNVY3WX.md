@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:33:19Z
+updated_at: 2026-09-22T17:39:44Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -244,3 +244,25 @@ Accepted and fixed at `e0af3a9`: the reader fast path is gone, and the current n
 - `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
 
 Fix head: `e0af3a9`.
+
+**agent:opencode/read-isolation** at 2026-09-22T17:39:44Z
+
+### Terva review round 6 — review 151 on `b8bc3d1`
+
+Request `ready-review-6`; run `71ae3994-bd37-438c-81da-c0e3896ce02b`; Actions run #140 (id 8698); model `gpt-5.6-sol` (thinking low); review hash `f1a98e8173005ecf37aece6b2eada1dd6055bc52d1cc22a4f0f09a2900b21696`.
+
+The round-5 finding is resolved: the stale reader fast path is gone and the no-op decision and update both use the name read inside the writer transaction.
+
+One new low finding about the test, not the code:
+
+- low `server/app/teams.py:128` — the round-5 rename regression test created its interleaving by monkeypatching `teams.reader`, but `rename_team` no longer calls that function, so the competing commit never ran. The test only performed an ordinary no-op rename and asserted a value that was unchanged from setup.
+
+Accepted. The test is replaced at `bec9c85` with a writer-lock interleaving: two requests ask for the same name, the first is parked inside its transaction via `teams.log_action`, and the second must wait on the lock (`assert not second.done()`), then see the first's commit and no-op. The test asserts exactly one new `team.renamed` audit row. It fails on the old code, which decided the no-op off the reader snapshot and logged a second rename row.
+
+### Evidence
+
+- `server/.venv/bin/python -m pytest server -q` → 172 passed.
+- `bash scripts/check-quality.sh` → exit 0.
+- `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
+
+Fix head: `bec9c85`.
