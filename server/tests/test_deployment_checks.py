@@ -503,6 +503,20 @@ def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):
     assert not list(destination.glob("arkham-backup-*.tar.gz"))
 
 
+def test_backup_accepts_a_leading_zero_keep_count(tmp_path):
+    """`08` is decimal eight, not an octal arithmetic error."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(source, tmp_path, ARKHAM_BACKUP_KEEP="08")
+
+    for _ in range(3):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    assert len(list(destination.glob("arkham-backup-*.tar.gz"))) == 3
+
+
 def test_backup_fails_when_retention_cannot_delete_an_archive(tmp_path):
     source = _live_data(tmp_path)
     destination = tmp_path / "backups"

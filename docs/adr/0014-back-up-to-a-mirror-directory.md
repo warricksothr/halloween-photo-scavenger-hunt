@@ -36,7 +36,9 @@ the script cannot know one exists, so an unset mirror prints a warning rather
 than failing, and a mirror that is set but not a directory fails loudly —
 `mkdir` there would create a directory on the root disk and shadow an unmounted
 mount. When `stat` is available and the mirror shares a device with `data/`,
-the script warns, because that is not off-host.
+the script warns, because that is not off-host. `ARKHAM_BACKUP_KEEP` is
+normalised to decimal before the retention sum, because a POSIX shell reads a
+leading zero as octal and would abort on a value like `08`.
 
 Archive names carry the timestamp plus a `mktemp -d` suffix, so two runs in the
 same second cannot collide; pruning orders by name, which is chronological

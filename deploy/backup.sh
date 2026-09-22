@@ -46,6 +46,10 @@ case "$KEEP" in
     exit 1
     ;;
 esac
+# Shell arithmetic reads a leading zero as octal, so "08" would abort the
+# retention sum. Strip the zeros to make every digit string decimal.
+while [ "${KEEP#0}" != "$KEEP" ]; do KEEP="${KEEP#0}"; done
+[ -n "$KEEP" ] || KEEP=0
 
 if [ ! -f "$DATA_DIR/arkham.db" ]; then
     echo "no database at $DATA_DIR/arkham.db — nothing to back up" >&2
