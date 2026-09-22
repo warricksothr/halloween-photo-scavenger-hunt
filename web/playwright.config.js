@@ -6,6 +6,10 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
+  // One worker: the specs share one served build, and the service-worker
+  // spec rewrites dist/index.html to stand in for a deploy. Parallel
+  // files would race that rewrite against the other spec.
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: [['list']],

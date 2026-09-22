@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js --config=playwright.config.js",
+    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js e2e/service-worker.spec.js --config=playwright.config.js",
     "screenshots": "npm run build && playwright test e2e/readme-screenshots.spec.js --config=playwright.config.js",
     "preview": "vite preview"
   },
