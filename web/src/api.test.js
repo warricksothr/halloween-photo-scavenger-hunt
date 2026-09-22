@@ -8,7 +8,7 @@ function response({ status = 200, body = {}, json = true } = {}) {
     ok: status >= 200 && status < 300,
     json: json
       ? vi.fn().mockResolvedValue(body)
-      : vi.fn().mockRejectedValue(new Error('not JSON')),
+      : vi.fn().mockRejectedValue(new SyntaxError('not JSON')),
   };
 }
 
@@ -28,6 +28,7 @@ describe('api client', () => {
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify({ display_name: 'Robin', device_label: 'phone' }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -53,6 +54,88 @@ describe('api client', () => {
       error: 'submission_pending',
       message: 'Already scanning.',
       status: 409,
+    });
+  });
+
+  it('folds a rejected fetch into the network error shape', async () => {
+    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+  });
+
+  it('aborts a fetch that never settles', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch.mockImplementation(
+      (_url, opts) =>
+        new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+
+    const pending = api.snapshot();
+    await vi.advanceTimersByTimeAsync(8000);
+
+    await expect(pending).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+    vi.useRealTimers();
+  });
+
+  it('aborts a response body that never settles', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch.mockImplementation((_url, opts) =>
+      Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      }),
+    );
+
+    const pending = api.snapshot();
+    await vi.advanceTimersByTimeAsync(8000);
+
+    await expect(pending).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+    vi.useRealTimers();
+  });
+
+  it('classifies a dropped response body as a network error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: () => Promise.reject(new TypeError('terminated')),
+    });
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+  });
+
+  it('classifies a dropped body on an error response as a network error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      status: 503,
+      ok: false,
+      json: () => Promise.reject(new TypeError('terminated')),
+    });
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
     });
   });
 });

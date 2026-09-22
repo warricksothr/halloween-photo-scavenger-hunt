@@ -91,19 +91,67 @@ export function getState() {
   return state;
 }
 
+// Boot and resync failures are usually a flaky phone connection, so a
+// transient failure retries before the UI gives up. The schedule is short:
+// a player on the boot screen reaches either the game or the retry
+// affordance within a few seconds, and never hangs there.
+const RETRY_DELAYS_MS = [500, 1000, 2000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// A network rejection or a 5xx is worth retrying; a 4xx or a 401 is not
+// (the store routes a 401 itself).
+function isTransient(result) {
+  return result.network === true || result.status >= 500;
+}
+
+// Both boot reads (the player snapshot and the moderator probe) go through
+// this, so neither is less resilient than the other.
+async function withRetry(request) {
+  let result = await request();
+  for (const delay of RETRY_DELAYS_MS) {
+    if (!isTransient(result)) return result;
+    await sleep(delay);
+    result = await request();
+  }
+  return result;
+}
+
 // The resync point. Called on boot, after every mutation, and on SSE
 // deltas (increment 7). Role detection: the player snapshot 401s for a
 // mod-only cookie, so a 401 means "try the moderator probe" before
 // concluding the visitor is unauthenticated.
+//
+// Refresh retries for up to a few seconds, and it is called from boot, from
+// mutations, and from SSE deltas, so several can overlap. Each run takes a
+// generation and drops its result if a newer run started meanwhile — an
+// older run exhausting its retries must not overwrite newer good state with
+// the error phase.
+let refreshGeneration = 0;
+
 export async function refresh() {
-  const result = await api.snapshot();
+  const generation = ++refreshGeneration;
+  const stale = () => generation !== refreshGeneration;
+
+  const result = await withRetry(api.snapshot);
+  if (stale()) return;
   if (result.unauthenticated) {
-    const mod = await api.modState();
+    const mod = await withRetry(api.modState);
+    if (stale()) return;
+    if (mod.error) {
+      // The probe failed too, so this is a connection problem, not an
+      // unauthenticated visitor — do not drop them on the join screen.
+      set({ phase: 'error', error: mod.message });
+      return;
+    }
     if (mod.event) {
       const copy =
         state.copy && state.themeName === mod.event.theme
           ? state.copy
           : await loadTheme(mod.event.theme);
+      if (stale()) return;
       set({ phase: 'ready', role: 'moderator', modEvent: mod.event,
             moderator: mod.moderator, copy, themeName: mod.event.theme,
             snapshot: null });
@@ -123,9 +171,17 @@ export async function refresh() {
     state.themeName === result.event.theme && state.copy
       ? state.copy
       : await loadTheme(result.event.theme);
+  if (stale()) return;
   set({ phase: 'ready', role: 'player', snapshot: result, copy,
         themeName: result.event.theme, modEvent: null });
   startStream();
+}
+
+// The retry affordance on the connection-error screen: back to booting so
+// the retry shows progress, then the full refresh (with its backoff).
+export function retry() {
+  set({ phase: 'booting', error: null });
+  return refresh();
 }
 
 export async function modJoin(modCode) {

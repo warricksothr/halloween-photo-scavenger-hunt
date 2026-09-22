@@ -5,25 +5,67 @@
 // and then hand the fresh snapshot back to the store. Errors follow
 // docs/impl/api.md: {"error": code, "message": human string}.
 
+// A fetch can stay pending indefinitely on a dead connection, which no
+// amount of retry logic can reach. Bound the whole exchange — headers *and*
+// body — so a hung connection turns into the same error shape a rejection
+// does. Uploads carry a photo over a phone network, so they get a much
+// longer budget than a small read.
+const REQUEST_TIMEOUT_MS = 8000;
+const UPLOAD_TIMEOUT_MS = 60000;
+
 async function request(path, options = {}) {
   // FormData bodies (photo upload) must NOT set Content-Type — the
   // browser sets it with the multipart boundary.
   const isForm = options.body instanceof FormData;
-  const resp = await fetch(path, {
-    headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
-    ...options,
-    body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
-  });
-  if (resp.status === 401) {
-    // Not joined (or session revoked) — the store routes to the join
-    // screen; it is not an error from the player's point of view.
-    return { unauthenticated: true };
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+  );
+  try {
+    const resp = await fetch(path, {
+      headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
+      ...options,
+      body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
+      signal: controller.signal,
+    });
+    if (resp.status === 401) {
+      // Not joined (or session revoked) — the store routes to the join
+      // screen; it is not an error from the player's point of view.
+      return { unauthenticated: true };
+    }
+    // The fetch promise settles on the headers, so the body read has to stay
+    // inside this block to remain under the timeout. A body read can fail
+    // three ways, and they are not the same: the timeout aborted it, the
+    // connection dropped mid-stream, or the body was not JSON. Only the last
+    // is a request failure, whatever the status; the other two are network
+    // errors, and a body that failed to parse must not be handed back as a
+    // successful empty object.
+    let body = {};
+    let bodyMalformed = false;
+    try {
+      body = await resp.json();
+    } catch (err) {
+      if (controller.signal.aborted) throw err;
+      if (!(err instanceof SyntaxError)) throw err;
+      bodyMalformed = true;
+    }
+    if (!resp.ok) {
+      return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status };
+    }
+    if (bodyMalformed) {
+      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status };
+    }
+    return body;
+  } catch {
+    // A dropped connection or an offline phone rejects the promise, and a
+    // dead one never settles until the timeout aborts it. Fold both into
+    // the same error shape the rest of the client branches on, so callers
+    // never see a rejection and a waiting screen cannot stay busy forever.
+    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true };
+  } finally {
+    clearTimeout(timer);
   }
-  const body = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status };
-  }
-  return body;
 }
 
 export const api = {
