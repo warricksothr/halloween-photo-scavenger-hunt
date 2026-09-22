@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T06:35:55Z
+updated_at: 2026-09-22T06:44:56Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -42,8 +42,9 @@ not prevent, since WAL isolates separate connections, not statements sharing
 one.
 
 Deferred from TKT-01M33RFWG7VYS4J83B5SQ4JTH0 as Terva review 116 finding-1
-(medium). That ticket's fix serialized write transactions and restored audit
-atomicity; it deliberately left read isolation alone.
+(medium), and re-raised by review 119 finding-1. That ticket's fix serialized
+write transactions and restored audit atomicity; it deliberately left read
+isolation alone.
 
 ### Evidence
 
@@ -64,7 +65,7 @@ atomicity; it deliberately left read isolation alone.
 - Or keep reads unlocked and document why dirty reads are acceptable at party
   scale, if that is the call.
 
-### Acceptance criteria
+## Acceptance criteria
 
 - [ ] A read request cannot observe another request's uncommitted rows.
 - [ ] A regression test interleaves an unlocked read with an uncommitted write
