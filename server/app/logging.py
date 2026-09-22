@@ -21,7 +21,7 @@ import re
 import secrets
 import time
 import traceback
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator, Mapping
 from contextvars import ContextVar
 from typing import Any
 from urllib.parse import parse_qsl
@@ -63,6 +63,18 @@ _CODE_PREFIXES = (
 # scrubber replaces verbatim, so a two-character query value would mangle
 # the message it is meant to protect. Real codes and tokens are longer.
 _MIN_SECRET = 6
+
+# Media types whose text the exception scrubber reads. A photo upload is
+# binary and is skipped: mining its bytes for strings would redact noise
+# while its part values are not the kind of secret a traceback quotes.
+_JSON_MEDIA = "application/json"
+_FORM_MEDIA = "application/x-www-form-urlencoded"
+_PARSED_MEDIA = (_JSON_MEDIA, _FORM_MEDIA)
+
+# Only the first of a parsed body is buffered. The bodies this reads are
+# small — a name, a code, a password — and the cap keeps a pathological
+# one from being held in memory on top of the body cap's spool.
+_BUFFERED_BODY_BYTES = 64 * 1024
 
 # The standard LogRecord attributes. A formatter has to skip them or every
 # line would carry the level, the pathname, the thread name, and so on.
@@ -125,10 +137,11 @@ def log_unhandled_exception(
     ``exc_info``. The exception's own message is the one part of the log
     the request does not control: app code can put a value it was handed
     into a ``raise``. ``exc_info`` would write that message verbatim, so
-    it is formatted instead and each of the request's own secrets is
-    replaced with ``<redacted>``. Nothing is lost that matters — the
-    type, the frames, and the message all survive unless the message
-    names a secret.
+    it is formatted instead and each value the request carried — the path
+    credential, a query value, a header or cookie, a JSON or form body's
+    strings — is replaced with ``<redacted>``. Nothing is lost that
+    matters: the type, the frames, and the message all survive unless the
+    message names a secret.
     """
     rendered = _scrub_secrets(
         "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
@@ -164,13 +177,54 @@ def bearer_secrets(path: str) -> tuple[str, ...]:
     return ()
 
 
+def _media_type(scope: Scope) -> str:
+    """The request's content type, without parameters, lowercased."""
+    for name, value in scope.get("headers", []):
+        if name.lower() == b"content-type":
+            return value.decode("latin-1").partition(";")[0].strip().lower()
+    return ""
+
+
+def _body_secrets(media: str, body: bytes) -> tuple[str, ...]:
+    """The string values a JSON or form body carried.
+
+    The traceback is the one log line request code does not control, so a
+    value the body handed to app code can reach it through a ``raise``.
+    Only the two media types the API parses are read; a photo upload is
+    binary and yields nothing. The bytes this parses are dropped when the
+    request ends and are never logged.
+    """
+    if media not in _PARSED_MEDIA:
+        return ()
+    try:
+        if media == _JSON_MEDIA:
+            parsed: Any = json.loads(body)
+        else:
+            parsed = dict(parse_qsl(body.decode("utf-8", "replace")))
+    except ValueError:
+        return ()
+    return tuple(value for value in _strings_in(parsed) if len(value) >= _MIN_SECRET)
+
+
+def _strings_in(value: Any) -> Iterator[str]:
+    """Every string leaf of a decoded body, whatever its shape."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _strings_in(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings_in(item)
+
+
 def _request_secrets(scope: Scope) -> tuple[str, ...]:
     """The secret values this request carried, longest first.
 
     Nothing collected here is logged; it exists so a traceback that
-    quotes one of them can be scrubbed. The body is not read: this module
-    never touches it, and a body value reaches a message only if app code
-    raised with it.
+    quotes one of them can be scrubbed. The body is not read here — the
+    middleware buffers it separately, and only on the failure path, so
+    the scrub set is built without holding a body for every request.
     """
     candidates: list[str] = list(bearer_secrets(scope.get("path", "")))
 
@@ -330,11 +384,31 @@ class RequestLogMiddleware:
         # below. The id, the redacted path, and the secrets the exception
         # logger scrubs all ride the scope for the app's exception handler,
         # which runs after this middleware's ``finally`` has reset the
-        # contextvars.
+        # contextvars. The secret list is mutable on purpose: the handler
+        # runs after the body has been read, so a body value encountered
+        # before the raise can still be appended to it.
+        carried = list(_request_secrets(scope))
         state = scope.setdefault("state", {})
         state["request_id"] = request_id
         state["redacted_path"] = path
-        state["request_secrets"] = _request_secrets(scope)
+        state["request_secrets"] = carried
+
+        # The traceback is the one log line request code does not control,
+        # so a value from a parsed body can reach it through a ``raise``.
+        # Buffering is limited to the media types ``_body_secrets`` reads
+        # and to a bound, and the bytes are consumed only on the failure
+        # path below — a request that succeeds pays nothing but the copy.
+        media = _media_type(scope)
+        body = bytearray()
+
+        async def receiving() -> Message:
+            message = await receive()
+            if media in _PARSED_MEDIA and message["type"] == "http.request":
+                chunk = message.get("body", b"")
+                room = _BUFFERED_BODY_BYTES - len(body)
+                if chunk and room > 0:
+                    body.extend(chunk[:room])
+            return message
 
         id_token = _request_id.set(request_id)
         path_token = _redacted_path.set(path)
@@ -354,7 +428,12 @@ class RequestLogMiddleware:
             await send(message)
 
         try:
-            await self.app(scope, receive, sending)
+            await self.app(scope, receiving, sending)
+        except BaseException:
+            # The route read the body before it raised, so the values are
+            # in the buffer now.
+            carried.extend(_body_secrets(media, bytes(body)))
+            raise
         finally:
             _log_request(scope, request_id, path, status, started)
             _request_id.reset(id_token)

@@ -187,13 +187,35 @@ def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
     assert line.request_id == resp.headers[app_logging.REQUEST_ID_HEADER]
 
 
+def test_body_secrets_reads_json_and_form_values():
+    assert set(
+        app_logging._body_secrets(
+            "application/json",
+            b'{"display_name": "Bruce Wayne", "password": "hunter2"}',
+        )
+    ) == {"Bruce Wayne", "hunter2"}
+
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded", b"code=JOIN234&password=hunter2"
+        )
+    ) == {"JOIN234", "hunter2"}
+
+
+def test_body_secrets_skips_binary_and_malformed_bodies():
+    # A photo upload is not text; mining it would redact noise.
+    assert app_logging._body_secrets("image/jpeg", b"\xff\xd8\xff\xe0topsecret") == ()
+    # A body that does not parse yields nothing rather than raising.
+    assert app_logging._body_secrets("application/json", b"{not json") == ()
+
+
 def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     """TKT-01M33S2WK: one traceback, tied to the request, without the
     cookie, the Authorization header, or the body.
 
-    The route raises with the request's own secrets in the message — the
-    one way a traceback could smuggle a credential past the middleware —
-    so the assertions show the scrubber, not merely that an unused value
+    The route raises with a value the request carried in each place a
+    secret can enter — the path, a header, and the JSON body — so the
+    assertions show the scrubber at work, not merely that an unused value
     was left out.
     """
     app = create_app(
@@ -207,7 +229,8 @@ def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     @app.post("/api/team/invites/{token}/boom")
     def boom(token: str, request: Request, payload: dict):
         raise RuntimeError(
-            f"kaboom token={token} auth={request.headers['authorization']}"
+            f"kaboom token={token} auth={request.headers['authorization']} "
+            f"password={payload['password']}"
         )
 
     caplog.set_level(logging.INFO)
@@ -244,7 +267,10 @@ def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     assert app_logging.REDACTED in text
     assert "SUPERSECRETCODE" not in text
     assert "topsecrettoken" not in text
+    # The body value the route raised with, and one it did not: the whole
+    # JSON body's strings are scrubbed, not just the field named password.
     assert "hunter2" not in text
+    assert "Bruce Wayne" not in text
 
 
 def test_query_string_is_redacted(client, caplog):

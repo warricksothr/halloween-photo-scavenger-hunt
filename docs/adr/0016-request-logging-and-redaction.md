@@ -59,12 +59,22 @@ was present; cookies and `Authorization` are never logged.
 line never reads the body, but the exception's own message is a channel the
 request does not control: app code can put a value it was handed into a `raise`,
 and `exc_info` would write that message verbatim. `log_unhandled_exception`
-therefore formats the traceback itself and replaces each of the request's own
-secret values — the bearer path segment, the query values, the `Authorization`
-value, and each cookie value — with `<redacted>`, longest first. The type, the
-frames, and the message survive unless the message names a secret. This is the
-one place the middleware reads `Authorization` and `Cookie`, and it reads them
-only to seed the scrub set; neither reaches a sink.
+therefore formats the traceback itself and replaces each value the request
+carried — the bearer path segment, the query values, the `Authorization` value,
+each cookie value, and the string values of a JSON or form body — with
+`<redacted>`, longest first. The type, the frames, and the message survive
+unless the message names one of them. This is the one place the middleware
+reads `Authorization` and `Cookie`, and it reads them only to seed the scrub
+set; neither reaches a sink.
+
+Reading the body for that set costs a copy, so it is bounded: the middleware
+buffers a parsed body up to `_BUFFERED_BODY_BYTES` and only for the two media
+types `_body_secrets` understands, and it parses the buffer in the `except`
+branch alone. A request that succeeds pays nothing but the copy, a photo upload
+is never buffered or parsed, and the bytes are dropped when the request ends.
+The scrub set is mutated in place across the request so the exception handler —
+which runs after the middleware's `finally` resets the contextvars — still sees
+what the body added.
 
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same
@@ -86,9 +96,9 @@ on so pytest's `caplog` still sees records.
 - Redaction is a list of prefixes, so a new code-carrying route must be added to
   `_CODE_PREFIXES`. The `redact_path` tests make the omission visible, but the
   list is not derived from the routers.
-- The exception scrubber knows only what the request carried in its path, query,
-  `Authorization`, and `Cookie`. A secret that reached the app only in the body
-  and then into a `raise` message would still be logged; the body stays unread
-  by design, and this is a constraint on app code rather than a hole in the
-  scrubber. Values shorter than `_MIN_SECRET` are left alone, because replacing
-  a short string verbatim would mangle ordinary words.
+- The exception scrubber reads the body of a JSON or form request. A multipart
+  body is not parsed, so a value that reached the app only in a multipart part
+  and then into a `raise` message would still be logged; the API's one multipart
+  route uploads a photo, and binary is not mined for strings. Values shorter
+  than `_MIN_SECRET` are left alone, because replacing a short string verbatim
+  would mangle ordinary words.
