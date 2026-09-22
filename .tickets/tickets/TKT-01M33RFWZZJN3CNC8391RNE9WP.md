@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:24:48Z
+updated_at: 2026-09-22T18:33:54Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -97,3 +97,27 @@ Two defects in `deploy/backup.sh`:
 - The header's restore line extracts into `data` and agrees with RUNBOOK §1
   (AC1).
 - An unset mirror warns; a mirror that is not a directory fails.
+
+## Notes
+
+**agent:opencode/backup-restore** at 2026-09-22T18:33:54Z
+
+### Round 1 — both findings accepted
+
+Reviewed head `b50103bfc8aeb0dfd048d05c1e309b36289d5f7f` (review id 156), Terva
+run `7f854877-6fc9-44e1-a83f-5e1a2d1e9876` for `request:backup-restore-1`,
+Actions run #171 (id 8741).
+
+- **high — the restore recipe passed a wildcard to tar.** Correct, and made
+  worse by the new retention. Once more than one archive exists the shell
+  expands it and tar reads all but the first as member names, so recovery
+  fails. Both the RUNBOOK §1 recipe and the script header now select the newest
+  archive with `ls -1t … | head -n 1` and pass one quoted path. The doc test
+  asserts the recipe selects a single archive and that no `tar -xzf` line
+  contains a wildcard.
+- **medium — the same-second test depended on the wall clock.** Correct. The
+  restricted PATH now installs a `date` stub pinned to one timestamp, so both
+  runs provably share a second and only the archive suffix can separate them.
+  The test asserts both names carry that stamp.
+
+Fixed in `27ad09d`. Re-requesting review.
