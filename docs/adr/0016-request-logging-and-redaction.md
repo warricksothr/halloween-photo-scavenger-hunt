@@ -113,6 +113,9 @@ on so pytest's `caplog` still sees records.
 - The exception scrubber reads the body of a JSON or form request. A multipart
   body is not parsed, so a value that reached the app only in a multipart part
   and then into a `raise` message would still be logged; the API's one multipart
-  route uploads a photo, and binary is not mined for strings. Values shorter
-  than `_MIN_SECRET` are left alone, because replacing a short string verbatim
-  would mangle ordinary words.
+  route uploads a photo, and binary is not mined for strings. There is no length
+  floor on a candidate: a four-digit PIN is as much a secret as a session token,
+  and a short value that appears in the message is replaced wherever it falls,
+  even if that touches an ordinary word. Cookies are collected twice — the raw
+  header and its `SimpleCookie` values — because the framework strips quotes, so
+  the string a route reads is not the one the header held.

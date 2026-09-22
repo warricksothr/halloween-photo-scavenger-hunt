@@ -23,6 +23,7 @@ import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping
 from contextvars import ContextVar
+from http.cookies import CookieError, SimpleCookie
 from itertools import chain
 from typing import Any
 from urllib.parse import parse_qsl
@@ -59,11 +60,6 @@ _CODE_PREFIXES = (
     "/j",
     "/m",
 )
-
-# A candidate shorter than this is too likely to be an ordinary word. The
-# scrubber replaces verbatim, so a two-character query value would mangle
-# the message it is meant to protect. Real codes and tokens are longer.
-_MIN_SECRET = 6
 
 # Media types whose text the exception scrubber reads. A photo upload is
 # binary and is skipped: mining its bytes for strings would redact noise
@@ -230,7 +226,7 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
             strings = chain(_strings_in(parsed), _raw_query_tokens(text))
     except ValueError:
         return None
-    return tuple(value for value in strings if len(value) >= _MIN_SECRET)
+    return tuple(value for value in strings if value)
 
 
 def _unrepresentable(value: Any) -> bool:
@@ -312,8 +308,19 @@ def _request_secrets(scope: Scope) -> tuple[str, ...]:
             for cookie in header.split(";"):
                 _, _, cookie_value = cookie.partition("=")
                 candidates.append(cookie_value.strip())
+            # The framework parses cookies with ``SimpleCookie``, which
+            # strips quotes and surrounding space, so the value a route
+            # reads is a different string than the raw header holds.
+            parsed_cookies = SimpleCookie()
+            try:
+                parsed_cookies.load(header)
+            except CookieError:
+                pass
+            else:
+                for morsel in parsed_cookies.values():
+                    candidates.append(morsel.value)
 
-    distinct = {value for value in candidates if len(value) >= _MIN_SECRET}
+    distinct = {value for value in candidates if value}
     return tuple(sorted(distinct, key=len, reverse=True))
 
 

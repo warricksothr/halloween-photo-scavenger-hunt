@@ -57,8 +57,10 @@ when the increment runs and its tests pass.
   body with a number, boolean, or null drops the message too, since no
   string candidate covers the text that value formats to. Every secret is
   replaced in one pass, so a value that is a substring of `<redacted>`
-  cannot be reintroduced by a later secret. 333 server
-  tests pass; coverage 95.49%.
+  cannot be reintroduced by a later secret. There is no length floor on a
+  candidate, so a four-digit PIN is scrubbed like any token, and a cookie
+  contributes both its raw header and the value the framework unquotes.
+  336 server tests pass; coverage 95.43%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

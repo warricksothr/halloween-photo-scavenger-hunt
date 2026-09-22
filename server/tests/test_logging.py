@@ -104,11 +104,24 @@ def test_request_secrets_collects_the_requests_own_values():
         "topsecrettoken",
         "cookiesecret",
     }
-    # Below the floor: replacing a short ordinary word would mangle the
-    # message it is meant to protect.
-    assert "dark" not in secrets
+    # No length floor: a short code or PIN is still a secret, so it is
+    # scrubbed even though the replacement may touch ordinary words.
+    assert "dark" in secrets
     # Longest first, so a secret containing another cannot leave a fragment.
     assert list(secrets) == sorted(secrets, key=len, reverse=True)
+
+
+def test_request_secrets_unquotes_a_cookie_value():
+    """The framework strips a cookie's quotes, so the scrubber must too."""
+    secrets = app_logging._request_secrets(
+        {
+            "path": "/api/health",
+            "query_string": b"",
+            "headers": [(b"cookie", b'arkham_session="topsecret"')],
+        }
+    )
+
+    assert "topsecret" in secrets
 
 
 def test_scrub_secrets_replaces_the_longest_first():
@@ -423,6 +436,61 @@ def test_a_json_key_quoted_by_route_code_is_scrubbed(tmp_path, caplog):
     assert "topsecretkey" not in text
     # The message itself survives; only the key inside it goes.
     assert "RuntimeError: kaboom key=" in text
+
+
+def test_a_short_query_value_is_scrubbed(tmp_path, caplog):
+    """A short PIN or code is still a secret, floor or no floor."""
+    app = create_app(
+        tmp_path / "short-query.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/short-boom")
+    def short_boom(request: Request):
+        raise RuntimeError(f"pin={request.query_params['pin']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get("/api/team/invites/SUPERSECRETCODE/short-boom?pin=1234")
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "1234" not in text
+    assert "RuntimeError:" in text
+
+
+def test_a_quoted_cookie_value_is_scrubbed(tmp_path, caplog):
+    """The framework unquotes a cookie, so the route reads a new string."""
+    app = create_app(
+        tmp_path / "quoted-cookie.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/cookie-boom")
+    def cookie_boom(request: Request):
+        raise RuntimeError(f"cookie={request.cookies['arkham_session']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get(
+            "/api/team/invites/SUPERSECRETCODE/cookie-boom",
+            headers={"cookie": 'arkham_session="topsecret"'},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "topsecret" not in text
+    assert "RuntimeError: cookie=" in text
 
 
 def test_a_malformed_json_body_drops_the_exception_message(tmp_path, caplog):
