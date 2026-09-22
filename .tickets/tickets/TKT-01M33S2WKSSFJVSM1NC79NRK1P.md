@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:15:31Z
+updated_at: 2026-09-22T23:19:33Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -130,3 +130,32 @@ Evidence: head 7330985, `bash scripts/check-server.sh` green — 325 tests,
 coverage 95.17%, Ruff clean (45 files formatted). New unit tests
 `test_body_secrets_reads_json_and_form_values` and
 `test_body_secrets_skips_binary_and_malformed_bodies`. Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:19:33Z
+
+Supersedes the note at head e1984e7.
+
+### high (review 188, run #272, request body-scrub-fix): a body over the buffer limit
+Terva confirmed the small-body path but kept the finding open: a supported JSON
+or form body larger than `_BUFFERED_BODY_BYTES` is truncated before
+`_body_secrets` parses it, the truncated copy fails to parse, and the app —
+which received the full body — can quote a value from it that is not in the
+scrub set.
+
+Accepted as the reviewer's "track whether the body exceeded the limit and use a
+safe traceback representation when complete sanitization is impossible" remedy.
+The middleware now tracks whether it dropped bytes; on the failure path it sets
+`state["safe_traceback"]`, and `log_unhandled_exception` then logs the frames
+and the exception type without the message (`include_message=False`, recorded
+as `message_included` on the record). The message is the only place an
+uninspected body value can surface, so a body too large to scrub whole loses
+its message instead of risking it. The buffer stays bounded rather than growing
+to the app's body cap, which is derived from the photo limit.
+
+Tests: `test_a_truncated_body_drops_the_exception_message` shrinks
+`_BUFFERED_BODY_BYTES` to 64 so a small body exercises the path; it asserts the
+frame line survives, the `Traceback` header and the `RuntimeError` message do
+not, and the body secret is absent.
+
+Evidence: head 65f6f82, `bash scripts/check-server.sh` green — 326 tests,
+coverage 95.19%, Ruff clean (45 files formatted). Re-review requested.
