@@ -46,12 +46,16 @@ Three checks wrap the routes, so they are not repeated per endpoint:
 
 | Role      | How obtained                        | Cookie scope        |
 | --------- | ----------------------------------- | ------------------- |
-| admin     | username/password (server config)   | all events          |
-| moderator | mod code for one event              | that event, mod API |
+| admin     | username/password, or SSO host group | all events         |
+| moderator | SSO moderator group + mod code      | that event, mod API |
 | player    | join code + display name            | that event          |
 
 Admin and moderator are distinct: the admin creates events and acts as
 host (strike reversals, event purge); moderators only work the queue.
+
+Single sign-on is optional. When it is unconfigured the password login is
+the only way in and the SSO routes answer `503`; when it is configured the
+password login remains as break-glass. See "Single sign-on" below.
 
 ## Endpoint inventory
 
@@ -78,6 +82,41 @@ DELETE /api/admin/events/{id}/riddles/{rid}   (409 if submissions reference it)
 
 Lifecycle transitions log `event.opened` / `event.closed`; riddle edits
 log `riddle.edited` with before/after text in `details`.
+
+### Single sign-on (S9CT)
+
+Optional OIDC authorization-code + PKCE against an Authentik issuer, so a
+host or moderator proves who they are before a cookie is minted. The mod
+link stays the event selector (S9CW); SSO supplies the identity. The
+password login above is unaffected and remains break-glass.
+
+```
+GET    /api/auth/oidc/login            303 → issuer with state, nonce, PKCE S256;
+                                       stashes the verifier in a 10-minute
+                                       httpOnly SameSite=Lax arkham_oidc_txn
+                                       cookie (the callback is a cross-site
+                                       top-level navigation, so Lax is required);
+                                       optional ?next=<same-origin path>
+GET    /api/auth/oidc/callback         code+state → 303 to /admin (host group) or
+                                       /mod (moderator group) | 401 | 502
+```
+
+Both routes answer `503 {"error":"oidc_disabled"}` when SSO is unset. The
+callback verifies the id_token's signature (JWKS), `iss`, `aud`, `exp`,
+and `nonce` before minting anything; any failure is `401` with no session
+cookie and the transaction cookie cleared. A host gets the existing
+`arkham_admin` session; a moderator gets an in-memory `arkham_oidc`
+identity session (`SameSite=Lax`) that S9CW consumes. Tokens, the
+authorization code, and the client secret are used and discarded — never
+stored, logged, audited, or placed in a redirect URL.
+
+Configuration is env-driven (`ARKHAM_OIDC_ISSUER`,
+`ARKHAM_OIDC_CLIENT_ID`, `ARKHAM_OIDC_CLIENT_SECRET`, optional
+`ARKHAM_OIDC_REDIRECT_URI`, `ARKHAM_OIDC_ADMIN_GROUP` default
+`arkham-admin`, `ARKHAM_OIDC_MODERATOR_GROUP` default `arkham-moderator`,
+`ARKHAM_OIDC_SCOPES` default `openid profile email`); all three of issuer,
+client id, and client secret are required to enable it. The Authentik
+side and the deploy runbook are S9D2.
 
 ### Player join & sessions (increment 3)
 

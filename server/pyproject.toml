@@ -9,6 +9,13 @@ dependencies = [
     "argon2-cffi>=23.1",
     "Pillow>=10.0",
     "python-multipart>=0.0.9",
+    # OIDC authorization-code + PKCE (app/oidc.py). authlib pulls in its
+    # own JOSE successor, joserfc, for id_token validation.
+    "authlib>=1.3",
+    # The HTTP client authlib's OAuth2 client uses, and the one Starlette
+    # 1.x's TestClient uses. Pinning it explicitly avoids authlib's
+    # deprecated fallback to the original httpx package.
+    "httpx2>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -16,9 +23,6 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0,<7.0",
     "ruff>=0.9,<1.0",
-    # Starlette 1.x uses httpx2 for TestClient. Keeping this explicit avoids
-    # its deprecated fallback to the original httpx package.
-    "httpx2>=2.0,<3.0",
     # Starlette 1.6 still imports anyio.abc.BlockingPortal, which AnyIO
     # 4.15 deprecates at import time. Keep the test stack warning-free until
     # Starlette moves to anyio.from_thread.BlockingPortal.
