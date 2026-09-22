@@ -39,6 +39,23 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
+  TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`
+  adds `GET /api/auth/oidc/login` and `/callback`: the authorization-code
+  flow with PKCE S256, `state` and `nonce` stashed in an HMAC-signed
+  short-lived `arkham_oidc_txn` cookie, and a `joserfc` id_token check
+  (signature, `iss`, `aud`, `azp`, `exp`, `nonce`). The `groups` claim
+  maps to a role from env (`ARKHAM_OIDC_*`, defaults `arkham-admin` and
+  `arkham-moderator`); an admin gets the existing `arkham_admin` session,
+  a moderator an in-memory identity session consumed by S9CW's gate.
+  Unset OIDC returns 503 and the password login stays as break-glass. Five
+  Terva rounds (175-178 plus a clean pass at `e79dc0c38`) fixed six medium
+  findings: state checked before provider errors, provider `OAuthError`
+  mapped to a sanitized 401, `azp` required for multi-audience tokens,
+  malformed discovery JSON mapped to 502, provider error text kept out of
+  logs, and the transaction lifetime enforced server-side. 312 server
+  tests pass, `oidc.py` at 100% branch, 95.24% overall, 40 frontend tests.
+
 - **2026-09-22 — Every request now logs one redacted structured line.**
   TKT-01M33S2WJ. `app/logging.py` adds a pure-ASGI `RequestLogMiddleware`
   (registered outermost) that emits one JSON line per request with

@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CTBFJTSEKX6QDA6N7P0
 title: Add OIDC authorization-code login for admins and moderators
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,22 +17,15 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/oidc-login
-  branch: t3code/oidc-login
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-oidc-login
-  commit: aba5c9fe589bc8ead0328f5957e9dc9cb5013cea
-  session: null
-  claimed_at: 2026-09-22T21:44:10Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-22T22:29:11Z
+updated_at: 2026-09-22T22:31:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/oidc-login
+  id: human:sothr
   name: ""
 extensions: {}
 ---
@@ -100,3 +93,11 @@ Rounds (each: review id, head, request-id, Actions run, outcome):
 - Clean: e79dc0c38, tkt-01m33s9ct-oidc-login-5, run #253 (task 22333), run ecb9797f-d2e0-4fee-a7e6-a0e6c24b5ae4 -> zero findings, review 178 finding-1 resolved. Marker comment 9961.
 
 Dispositions posted: 175 finding-1/2 (comments 9938, 9939), 176 finding-1 (9948), 177 finding-1/2 (9952, 9953), 178 finding-1 (9960). All accepted and fixed.
+
+## Summary
+
+Optional OIDC authorization-code login for admins and moderators, merged in PR #17 (merge commit bba0d7d409c0975a9ef10afc622739556006dfca) on top of base aba5c9fe589bc8ead0328f5957e9dc9cb5013cea, reviewed clean at head e79dc0c38b458e3b0c8e383386f2c5954ea3b090.
+
+server/app/oidc.py adds GET /api/auth/oidc/login and /callback: authlib auth-code + PKCE S256, state and nonce stashed in an HMAC-signed short-lived txn cookie, joserfc id_token validation (signature, iss, aud, azp, exp, nonce), group-to-role mapping from env, admin session via auth.issue_admin_session and a moderator identity session in app.state.oidc_identities. Unconfigured OIDC returns 503 and the password login is untouched.
+
+Five Terva rounds (175-178 plus clean) produced 6 medium findings, all fixed: state validated before provider errors, OAuthError mapped to a sanitized 401, azp required for multi-audience tokens, malformed discovery JSON mapped to 502, provider error text kept out of logs, and a signed transaction lifetime enforced server-side. Quality gate green: 312 server tests, 100% branch on oidc.py, 95.24% overall, 40 frontend tests.
