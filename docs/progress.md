@@ -64,13 +64,23 @@ when the increment runs and its tests pass.
   `ARKHAM_BACKUP_KEEP` (default 14) bounds retention in both the local
   destination and the mirror. The tarball is built in a `mktemp -d` work
   directory and the final archive name is reserved with
-  `mktemp --suffix=.tar.gz`, so two runs in the same second cannot collide; the
+  `mktemp`, so two runs in the same second cannot collide; the
   mirror copy is published with a temp name plus `mv`, so an interrupted copy
   never leaves a truncated archive under a final name. A mirror that is not a
   directory fails rather than `mkdir` a mount point and shadow an unmounted
   drive, and an unset or same-device mirror warns. ADR 0014 records the mirror
   directory over `scp`/`rsync`. The deployment tests cover the failure paths,
   and the quality gate passes 182 tests at the coverage floor.
+
+- **2026-09-22 — Backup archive name reserved without a GNU-only option.**
+  `deploy/backup.sh` reserved the archive name with
+  `mktemp --suffix=.tar.gz`, which BusyBox `mktemp` rejects, so the Quality
+  workflow failed on `main` and on every PR from PR #12 until this fix.
+  The script now asks `mktemp` for an extension-less name and renames it to
+  add `.tar.gz`, which both GNU and BusyBox accept, and keeps `PENDING`
+  pointing at whichever path exists so the trap still cleans up. The
+  reservation test now asserts the extension-less argument and the renamed
+  archive. TKT-01M35C6QJ1AF1QW1FE30Q63TT4.
 
 - **2026-09-22 — Container runtime pinned, nginx and systemd hardened.**
   The `Containerfile` now installs `server/requirements.lock`, the hash-pinned

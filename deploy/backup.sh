@@ -100,7 +100,13 @@ tar -czf "$STAGED" -C "$WORK" arkham.db photos
 # Reserve the archive name with mktemp and move the tarball in. Naming it
 # after the work directory would let a later run in the same second reuse
 # that suffix once the directory is gone, and overwrite the archive.
-OUT="$(mktemp --suffix=.tar.gz "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
+# BusyBox mktemp needs the Xs at the end of the template, so mktemp cannot
+# be asked for a name that already ends in .tar.gz; reserve the bare name and
+# rename it to add the extension.
+RESERVED="$(mktemp "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
+PENDING="$RESERVED"
+OUT="$RESERVED.tar.gz"
+mv "$RESERVED" "$OUT"
 PENDING="$OUT"
 mv "$STAGED" "$OUT"
 PENDING=""

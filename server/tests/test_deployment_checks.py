@@ -526,14 +526,18 @@ def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path
     The work directory's suffix is free for reuse once the directory is
     removed, so a later run in the same second could take it and overwrite the
     archive. The stub creates the path it returns and records its arguments, so
-    the test fails if the script stops asking mktemp for the archive name.
+    the test fails if the script stops asking mktemp for the archive name. The
+    reserved name has no extension: BusyBox mktemp rejects a template whose
+    trailing characters follow the `X`s, so the script renames the reserved
+    name to add `.tar.gz`.
     """
 
     source = _live_data(tmp_path)
     destination = tmp_path / "backups"
     work = destination / ".backup-work-20260101-000000-WORKSU"
-    archive = destination / "arkham-backup-20260101-000000-ARCHSU.tar.gz"
-    env = _backup_env(source, tmp_path, mktemp_sequence=(str(work), str(archive)))
+    reserved = destination / "arkham-backup-20260101-000000-ARCHSU"
+    archive = reserved.with_name(f"{reserved.name}.tar.gz")
+    env = _backup_env(source, tmp_path, mktemp_sequence=(str(work), str(reserved)))
 
     result = _run_backup(destination, env)
 
@@ -541,9 +545,10 @@ def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path
     assert [path.name for path in destination.glob("arkham-backup-*.tar.gz")] == [
         archive.name
     ]
+    assert not reserved.exists()
     assert (tmp_path / "mktemp.args").read_text().splitlines() == [
         f"-d {destination}/.backup-work-20260101-000000-XXXXXX",
-        f"--suffix=.tar.gz {destination}/arkham-backup-20260101-000000-XXXXXX",
+        f"{destination}/arkham-backup-20260101-000000-XXXXXX",
     ]
     # The stub left an empty file at the reserved name; publication must have
     # replaced it with the finished tarball.
