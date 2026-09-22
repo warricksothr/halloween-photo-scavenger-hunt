@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:49:08Z
+updated_at: 2026-09-22T23:59:25Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -259,4 +259,29 @@ Tests: `test_replacing_a_secret_does_not_rescan_the_marker` uses the secrets
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 327
 tests, coverage 95.22%, Ruff clean (47 files formatted); `bash
+scripts/check-quality.sh` also green. Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:59:25Z
+
+Supersedes the note at head 76dd3ec0.
+
+### medium (review 200, run #295, request single-pass-fix)
+Terva resolved the replacement-marker finding (`finding-1` resolved: one
+alternation, a single `re.sub`, and a marker-substring test). The same review
+opened a medium.
+
+**medium: sets and frozensets were returned unchanged.** `_scrub_strings`
+recursed through dicts, lists, and tuples, then fell through to `return value`.
+A set is not a JSON type, but `extra` can hold one and the SDK normalizes it to
+an array, so a DSN or key inside it reached the wire. Accepted: a
+`(set, frozenset)` branch rebuilds one as a list of scrubbed items, the same
+shape the SDK sends. The list is unordered, which matches what serialization
+would have produced anyway.
+
+Tests: `test_secrets_in_a_set_never_serialize` puts `{DSN, "public-key"}` under
+`extra` and asserts the serialized event holds neither string and the value is
+`[REDACTED, REDACTED]`.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 328
+tests, coverage 95.23%, Ruff clean (47 files formatted); `bash
 scripts/check-quality.sh` also green. Re-review requested.
