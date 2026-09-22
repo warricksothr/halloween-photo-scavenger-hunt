@@ -23,6 +23,7 @@ import time
 import traceback
 from collections.abc import Iterable, Iterator, Mapping
 from contextvars import ContextVar
+from itertools import chain
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -215,13 +216,34 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
     try:
         if media == _JSON_MEDIA:
             parsed: Any = json.loads(body)
+            strings = _strings_in(parsed)
         else:
             # Pairs, not a dict: a form can repeat a field name, and the
-            # app reads every value while a dict keeps only the last.
-            parsed = parse_qsl(body.decode("utf-8", "replace"))
+            # app reads every value while a dict keeps only the last. The
+            # raw tokens ride along because ``parse_qsl`` percent-decodes,
+            # and a route can still quote the undecoded body it read.
+            text = body.decode("utf-8", "replace")
+            parsed = parse_qsl(text)
+            strings = chain(_strings_in(parsed), _raw_query_tokens(text))
     except ValueError:
         return None
-    return tuple(value for value in _strings_in(parsed) if len(value) >= _MIN_SECRET)
+    return tuple(value for value in strings if len(value) >= _MIN_SECRET)
+
+
+def _raw_query_tokens(text: str) -> Iterator[str]:
+    """The undecoded pieces of a query string or a form body.
+
+    ``parse_qsl`` percent-decodes and turns ``+`` into a space, so the raw
+    text a route reads is a different string than the parsed candidates
+    hold. The whole text and each ``&``/``=``-separated piece are yielded
+    so a route that quotes the raw bytes still gets a scrub.
+    """
+    if not text:
+        return
+    yield text
+    for chunk in text.split("&"):
+        yield chunk
+        yield from chunk.split("=")
 
 
 def _strings_in(value: Any) -> Iterator[str]:
@@ -255,6 +277,7 @@ def _request_secrets(scope: Scope) -> tuple[str, ...]:
     query = (scope.get("query_string") or b"").decode("latin-1")
     for _, value in parse_qsl(query):
         candidates.append(value)
+    candidates.extend(_raw_query_tokens(query))
 
     for name, value in scope.get("headers", []):
         header = value.decode("latin-1")

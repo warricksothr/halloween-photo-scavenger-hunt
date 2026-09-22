@@ -51,8 +51,10 @@ when the increment runs and its tests pass.
   and `Cookie` headers and buffers a JSON or form body; those values are
   used to redact the log line and are never written to it. A body larger
   than the buffer, or one that does not parse, loses the exception
-  message rather than risk a value the scrub set never held. 329 server
-  tests pass; coverage 95.47%.
+  message rather than risk a value the scrub set never held. A query
+  string or form body also adds its raw, still-encoded text beside the
+  decoded values, because a route can quote the bytes it read. 331 server
+  tests pass; coverage 95.50%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

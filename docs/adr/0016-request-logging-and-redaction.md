@@ -73,12 +73,14 @@ types `_body_secrets` understands, and it parses the buffer in the `except`
 branch alone. The form branch keeps every `(name, value)` pair rather than
 folding the pairs into a dict, because a repeated field is readable through the
 form's multi-value interface while a dict holds only the last, and the set takes
-keys and field names as well as values — a route can quote either. A request
-that succeeds pays nothing but the copy, a photo upload is never buffered or
-parsed, and the bytes are dropped when the request ends. The scrub set is
-mutated in place across the request so the exception handler — which runs after
-the middleware's `finally` resets the contextvars — still sees what the body
-added.
+keys and field names as well as values — a route can quote either. `parse_qsl`
+percent-decodes and turns `+` into a space, so the query string and the form
+body also contribute their raw text and each `&`/`=`-separated piece; a route
+that quotes the undecoded bytes it read is covered too. A request that succeeds
+pays nothing but the copy, a photo upload is never buffered or parsed, and the
+bytes are dropped when the request ends. The scrub set is mutated in place
+across the request so the exception handler — which runs after the middleware's
+`finally` resets the contextvars — still sees what the body added.
 
 Two cases cannot be represented by the scrub set, and both drop the message
 rather than log a value the set never saw. A body larger than the buffer is the

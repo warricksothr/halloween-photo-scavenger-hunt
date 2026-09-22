@@ -200,7 +200,7 @@ def test_body_secrets_reads_json_and_form_values():
         app_logging._body_secrets(
             "application/x-www-form-urlencoded", b"code=JOIN234&password=hunter2"
         )
-    ) == {"password", "JOIN234", "hunter2"}
+    ) >= {"password", "JOIN234", "hunter2"}
 
     # A repeated field keeps every value, not just the last: the app can
     # read them all through the form's multi-value interface.
@@ -209,7 +209,15 @@ def test_body_secrets_reads_json_and_form_values():
             "application/x-www-form-urlencoded",
             b"password=firstsecret&password=secondsecret",
         )
-    ) == {"password", "firstsecret", "secondsecret"}
+    ) >= {"password", "firstsecret", "secondsecret"}
+
+    # The raw, still-encoded form is held too: ``parse_qsl`` decodes it
+    # away, and a route can quote the body it read.
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded", b"password=top%2Fsecret"
+        )
+    ) >= {"top/secret", "top%2Fsecret"}
 
 
 def test_body_secrets_skips_binary_and_malformed_bodies():
@@ -434,6 +442,67 @@ def test_a_malformed_json_body_drops_the_exception_message(tmp_path, caplog):
     text = _rendered(caplog)
     assert "topsecret" not in text
     assert "RuntimeError: kaboom" not in text
+
+
+def test_a_raw_encoded_query_is_scrubbed(tmp_path, caplog):
+    """A route that quotes the raw query is scrubbed, not just the decoded.
+
+    ``parse_qsl`` turns this into ``top/secret``; the raw string a route
+    reads off the URL is ``top%2Fsecret``, and both must go.
+    """
+    app = create_app(
+        tmp_path / "raw-query.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/boom")
+    def boom(request: Request):
+        raise RuntimeError(f"kaboom qs={request.url.query}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get("/api/team/invites/SUPERSECRETCODE/boom?password=top%2Fsecret")
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top%2Fsecret" not in text
+    assert "top/secret" not in text
+
+
+def test_a_raw_encoded_form_body_is_scrubbed(tmp_path, caplog):
+    """The undecoded body a route reads is scrubbed beside the parsed one."""
+    app = create_app(
+        tmp_path / "raw-form.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b"password=top%2Fsecret",
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top%2Fsecret" not in text
+    assert "top/secret" not in text
 
 
 def test_query_string_is_redacted(client, caplog):
