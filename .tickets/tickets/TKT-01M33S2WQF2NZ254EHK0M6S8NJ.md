@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:31:29Z
+updated_at: 2026-09-22T23:36:39Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -200,6 +200,33 @@ top-level `url` and `query_string` beside the nested pair and asserts the join
 code and query value are gone from the JSON, that the crumb's own `url` is
 `https://hunt.example/m/<redacted>?<redacted>`, and that `query_string` is
 `<redacted>`. The header and cookie drop assertions stay.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
+tests, coverage 95.21%, Ruff clean (47 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:36:39Z
+
+Supersedes the note at head c4582b28.
+
+### medium (review 196, run #286, request breadcrumb-url-fix)
+Terva resolved the top-level breadcrumb finding (`finding-1` resolved:
+`_scrub_breadcrumb` calls `_scrub_mapping(crumb)` before it handles `data`, and
+the test exercises top-level URL and query redaction). The same review opened a
+medium.
+
+**medium: deep scrubbing missed tuples.** `_scrub_strings` descended into `dict`
+and `list` only, so a tuple in an event field — `extra` is app-provided — was
+returned unchanged. The SDK serializes a tuple as a JSON array, so a DSN, its
+public key, or a secret key inside a tuple reached the wire.
+
+Accepted. `_scrub_strings` now treats a tuple like a list and returns the list
+form; the serialized shape is the same array, so nothing downstream changes. A
+tuple nested in a tuple is covered by the same recursion.
+
+Test: `test_dsn_secret_and_local_variables_never_serialize` now puts the DSN and
+the key material in a nested tuple under `extra` and still asserts none of them
+appear in the serialized event. The join code stays out of that test: it is not
+a DSN secret, it was only ever absent because the frame `vars` are dropped.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
 tests, coverage 95.21%, Ruff clean (47 files formatted). Re-review requested.
