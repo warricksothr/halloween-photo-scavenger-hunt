@@ -20,6 +20,7 @@ each join or redeem overwrites that jar's session cookie.
 import time
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 from test_leaderboard import _multi_party
 from test_mod import _mod
@@ -47,7 +48,7 @@ def _invite(batman):
 
 
 def _new_player(client):
-    return TestClient(client.app)
+    return arm_csrf(TestClient(client.app))
 
 
 class TestInviteLifecycle:
@@ -73,7 +74,7 @@ class TestInviteLifecycle:
         token = _invite(batman)
 
         # No session at all — a brand-new phone must be able to look.
-        anon = TestClient(client.app)
+        anon = arm_csrf(TestClient(client.app))
         info = anon.get(f"/api/team/invites/{token}")
         assert info.status_code == 200, info.text
         assert info.json()["event_name"] == "Standings Party"

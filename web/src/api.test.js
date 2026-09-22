@@ -15,6 +15,7 @@ function response({ status = 200, body = {}, json = true } = {}) {
 describe('api client', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
+    document.cookie = 'arkham_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
   });
 
   it('returns JSON and sends JSON request bodies', async () => {
@@ -137,5 +138,71 @@ describe('api client', () => {
       message: 'Could not reach the server. Check your connection.',
       network: true,
     });
+  });
+
+  it('echoes the CSRF cookie in the header on a mutating request', async () => {
+    document.cookie = 'arkham_csrf=nonce.signature';
+    const fetchMock = globalThis.fetch;
+    fetchMock.mockResolvedValue(response({ body: {} }));
+
+    await api.logout();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/logout', {
+      headers: { 'X-CSRF-Token': 'nonce.signature' },
+      method: 'POST',
+      body: undefined,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('leaves the CSRF header off a safe read', async () => {
+    document.cookie = 'arkham_csrf=nonce.signature';
+    const fetchMock = globalThis.fetch;
+    fetchMock.mockResolvedValue(response({ body: {} }));
+
+    await api.snapshot();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/state', {
+      headers: {},
+      body: undefined,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('re-plants the token and retries once after csrf_failed', async () => {
+    const fetchMock = globalThis.fetch;
+    fetchMock
+      .mockResolvedValueOnce(
+        response({ status: 403, body: { error: 'csrf_failed', message: 'stale' } }),
+      )
+      .mockResolvedValueOnce(response({ body: {} }))
+      .mockResolvedValueOnce(response({ body: { id: 'player-1' } }));
+
+    await expect(api.join('J', 'Robin', 'phone')).resolves.toEqual({ id: 'player-1' });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/health',
+      { credentials: 'same-origin' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/join/J',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('returns the second csrf_failed rather than retrying forever', async () => {
+    const fetchMock = globalThis.fetch;
+    fetchMock.mockResolvedValue(
+      response({ status: 403, body: { error: 'csrf_failed', message: 'stale' } }),
+    );
+
+    await expect(api.join('J', 'Robin', 'phone')).resolves.toEqual({
+      error: 'csrf_failed',
+      message: 'stale',
+      status: 403,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

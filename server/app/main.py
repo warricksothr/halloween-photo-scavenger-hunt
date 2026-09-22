@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -22,18 +23,21 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from app import db as db_module
 from app import (
+    csrf,
     events,
     evidence,
     leaderboard,
+    limits,
     mod,
     players,
+    ratelimit,
     sse,
     state,
     submissions,
     teams,
 )
+from app import db as db_module
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -105,6 +109,18 @@ def create_app(
         app.state.admin_config = admin_config
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
         app.state.cookie_secure = cookie_secure
+        # CSRF signing key. Minted per process; a restart invalidates
+        # outstanding tokens, which the SPA re-earns on its next safe
+        # request. ARKHAM_CSRF_SECRET pins it for a multi-worker run
+        # (this deployment is one uvicorn process, so the default is
+        # enough — see ADR 0015).
+        app.state.csrf_secret = os.environ.get("ARKHAM_CSRF_SECRET", "").encode() or (
+            secrets.token_bytes(32)
+        )
+        # Per-process failure counters for the unauthenticated entry
+        # points (app/ratelimit.py, ADR 0015). In-memory on purpose: the
+        # deployment is one worker and a restart may as well clear them.
+        app.state.rate_limiter = ratelimit.RateLimiter()
         app.state.photos_dir = photos_dir
         # The broker captures the running loop: sync endpoints publish
         # from the threadpool, and asyncio queues can only be fed from
@@ -120,6 +136,11 @@ def create_app(
         conn.close()
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
+    # Middleware is added inner-to-outer: the last one added wraps the
+    # rest. The body cap goes on first so an oversized request is refused
+    # before CSRF or any route touches it; CSRF sits just inside it.
+    app.add_middleware(csrf.CsrfMiddleware)
+    app.add_middleware(limits.BodyLimitMiddleware)
     app.include_router(events.router)
     app.include_router(players.router)
     app.include_router(state.router)

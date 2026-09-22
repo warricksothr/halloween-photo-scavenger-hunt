@@ -22,6 +22,26 @@ Conventions:
 - IDs and timestamps follow `docs/impl/schema.md` (TEXT ids, INTEGER
   epoch seconds).
 
+### Request guards (ADR 0015)
+
+Three checks wrap the routes, so they are not repeated per endpoint:
+
+- **CSRF.** Every unsafe method (POST/PATCH/PUT/DELETE) must echo the
+  `arkham_csrf` cookie in `X-CSRF-Token`; a missing or stale token is
+  `403 {"error":"csrf_failed"}`. Safe responses plant the cookie when it
+  is absent or fails its signature check. The SPA replays once after a
+  `csrf_failed`.
+- **Body cap.** A request whose body exceeds 16 MiB
+  (`images.MAX_BYTES` + 1 MiB, matching nginx's `client_max_body_size`)
+  is `413 {"error":"request_too_large"}` before any route runs. A body
+  with no declared length is read up to the cap and replayed, so the cap
+  holds even when the route ignores the body.
+- **Rate limits.** The unauthenticated guess-taking routes answer
+  `429 {"error":"rate_limited"}` with `Retry-After` after too many
+  *failed* attempts (successes are not counted). Attempts are reserved
+  against a per-source cap (client IP) and an endpoint-wide global cap;
+  the global is what bounds a guess spread across many addresses.
+
 ## Roles
 
 | Role      | How obtained                        | Cookie scope        |
@@ -39,6 +59,7 @@ host (strike reversals, event purge); moderators only work the queue.
 
 ```
 POST   /api/admin/login                 { username, password } → admin cookie
+                                        (429 after repeated failures)
 POST   /api/admin/logout
 GET    /api/admin/events                → [event summary]
 POST   /api/admin/events                { name, theme, leaderboard_visibility,
@@ -64,6 +85,7 @@ log `riddle.edited` with before/after text in `details`.
 POST   /api/join/{join_code}            { display_name, device_label? }
                                         → 404 bad code | 409 event closed |
                                           player cookie + { event, player }
+                                          (429 after repeated bad codes)
 POST   /api/logout                      revoke own session (logs session.revoked)
 POST   /api/me/notice-ack               acknowledge the strike-1 interstitial
                                         (clears pending_notice in the snapshot)
@@ -103,6 +125,7 @@ POST   /api/submissions                 { riddle_id, evidence_item_id }
 
 ```
 POST   /api/mod/join/{mod_code}         → moderator cookie + { event }
+                                        (429 after repeated bad codes)
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
                                           state, duplicate flags

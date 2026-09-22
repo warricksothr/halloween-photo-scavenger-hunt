@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import ASGITransport, AsyncClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 from test_mod import _mod, _submit
 from test_mod import _party as mod_party
@@ -39,6 +40,8 @@ def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
             AsyncClient(transport=transport, base_url="http://test") as robin,
             AsyncClient(transport=transport, base_url="http://test") as oracle,
         ):
+            arm_csrf(robin, client.app)
+            arm_csrf(oracle, client.app)
 
             async def redeem(player, display_name):
                 await start_barrier.wait()
@@ -181,6 +184,8 @@ def test_concurrent_inappropriate_verdicts_advance_one_rung_each(
                 cookies=dict(mod_b.cookies),
             ) as mod_b_api,
         ):
+            arm_csrf(mod_a_api, client.app)
+            arm_csrf(mod_b_api, client.app)
 
             async def flag(api, submission_id):
                 await start_barrier.wait()
@@ -224,7 +229,7 @@ def test_auth_read_cannot_commit_another_requests_mutation(
     mutation and its audit row must land together."""
     party = mod_party(admin, client)
 
-    reader = TestClient(client.app)
+    reader = arm_csrf(TestClient(client.app))
     reader_join = reader.post(
         f"/api/join/{party['join_code']}", json={"display_name": "Robin"}
     )
@@ -273,6 +278,8 @@ def test_auth_read_cannot_commit_another_requests_mutation(
                 cookies=dict(reader.cookies),
             ) as reader_api,
         ):
+            arm_csrf(mutator_api, client.app)
+            arm_csrf(reader_api, client.app)
             mutation = asyncio.create_task(
                 mutator_api.post(
                     "/api/submissions",
@@ -354,6 +361,8 @@ def test_unlocked_read_does_not_see_another_requests_uncommitted_write(
                 cookies=dict(moderator.cookies),
             ) as reader_api,
         ):
+            arm_csrf(mutator_api, client.app)
+            arm_csrf(reader_api, client.app)
             mutation = asyncio.create_task(
                 mutator_api.post(
                     "/api/submissions",
@@ -442,6 +451,8 @@ def test_write_after_a_session_revocation_commits_is_rejected(
                 transport=transport, base_url="http://test", cookies=cookies
             ) as writer,
         ):
+            arm_csrf(revoker, client.app)
+            arm_csrf(writer, client.app)
             logout = asyncio.create_task(revoker.post("/api/logout"))
             assert await asyncio.to_thread(revoke_written.wait, 5)
 
@@ -530,6 +541,8 @@ def test_create_riddle_after_the_event_is_purged_is_not_a_500(
                 transport=transport, base_url="http://test", cookies=cookies
             ) as creator,
         ):
+            arm_csrf(purger, client.app)
+            arm_csrf(creator, client.app)
             purge = asyncio.create_task(
                 purger.post(
                     f"/api/admin/events/{event['id']}/purge",
@@ -582,6 +595,8 @@ def test_event_close_and_verdict_leave_one_terminal_submission(admin, client):
                 cookies=dict(moderator.cookies),
             ) as moderator_api,
         ):
+            arm_csrf(admin_api, client.app)
+            arm_csrf(moderator_api, client.app)
 
             async def close_event():
                 await start_barrier.wait()
@@ -720,7 +735,7 @@ def test_cross_event_and_cross_team_reads_hide_foreign_data(admin, client):
         json={"text": "Second clue", "sort_order": 1},
     ).json()
     admin.post(f"/api/admin/events/{second_event['id']}/open")
-    second_player = TestClient(client.app)
+    second_player = arm_csrf(TestClient(client.app))
     second_join = second_player.post(
         f"/api/join/{second_event['join_code']}",
         json={"display_name": "Robin"},
@@ -871,6 +886,7 @@ def _join_after_the_event_vanishes(client, monkeypatch, path, payload, event_id)
     async def interleave():
         transport = ASGITransport(app=client.app)
         async with AsyncClient(transport=transport, base_url="http://test") as joiner:
+            arm_csrf(joiner, client.app)
             join = asyncio.create_task(joiner.post(path, json=payload))
             loop = asyncio.get_running_loop()
             deadline = loop.time() + 5
@@ -955,6 +971,8 @@ def test_revoke_after_a_concurrent_redemption_is_closed(admin, client, monkeypat
                 cookies=dict(batman.cookies),
             ) as owner,
         ):
+            arm_csrf(robin, client.app)
+            arm_csrf(owner, client.app)
             redeem = asyncio.create_task(
                 robin.post(
                     f"/api/team/invites/{token}/redeem",
@@ -1025,6 +1043,8 @@ def test_purge_after_a_concurrent_purge_is_not_a_second_delete(
                 transport=transport, base_url="http://test", cookies=cookies
             ) as second,
         ):
+            arm_csrf(first, client.app)
+            arm_csrf(second, client.app)
             purge_one = asyncio.create_task(
                 first.post(
                     f"/api/admin/events/{event['id']}/purge",
@@ -1059,7 +1079,7 @@ def test_resolve_flag_after_a_concurrent_resolve_is_not_found(
     flag on the writer and answers 404, so the audit log holds exactly one
     resolution (ADR 0013)."""
     party = mod_party(admin, client)
-    other = TestClient(client.app)
+    other = arm_csrf(TestClient(client.app))
     other.post(f"/api/join/{party['join_code']}", json={"display_name": "Robin"})
     flagged = other.post(
         "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
@@ -1094,6 +1114,8 @@ def test_resolve_flag_after_a_concurrent_resolve_is_not_found(
                 cookies=dict(mod_b.cookies),
             ) as api_b,
         ):
+            arm_csrf(api_a, client.app)
+            arm_csrf(api_b, client.app)
             first = asyncio.create_task(
                 api_a.post(
                     f"/api/mod/flags/{flagged}/resolve",
@@ -1170,6 +1192,8 @@ def test_remove_member_after_a_concurrent_remove_is_not_found(
                 cookies=dict(moderator_b.cookies),
             ) as api_b,
         ):
+            arm_csrf(api_a, client.app)
+            arm_csrf(api_b, client.app)
             first = asyncio.create_task(
                 api_a.post(f"/api/mod/teams/{team_id}/remove/{party['player_id']}")
             )
@@ -1300,6 +1324,8 @@ def test_rename_no_op_is_decided_after_a_peer_rename_commits(
                 transport=transport, base_url="http://test", cookies=cookies
             ) as api_b,
         ):
+            arm_csrf(api_a, client.app)
+            arm_csrf(api_b, client.app)
             first = asyncio.create_task(
                 api_a.post("/api/team/rename", json={"name": "Beta"})
             )

@@ -13,10 +13,31 @@
 const REQUEST_TIMEOUT_MS = 8000;
 const UPLOAD_TIMEOUT_MS = 60000;
 
-async function request(path, options = {}) {
+// CSRF (ADR 0015): the server plants a signed token in a readable cookie
+// on any safe response. Echo it back in a header on every mutating
+// request — the pair is what proves the call came from same-origin JS.
+const CSRF_COOKIE = 'arkham_csrf';
+const CSRF_HEADER = 'X-CSRF-Token';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function csrfToken() {
+  const prefix = `${CSRF_COOKIE}=`;
+  for (const part of document.cookie.split('; ')) {
+    if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+  }
+  return null;
+}
+
+async function send(path, options = {}) {
   // FormData bodies (photo upload) must NOT set Content-Type — the
   // browser sets it with the multipart boundary.
   const isForm = options.body instanceof FormData;
+  const method = (options.method ?? 'GET').toUpperCase();
+  const headers = options.body && !isForm ? { 'Content-Type': 'application/json' } : {};
+  if (!SAFE_METHODS.has(method)) {
+    const token = csrfToken();
+    if (token) headers[CSRF_HEADER] = token;
+  }
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -24,7 +45,7 @@ async function request(path, options = {}) {
   );
   try {
     const resp = await fetch(path, {
-      headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
+      headers,
       ...options,
       body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
       signal: controller.signal,
@@ -66,6 +87,16 @@ async function request(path, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function request(path, options = {}) {
+  const result = await send(path, options);
+  if (result.error !== 'csrf_failed') return result;
+  // The token was missing or stale — a restarted server or an expired
+  // cookie. Any safe GET re-plants it, so replay the call once with the
+  // fresh pair rather than surfacing an error the player cannot act on.
+  await fetch('/api/health', { credentials: 'same-origin' });
+  return send(path, options);
 }
 
 export const api = {

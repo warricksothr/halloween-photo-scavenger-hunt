@@ -7,6 +7,7 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+from support import arm_csrf
 
 from app import db as db_module
 from app.main import create_app
@@ -69,7 +70,7 @@ def client(tmp_path):
         photos_dir=tmp_path / "photos",
     )
     with TestClient(app) as c:
-        yield c
+        yield arm_csrf(c)
 
 
 @pytest.fixture()

@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids
+from app import auth, ids, ratelimit
 from app.audit import Action, ActorType, log_action
 from app.db import hold_request_lock, locked_transaction, reader
 from app.leaderboard import publish_leaderboard
@@ -289,6 +289,19 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
       team"); confirm_switch=true re-calls and completes.
     """
     conn: sqlite3.Connection = reader(request)
+    # Invite tokens are guessable if short, so throttle the 404s
+    # (ADR 0015). The reservation is released as soon as the token turns
+    # out to be real, so a used or expired token is not a failure.
+    source_key = ("invite:source", ratelimit.source(request))
+    global_key = ("invite:global", "all")
+    reservation, wait = ratelimit.admit(
+        request,
+        (source_key, ratelimit.INVITE_SOURCE),
+        (global_key, ratelimit.INVITE_GLOBAL),
+    )
+    if reservation is None:
+        return ratelimit.retry_response(wait)
+
     now = int(time.time())
     invite = conn.execute(
         "SELECT ti.team_id, ti.expires_at, ti.redeemed_by, ti.revoked_at,"
@@ -298,6 +311,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
     ).fetchone()
     if invite is None:
         return _err(404, "bad_invite", "That invite link is invalid.")
+    ratelimit.release(request, reservation)
     if (
         invite["redeemed_by"] is not None
         or invite["revoked_at"] is not None

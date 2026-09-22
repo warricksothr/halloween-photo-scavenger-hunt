@@ -11,6 +11,7 @@ Two surfaces:
 """
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_leaderboard import _multi_party, _upload_and_solve
 from test_mod import _mod
 
@@ -38,7 +39,7 @@ def _app(tmp_path, static_dir=None):
         )
     )
     client.__enter__()
-    return client
+    return arm_csrf(client)
 
 
 def _login(client):
@@ -152,7 +153,7 @@ class TestPurge:
             == 401
         )
         assert (
-            TestClient(client.app)
+            arm_csrf(TestClient(client.app))
             .post(
                 f"/api/admin/events/{p['event_id']}/purge",
                 json={"confirm": "Standings Party"},

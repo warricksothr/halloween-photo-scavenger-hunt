@@ -17,6 +17,7 @@ player/moderator (``admin`` and ``client`` share a jar).
 """
 
 from fastapi.testclient import TestClient
+from support import arm_csrf
 from test_evidence import make_jpeg
 from test_mod import _mod, _submit
 
@@ -44,7 +45,7 @@ def _multi_party(
     ]
     players = {}
     for name in names:
-        pc = TestClient(client.app)
+        pc = arm_csrf(TestClient(client.app))
         join = pc.post(
             f"/api/join/{event['join_code']}", json={"display_name": name}
         ).json()
@@ -301,12 +302,12 @@ class TestModAudit:
         batman = p["players"]["Batman"]["client"]
         # Players and anonymous callers are refused.
         assert batman.get("/api/mod/audit").status_code == 401
-        assert TestClient(client.app).get("/api/mod/audit").status_code == 401
+        assert arm_csrf(TestClient(client.app)).get("/api/mod/audit").status_code == 401
 
         # A moderator of another event sees THEIR event's log, not this
         # one's.
         other = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = _mod(client, other["mod_code"], TestClient(client.app))
+        other_mod = _mod(client, other["mod_code"], arm_csrf(TestClient(client.app)))
         other_audit = other_mod.get("/api/mod/audit").json()
         assert all(
             row["action"] != "player.joined" or True for row in other_audit

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids
+from app import auth, ids, ratelimit
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import locked_transaction, reader
@@ -31,6 +31,19 @@ class JoinBody(BaseModel):
 
 @router.post("/join/{join_code}", status_code=201)
 def join(join_code: str, body: JoinBody, request: Request):
+    # Reserve an attempt before the comparison (ADR 0015). The reservation
+    # is kept when the code is wrong and released once it matches, so only
+    # failures count.
+    source_key = ("join:source", ratelimit.source(request))
+    global_key = ("join:global", "all")
+    reservation, wait = ratelimit.admit(
+        request,
+        (source_key, ratelimit.JOIN_SOURCE),
+        (global_key, ratelimit.JOIN_GLOBAL),
+    )
+    if reservation is None:
+        return ratelimit.retry_response(wait)
+
     conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE join_code = ?", (join_code,)
@@ -45,6 +58,7 @@ def join(join_code: str, body: JoinBody, request: Request):
                 "message": "That join link doesn't match any event.",
             },
         )
+    ratelimit.release(request, reservation)
     if event["status"] == "closed":
         return JSONResponse(
             status_code=409,
