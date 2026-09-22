@@ -131,7 +131,10 @@ class Scrubber:
 
     def _scrub_breadcrumb(self, crumb: Mapping[str, Any]) -> None:
         # A breadcrumb's data can be an HTTP request of its own, and a
-        # navigation breadcrumb can carry the URL it navigated to.
+        # navigation breadcrumb can carry the URL it navigated to. The URL
+        # and query keys sit on the crumb or inside its data, so both
+        # levels are scrubbed.
+        _scrub_mapping(crumb)
         for key in _DROPPED_BREADCRUMB_KEYS:
             crumb.pop(key, None)
         data = crumb.get("data")

@@ -159,6 +159,8 @@ def test_request_id_becomes_a_tag():
 def test_breadcrumb_url_headers_and_cookies_are_scrubbed():
     crumb = {
         "category": "navigation",
+        "url": f"https://hunt.example/m/{JOIN_CODE}?invite=tok123",
+        "query_string": "invite=tok123",
         "data": {
             "url": f"https://hunt.example/m/{JOIN_CODE}",
             "from": "/",
@@ -173,8 +175,13 @@ def test_breadcrumb_url_headers_and_cookies_are_scrubbed():
     blob = json.dumps(scrubbed)
 
     assert JOIN_CODE not in blob
+    assert "tok123" not in blob
     # The session is in no scrub set: only the drop removes it.
     assert "SESSIONVALUE" not in blob
+    # Both the crumb and its data keep the route but lose the credential
+    # and the query.
+    assert scrubbed["url"] == "https://hunt.example/m/<redacted>?<redacted>"
+    assert scrubbed["query_string"] == "<redacted>"
     for dropped in ("headers", "cookies"):
         assert dropped not in scrubbed
         assert dropped not in scrubbed["data"]

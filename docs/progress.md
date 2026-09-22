@@ -47,10 +47,12 @@ when the increment runs and its tests pass.
   path segments with the same `redact_path` the request log uses, collapses
   query strings, drops request headers, cookies, body, and server env, strips
   exception frame locals, and deep-scrubs the DSN and its key out of any
-  string that survives; the request id rides along as a tag. `send_default_pii`
+  string that survives — keys as well as values, in a breadcrumb's `data` and
+  on the breadcrumb itself, since a navigation crumb carries its own `url` and
+  `query_string`; the request id rides along as a tag. `send_default_pii`
   stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
-  `server/requirements.lock` regenerated together. 320 server tests pass;
-  coverage 95.09%.
+  `server/requirements.lock` regenerated together. 326 server tests pass;
+  coverage 95.21%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`
