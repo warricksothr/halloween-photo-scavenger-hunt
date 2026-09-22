@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:25:36Z
+updated_at: 2026-09-22T23:31:29Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -176,3 +176,30 @@ that the DSN and key stay out of the blob still hold.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
 tests, coverage 95.20%, Ruff clean (47 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:31:29Z
+
+Supersedes the note at head dadd75b1.
+
+### medium (review 194, run #282, request mapping-key-fix)
+Terva resolved the mapping-key finding (`finding-1` resolved: `_scrub_strings`
+now scrubs keys as well as values, first-wins on collision). The same review
+opened a medium.
+
+**medium: the breadcrumb's own URL and query keys bypass the scrubber.**
+`_scrub_breadcrumb` applied `_scrub_mapping` only to the nested `data` mapping,
+so a navigation breadcrumb carrying `url`, `to`, `from`, `query`, or
+`query_string` at the top level kept its bearer path segment and query values.
+
+Accepted. `_scrub_breadcrumb` now calls `_scrub_mapping(crumb)` before it
+touches `data`, so both levels lose the credential and the query. The URL and
+query keys can sit on either level, and one scrub per level covers both.
+
+Test: `test_breadcrumb_url_headers_and_cookies_are_scrubbed` now carries a
+top-level `url` and `query_string` beside the nested pair and asserts the join
+code and query value are gone from the JSON, that the crumb's own `url` is
+`https://hunt.example/m/<redacted>?<redacted>`, and that `query_string` is
+`<redacted>`. The header and cookie drop assertions stay.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
+tests, coverage 95.21%, Ruff clean (47 files formatted). Re-review requested.
