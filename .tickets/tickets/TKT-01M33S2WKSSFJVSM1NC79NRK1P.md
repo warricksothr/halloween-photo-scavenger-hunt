@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:46:08Z
+updated_at: 2026-09-22T23:50:15Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -288,4 +288,25 @@ a top-level number and for a nested boolean;
 and asserts `message_included is False` with the digits absent.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 332
+tests, coverage 95.49%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:50:15Z
+
+Supersedes the note at head 0826a938. A commit landed after the
+`json-scalar-fix` dispatch, so that run reports superseded; the fresh request is
+`marker-single-pass-fix`.
+
+### same class as PR #18's review 197
+While fixing the non-string scalar finding I noticed `_scrub_secrets` on this
+branch shared the rescan defect Terva found in `errors.py` (`value.replace`
+in a loop, so a later secret can match the `<redacted>` marker an earlier
+replacement inserted). The traceback scrub set holds body and query strings, so
+a value of `redact` would survive its own redaction the same way.
+
+Fixed here too: `_scrub_secrets` compiles one alternation of the secrets,
+longest first, and runs a single `re.sub`, so replacement text is never
+rescanned. `re` was already imported. `test_scrub_secrets_does_not_rescan_the_marker`
+covers it.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 333
 tests, coverage 95.49%, Ruff clean (45 files formatted). Re-review requested.
