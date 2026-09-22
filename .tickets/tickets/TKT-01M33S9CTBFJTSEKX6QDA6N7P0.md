@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-22T22:03:37Z
+updated_at: 2026-09-22T22:29:11Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -87,3 +87,16 @@ PR #17 opened on t3code/oidc-login, base main, head ccb9e191c44131e4f8a57eb5dc81
 **agent:opencode/oidc-login** at 2026-09-22T22:03:37Z
 
 Terva review requested: PR #17, base main, head 074455b27681705654d64da4f9470cdb92c10f66, request-id tkt-01m33s9ct-oidc-login-1, run task 22301 (run_number 238, terva-review.yml on main).
+
+**agent:opencode/oidc-login** at 2026-09-22T22:29:11Z
+
+Terva review loop settled clean. PR #17, base aba5c9fe589bc8ead0328f5957e9dc9cb5013cea, head e79dc0c38b458e3b0c8e383386f2c5954ea3b090.
+
+Rounds (each: review id, head, request-id, Actions run, outcome):
+- 175: f3f1f72, tkt-01m33s9ct-oidc-login-1, run #240 (task 22301 failure) -> 2 medium; fixed in 8b558b1.
+- 176: 8b558b1, tkt-01m33s9ct-oidc-login-2, run #242 (task 22307 failure, review posted) -> 175 both resolved; 1 new medium (azp); fixed in 106952ecf.
+- 177: 106952ecf, tkt-01m33s9ct-oidc-login-3, run #246 (task 22321 failure, review posted) -> 176 resolved; 2 new medium (malformed discovery JSON, provider error text in logs); fixed in d3dee0462.
+- 178: d3dee0462, tkt-01m33s9ct-oidc-login-4, run #249 (task 22324 failure, review posted) -> 177 both resolved; 1 new medium (txn lifetime only client-enforced); fixed in e79dc0c38.
+- Clean: e79dc0c38, tkt-01m33s9ct-oidc-login-5, run #253 (task 22333), run ecb9797f-d2e0-4fee-a7e6-a0e6c24b5ae4 -> zero findings, review 178 finding-1 resolved. Marker comment 9961.
+
+Dispositions posted: 175 finding-1/2 (comments 9938, 9939), 176 finding-1 (9948), 177 finding-1/2 (9952, 9953), 178 finding-1 (9960). All accepted and fixed.
