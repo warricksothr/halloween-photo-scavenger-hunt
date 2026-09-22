@@ -12,9 +12,12 @@
 # (default 14). Without a mirror the script warns: a backup on the same
 # disk is not a backup.
 #
-# Restore (see deploy/RUNBOOK.md §1 for the full drill):
+# Restore (see deploy/RUNBOOK.md §1 for the full drill). Select one
+# archive — a wildcard would hand tar several files and it would treat
+# all but the first as members:
 #   systemctl --user stop arkham-hunt
-#   tar -xzf backups/arkham-backup-*.tar.gz -C <repo-root>/data
+#   ARCHIVE=$(ls -1t backups/arkham-backup-*.tar.gz | head -n 1)
+#   tar -xzf "$ARCHIVE" -C <repo-root>/data
 #   systemctl --user start arkham-hunt
 #
 # The archive holds arkham.db and photos/ at its root, and the app reads

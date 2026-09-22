@@ -177,25 +177,24 @@ def test_systemd_unit_hardens_the_data_dir():
     assert "ReadWritePaths=%h/arkham/data" in unit
 
 
-def _restricted_path_without_sqlite_cli(root: Path) -> str:
-    """Expose only the utilities backup.sh needs, never sqlite3."""
+def _restricted_path_without_sqlite_cli(
+    root: Path, *, stamp: str = "20260101-000000"
+) -> str:
+    """Expose only the utilities backup.sh needs, never sqlite3.
+
+    `date` is a stub pinned to `stamp`, so a test can put two runs in the same
+    second on purpose rather than relying on the wall clock.
+    """
 
     bin_dir = root / "bin"
     bin_dir.mkdir()
-    for name in (
-        "cp",
-        "date",
-        "dirname",
-        "gzip",
-        "mkdir",
-        "mktemp",
-        "rm",
-        "stat",
-        "tar",
-    ):
+    for name in ("cp", "dirname", "gzip", "mkdir", "mktemp", "rm", "stat", "tar"):
         source = shutil.which(name)
         assert source is not None, f"test host lacks {name}"
         (bin_dir / name).symlink_to(source)
+    date_stub = bin_dir / "date"
+    date_stub.write_text(f"#!/bin/sh\necho {stamp}\n")
+    date_stub.chmod(0o755)
     return str(bin_dir)
 
 
@@ -314,23 +313,31 @@ def test_backup_archive_restores_live_database_and_photos(tmp_path):
     ).read_bytes() == photo_bytes
 
 
-def test_backup_restore_recipe_extracts_into_data():
-    """The header recipe must match RUNBOOK §1, or the restore is empty."""
+def test_backup_restore_recipe_extracts_one_archive_into_data():
+    """The header recipe must match RUNBOOK §1, or the restore is empty.
+
+    Retention leaves several archives, so a wildcard passed to tar would make
+    every file but the first a member name and the restore would fail.
+    """
 
     header = BACKUP_SCRIPT.read_text()
     runbook = RUNBOOK.read_text()
     assert "tar -xzf" in header
-    assert "-C <repo-root>/data" in header
-    # No recipe that extracts into the repo root itself.
-    assert not re.search(r"-C <repo-root>(?!\S)", header)
-    assert (
-        "tar -xzf ~/arkham/backups/arkham-backup-*.tar.gz -C ~/arkham/data" in runbook
-    )
+    assert 'tar -xzf "$ARCHIVE" -C <repo-root>/data' in header
+    assert 'tar -xzf "$ARCHIVE" -C ~/arkham/data' in runbook
+    for text in (header, runbook):
+        # No recipe that extracts into the repo root itself, and none that
+        # lets the shell expand the archive argument.
+        assert not re.search(r"-C <repo-root>(?!\S)", text)
+        assert not re.search(r"tar -xzf [^\n]*\*", text)
+        assert re.search(r"ARCHIVE=\$\(ls -1t [^\n]*arkham-backup-\*\.tar\.gz", text)
 
 
 def test_backups_in_the_same_second_do_not_collide(tmp_path):
     source = _live_data(tmp_path)
     destination = tmp_path / "backups"
+    # The stubbed date pins both runs to the same second, so only the archive
+    # suffix can keep them apart.
     env = _backup_env(source, tmp_path)
 
     for _ in range(2):
@@ -339,6 +346,7 @@ def test_backups_in_the_same_second_do_not_collide(tmp_path):
 
     archives = sorted(destination.glob("arkham-backup-*.tar.gz"))
     assert len(archives) == 2, [archive.name for archive in archives]
+    assert all("20260101-000000" in archive.name for archive in archives)
     assert not list(destination.glob(".backup-work-*"))
 
 

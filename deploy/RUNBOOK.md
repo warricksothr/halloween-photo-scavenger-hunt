@@ -33,11 +33,13 @@ export ARKHAM_BACKUP_KEEP=14                  # newest archives retained
 
 ```sh
 ~/arkham/deploy/backup.sh                      # → backups/arkham-backup-*.tar.gz, copied to the mirror
-# Prove it restores:
+# Prove it restores. Select one archive — retention leaves several, and a
+# wildcard would make tar read all but the first as member names:
 systemctl --user stop arkham-hunt
 mv ~/arkham/data ~/arkham/data.saved
 mkdir -p ~/arkham/data
-tar -xzf ~/arkham/backups/arkham-backup-*.tar.gz -C ~/arkham/data
+ARCHIVE=$(ls -1t ~/arkham/backups/arkham-backup-*.tar.gz | head -n 1)
+tar -xzf "$ARCHIVE" -C ~/arkham/data
 systemctl --user start arkham-hunt
 curl -s https://<host>/api/health              # ok → the backup is real
 ```
