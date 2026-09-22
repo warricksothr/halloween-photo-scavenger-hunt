@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:24:05Z
+updated_at: 2026-09-22T23:29:36Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -184,3 +184,40 @@ the log.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 327
 tests, coverage 95.45%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:29:36Z
+
+Supersedes the note at head ab98776.
+
+### high + low (review 193, run #280, request duplicate-form-fix)
+Terva resolved the repeated-form finding (`finding-1` resolved: every
+`parse_qsl` value is kept and the new test raises with the first duplicate).
+The same review opened a high and a low.
+
+**high: malformed bodies and request-controlled keys.** `_body_secrets` returned
+`()` when JSON did not parse, so `safe_traceback` stayed false and the message
+was logged even though the app may have read the raw bytes; and `_strings_in`
+walked mapping values only, so a JSON key the route quoted was never scrubbed.
+
+Accepted. `_body_secrets` now returns `None` for a body it cannot represent, and
+the middleware treats `None` like truncation: the message is dropped.
+`_strings_in` yields mapping keys and form field names as well as values, since
+app code can quote either; a repeated form field keeps every pair rather than
+folding into a dict. The message now drops in exactly two cases — the buffer was
+short or the body did not parse — and every request that parses keeps it.
+
+Tests: `test_body_secrets_reads_json_and_form_values` expects keys and names;
+the malformed case asserts `None`; `test_a_json_key_quoted_by_route_code_is_scrubbed`
+shows the key redacted and the message kept;
+`test_a_malformed_json_body_drops_the_exception_message` reads the raw body and
+asserts `message_included is False` with the secret absent.
+
+**low: the progress note contradicted the implementation.** `docs/progress.md`
+still said headers, cookies, and the body are never read, while
+`_request_secrets` reads `Authorization` and `Cookie` and the middleware buffers
+JSON/form bodies. Rewritten to say those are read only to seed the scrub set and
+never written to the log, with the two message-dropping cases and the current
+test and coverage counts. The ADR was updated to match.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 329
+tests, coverage 95.47%, Ruff clean (45 files formatted). Re-review requested.
