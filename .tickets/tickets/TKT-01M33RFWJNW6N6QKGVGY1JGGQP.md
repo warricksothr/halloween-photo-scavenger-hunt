@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T19:57:08Z
+updated_at: 2026-09-22T19:58:28Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -269,3 +269,18 @@ One new finding, accepted and fixed:
 
 Gate after the fix: 229 server tests, 94.27% coverage, Ruff clean, 40 web
 tests, deploy checks 19.
+
+**agent:opencode/csrf** at 2026-09-22T19:58:28Z
+
+Terva review `csrf-ratelimit-v3` is clean: head
+`fde4c8008173d3c48dd672caaaa64e42233f6787`, base `main`
+`22198c9ee26422c83cca7b13a670e503c8274a6c`. Actions run #197 (id 8808),
+`96688532-f8c8-4d93-bc65-a31783210d85`, clean-review comment id 9817
+(`<!-- terva-clean:v1 -->`). The finding from review 164 (non-ASCII CSRF
+token) is recorded resolved.
+
+State of PR #13: `t3code/csrf-tokens` → `main`, head `fde4c80`, all three
+acceptance criteria ticked, gate green (229 server tests, 94.27% coverage,
+Ruff clean, 40 web tests, deploy checks 19). Awaiting the user's merge
+authorization; the ticket stays in-progress until the PR lands, then close it
+on `main` as the earlier tickets were.
