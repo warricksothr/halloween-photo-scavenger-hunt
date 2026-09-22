@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:17:29Z
+updated_at: 2026-09-22T18:19:43Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -138,3 +138,22 @@ Actions run #161 (id 8727).
 
 The plan on this ticket has been revised to the final policy. Fixed in
 `bd9ddec`; the PR description was updated to match. Re-requesting review.
+
+**agent:opencode/sw-deploy-safe** at 2026-09-22T18:19:43Z
+
+### Round 3 — finding resolved, one accepted
+
+Reviewed head `6ccf6fa651f373f218d4f0f3e8228994fa1bf778` (review id 155), Terva
+run `3f1ffd0a-b615-405a-b3c9-61ca29fddf27` for `request:sw-deploy-safe-3`,
+Actions run #162 (id 8730).
+
+- **finding-1 (the `/assets/` predicate) — resolved** by the reviewer's
+  reading; the cache-first branch is gone.
+- **new medium — a failed cache write fell into the offline fallback.**
+  Accepted. The write now has its own error boundary inside `networkFirst`, so
+  a quota or unacceptable-response rejection still returns the fresh network
+  copy instead of an older cached one. The write is still awaited so it
+  outlives the worker. A test rejects `cache.put` and asserts the fresh
+  response is returned; it fails on the previous head.
+
+Fixed in `0edf5e1`. Re-requesting review.
