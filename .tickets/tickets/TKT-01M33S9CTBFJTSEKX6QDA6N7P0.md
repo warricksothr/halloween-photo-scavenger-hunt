@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-22T21:53:13Z
+updated_at: 2026-09-22T22:03:12Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,11 +43,11 @@ Admin auth is a single offline argon2id hash (server/app/security.py) and modera
 
 ## Acceptance criteria
 
-- [ ] GET /api/auth/oidc/login redirects to Authentik with state, nonce, and PKCE; the verifier lives in a short-lived SameSite=Lax cookie (the callback is a cross-site top-level navigation, so the existing Strict cookie would be dropped).
-- [ ] The callback validates state, nonce, issuer, audience, expiry, and signature before minting any session; failures return 401 without a session cookie.
-- [ ] Admin and moderator group names come from env (ARKHAM_OIDC_*), not hard-coded; a user in neither group is refused with a clear error.
-- [ ] OIDC tokens, authorization codes, and the client secret never appear in logs, audit rows, or URLs after the callback.
-- [ ] The argon2 password login still works when OIDC is unset, and the app starts with OIDC unconfigured.
+- [x] GET /api/auth/oidc/login redirects to Authentik with state, nonce, and PKCE; the verifier lives in a short-lived SameSite=Lax cookie (the callback is a cross-site top-level navigation, so the existing Strict cookie would be dropped).
+- [x] The callback validates state, nonce, issuer, audience, expiry, and signature before minting any session; failures return 401 without a session cookie.
+- [x] Admin and moderator group names come from env (ARKHAM_OIDC_*), not hard-coded; a user in neither group is refused with a clear error.
+- [x] OIDC tokens, authorization codes, and the client secret never appear in logs, audit rows, or URLs after the callback.
+- [x] The argon2 password login still works when OIDC is unset, and the app starts with OIDC unconfigured.
 
 ## Implementation plan
 
@@ -77,3 +77,9 @@ Add `authlib>=1.3` to `server/pyproject.toml` runtime deps (it brings `joserfc` 
 ### Tests (`server/tests/test_oidc.py`)
 
 A stub provider built on `httpx2.MockTransport` and a generated RSA key serves discovery, JWKS, and the token endpoint; no test touches the network. Cover the admin happy path, the moderator identity path, a user in neither group, bad state, bad nonce, expired token, tampered signature, unconfigured OIDC (503, and the password login still works), and app startup with OIDC unset.
+
+## Notes
+
+**agent:opencode/oidc-login** at 2026-09-22T22:03:12Z
+
+PR #17 opened on t3code/oidc-login, base main, head ccb9e191c44131e4f8a57eb5dc81c414be97cee9. bash scripts/check-quality.sh passes (server 286 passed, oidc.py 100% branch coverage; frontend 40 passed + build). docs/impl/api.md documents the routes, roles, and env config; the Authentik side and runbook stay with S9D2.
