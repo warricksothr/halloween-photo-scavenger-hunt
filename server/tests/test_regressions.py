@@ -1259,50 +1259,75 @@ def test_notice_ack_derives_the_pending_strike_on_the_writer(
     )
 
 
-def test_rename_after_a_concurrent_rename_applies_the_requested_name(
+def test_rename_no_op_is_decided_after_a_peer_rename_commits(
     admin, client, monkeypatch
 ):
-    """The rename no-op check must decide on the writer (ADR 0013): the
-    reader snapshot can name the requested value while a concurrent
-    rename commits a different one, so returning early would report
-    success without applying the name the caller asked for."""
+    """The rename no-op must be decided under the writer lock (ADR 0013):
+    a peer rename that commits while this request waits on the lock has to
+    be visible to the decision. Two requests ask for the same name; the
+    second must see the first's commit and no-op, not write a second
+    rename row off a stale reader snapshot."""
     party = _party(admin, client)
     batman = party["players"]["Batman"]["client"]
     team_id = party["players"]["Batman"]["team_id"]
     conn = client.app.state.db
 
     assert batman.post("/api/team/rename", json={"name": "Alpha"}).status_code == 200
+    renames_before = conn.execute(
+        "SELECT COUNT(*) FROM audit_event WHERE action = 'team.renamed'"
+    ).fetchone()[0]
 
-    real_reader = teams.reader
+    renamed_written = threading.Event()
+    release = threading.Event()
+    real_log_action = teams.log_action
 
-    class _StaleCursor:
-        def __init__(self, row):
-            self._row = row
+    def blocking_log_action(*args, **kwargs):
+        if kwargs.get("action") == Action.TEAM_RENAMED:
+            renamed_written.set()
+            assert release.wait(timeout=5), "rename was never released"
+        return real_log_action(*args, **kwargs)
 
-        def fetchone(self):
-            return self._row
+    monkeypatch.setattr(teams, "log_action", blocking_log_action)
 
-    def stale_reader(request):
-        real = real_reader(request)
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        cookies = dict(batman.cookies)
+        async with (
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as api_a,
+            AsyncClient(
+                transport=transport, base_url="http://test", cookies=cookies
+            ) as api_b,
+        ):
+            first = asyncio.create_task(
+                api_a.post("/api/team/rename", json={"name": "Beta"})
+            )
+            assert await asyncio.to_thread(renamed_written.wait, 5)
 
-        class _StaleReader:
-            def execute(self, sql, params=()):
-                row = real.execute(sql, params).fetchone()
-                conn.execute("UPDATE team SET name = 'Beta' WHERE id = ?", (team_id,))
-                conn.commit()
-                return _StaleCursor(row)
+            second = asyncio.create_task(
+                api_b.post("/api/team/rename", json={"name": "Beta"})
+            )
+            await asyncio.sleep(0.3)
+            assert not second.done(), "second rename did not wait for the writer"
 
-        return _StaleReader()
+            release.set()
+            return await first, await second
 
-    monkeypatch.setattr(teams, "reader", stale_reader)
+    first_response, second_response = asyncio.run(interleave())
 
-    response = batman.post("/api/team/rename", json={"name": "Alpha"})
-
-    assert response.status_code == 200, response.text
-    assert response.json()["name"] == "Alpha"
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 200, second_response.text
     assert (
         conn.execute("SELECT name FROM team WHERE id = ?", (team_id,)).fetchone()[
             "name"
         ]
-        == "Alpha"
-    ), "the requested name was reported but not applied"
+        == "Beta"
+    )
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'team.renamed'"
+        ).fetchone()[0]
+        - renames_before
+        == 1
+    ), "the no-op rename decided off a stale snapshot and logged a second rename"

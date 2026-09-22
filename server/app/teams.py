@@ -130,9 +130,9 @@ def rename_team(
     COALESCEs team.name before the display-name fallback)."""
     with locked_transaction(request) as writer:
         # Read the current name on the writer (ADR 0013): the reader
-        # serves the last committed snapshot, so a concurrent rename can
-        # commit between the check above and this transaction. Both the
-        # no-op decision and the audit's old_name must come from here.
+        # serves the last committed snapshot, so a peer rename can commit
+        # before this request takes the lock. Both the no-op decision and
+        # the audit's old_name must come from this transaction.
         old = writer.execute(
             "SELECT name FROM team WHERE id = ?", (ctx.team_id,)
         ).fetchone()["name"]
