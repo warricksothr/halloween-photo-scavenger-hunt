@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   api: {
     drawer: vi.fn(),
     noticeAck: vi.fn(),
+    inviteInfo: vi.fn(),
+    redeemInvite: vi.fn(),
   },
   refresh: vi.fn(),
 }));
@@ -15,6 +17,7 @@ vi.mock('../store', () => ({ refresh: mocks.refresh }));
 import { RiddleDetailScreen } from './RiddleDetail';
 import { StrikeNoticeScreen } from './StrikeNotice';
 import { ConnectionErrorScreen } from './ConnectionError';
+import { TeamJoinScreen } from './TeamJoin';
 
 const copy = {
   verdicts: {
@@ -30,6 +33,19 @@ const copy = {
       submit: 'Submit evidence',
       submitting: 'Submitting',
     },
+    teamJoin: {
+      headline: 'You Have Been Recruited',
+      teamLine: (teamName, eventName) =>
+        `${teamName} wants you on their team — ${eventName}.`,
+      nameLabel: 'Codename',
+      join: 'Join the Team',
+      expired: 'That invite link is expired.',
+      switchHeadline: 'Changing Teams?',
+      switchBody: 'Your evidence stays with your current team.',
+      stay: 'Stay',
+      switchConfirm: 'Switch team',
+      full: 'That team is full.',
+    },
   },
 };
 
@@ -44,6 +60,7 @@ function snapshot({ riddleState = 'unsolved', restrictionLevel = 0 } = {}) {
 describe('player screens', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
     mocks.api.drawer.mockResolvedValue([]);
     mocks.api.noticeAck.mockResolvedValue({ ok: true });
     mocks.refresh.mockResolvedValue(undefined);
@@ -105,5 +122,77 @@ describe('player screens', () => {
     expect(screen.getByText('Connection Failed')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the invite when the player stays on their team', async () => {
+    window.history.replaceState(null, '', '/t/invite-token');
+    mocks.api.inviteInfo.mockResolvedValue({
+      team_name: 'GCPD',
+      event_name: 'The Hunt',
+    });
+    mocks.api.redeemInvite.mockResolvedValue({ error: 'switch_needs_confirm' });
+
+    render(<TeamJoinScreen token="invite-token" copy={copy} />);
+
+    const codename = await screen.findByLabelText('Codename');
+    fireEvent.input(codename, { target: { value: 'Robin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join the Team' }));
+
+    const stay = await screen.findByRole('button', { name: 'Stay' });
+    fireEvent.click(stay);
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(mocks.refresh).toHaveBeenCalled();
+  });
+
+  it('re-enables the warning controls when the refresh fails', async () => {
+    window.history.replaceState(null, '', '/t/invite-token');
+    mocks.api.inviteInfo.mockResolvedValue({
+      team_name: 'GCPD',
+      event_name: 'The Hunt',
+    });
+    mocks.api.redeemInvite.mockResolvedValue({ error: 'switch_needs_confirm' });
+    mocks.refresh.mockRejectedValueOnce(new Error('offline'));
+
+    render(<TeamJoinScreen token="invite-token" copy={copy} />);
+
+    const codename = await screen.findByLabelText('Codename');
+    fireEvent.input(codename, { target: { value: 'Robin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join the Team' }));
+
+    const stay = await screen.findByRole('button', { name: 'Stay' });
+    fireEvent.click(stay);
+
+    await waitFor(() => expect(stay.disabled).toBe(false));
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('switches team only after the warning is confirmed', async () => {
+    window.history.replaceState(null, '', '/t/invite-token');
+    mocks.api.inviteInfo.mockResolvedValue({
+      team_name: 'GCPD',
+      event_name: 'The Hunt',
+    });
+    mocks.api.redeemInvite
+      .mockResolvedValueOnce({ error: 'switch_needs_confirm' })
+      .mockResolvedValueOnce({ ok: true });
+
+    render(<TeamJoinScreen token="invite-token" copy={copy} />);
+
+    const codename = await screen.findByLabelText('Codename');
+    fireEvent.input(codename, { target: { value: 'Robin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join the Team' }));
+
+    const switchTeam = await screen.findByRole('button', { name: 'Switch team' });
+    fireEvent.click(switchTeam);
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(mocks.api.redeemInvite).toHaveBeenLastCalledWith(
+      'invite-token',
+      'Robin',
+      '',
+      true,
+    );
+    expect(window.location.pathname).toBe('/');
   });
 });

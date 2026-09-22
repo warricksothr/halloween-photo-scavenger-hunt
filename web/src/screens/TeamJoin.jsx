@@ -71,6 +71,26 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
     setBusy(false);
   }
 
+  // Stay keeps the player's current team, so the invite path has to go:
+  // main.jsx routes every /t/<token> back to this screen, and a bare
+  // refresh() would only re-render it. Clearing the path lets the
+  // snapshot routing put the player back in the game (the same move
+  // redeem makes on success).
+  async function stay() {
+    if (busy) return;
+    setBusy(true);
+    window.history.replaceState(null, '', '/');
+    try {
+      await refresh();
+    } catch {
+      // refresh() folds read failures into the store's error phase and
+      // does not reject on them; the store owns the error surface, so
+      // this only has to put the warning controls back.
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!copy) return <div class="frame" />;
   const c = copy.screens.teamJoin;
 
@@ -100,7 +120,8 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, width: '100%' }}>
                 <button class="btn secondary" style={{ flex: 1 }}
-                        onClick={() => refresh()}>
+                        disabled={busy}
+                        onClick={stay}>
                   {c.stay}
                 </button>
                 <button class="btn danger" style={{ flex: 1 }}
