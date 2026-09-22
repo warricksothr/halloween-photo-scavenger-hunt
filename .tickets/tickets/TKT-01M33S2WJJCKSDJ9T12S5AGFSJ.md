@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T21:30:13Z
+updated_at: 2026-09-22T21:41:03Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -132,3 +132,11 @@ Terva review id 171 (run 6415ed85, actions run #225/id 8862) at head c0ebe4b: fi
 **agent:opencode/request-id-logging** at 2026-09-22T21:30:13Z
 
 Terva review id 172 (run 12969b50, actions run #228/id 8868) at head ff345bc: finding-1 of review 171 resolved; new finding-1, medium, accepted. ServerErrorMiddleware builds an unhandled exception's 500 outside RequestLogMiddleware, so its send wrapper never ran and X-Request-ID was missing. Fixed: the middleware writes the id onto scope['state'], and create_app registers an Exception handler that sets the header on the 500. Added a failing-first test with a raising route and raise_server_exceptions=False asserting the 500 line and the echoed header. check-quality.sh: exit 0 (255 passed, 94.30% coverage).
+
+**agent:opencode/request-id-logging** at 2026-09-22T21:41:03Z
+
+Terva review rounds on PR #16 (base d14ff95):
+- Review 171, head c0ebe4b (run 6415ed85, request s2wj-request-logging-v1, actions #225/id 8862): finding-1 high, accepted; fixed in ff345bc.
+- Review 172, head ff345bc (run 12969b50, request s2wj-request-logging-v2, actions #228/id 8868): finding-1 of 171 resolved; new finding-1 medium, accepted; fixed in 0900faee.
+- Clean review, head 0900faee (run e51005e2, request s2wj-request-logging-v3, actions #231/id 8871): findings [], both prior findings resolved. Comment https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/16#issuecomment-9906
+Ready to merge; awaiting the user's merge authorization.
