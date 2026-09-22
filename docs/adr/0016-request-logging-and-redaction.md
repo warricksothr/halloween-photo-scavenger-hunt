@@ -37,10 +37,14 @@ when it matches `[A-Za-z0-9._-]{1,64}`; anything else is replaced with a fresh
 **Bearer segments are redacted by route, not by a generic rule.** A rule that
 redacted every path segment would destroy the operator's ability to read the
 log; a rule that redacted none is what leaked. `redact_path` matches the known
-code-carrying routes, including the `/revoke` and `/redeem` suffixes, and
-replaces only the bearer segment with `<redacted>`. The query string is dropped
-from the path and reported as `query: "<redacted>"` when one was present;
-cookies and `Authorization` are simply never read.
+code-carrying route prefixes and replaces the first segment after the prefix
+with `<redacted>`, keeping any following suffix so `/api/team/invites/<token>`
+and its `/revoke` and `/redeem` forms stay readable. Matching by prefix, not by
+the exact route, is deliberate: a trailing slash or an unexpected suffix
+(`/api/join/SECRET/`, `/api/mod/join/SECRET/extra`) still reaches the
+middleware, and a malformed request must not leak its credential. The query
+string is dropped from the path and reported as `query: "<redacted>"` when one
+was present; cookies and `Authorization` are simply never read.
 
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same
@@ -59,6 +63,6 @@ on so pytest's `caplog` still sees records.
   whose line does not appear promptly.
 - The log line carries no client address. Adding it would mean trusting
   `X-Forwarded-For`, which belongs with the proxy work, not here.
-- Redaction is a list of routes, so a new code-carrying route must be added to
-  `_CODE_ROUTES`. The `redact_path` tests make the omission visible, but the
+- Redaction is a list of prefixes, so a new code-carrying route must be added to
+  `_CODE_PREFIXES`. The `redact_path` tests make the omission visible, but the
   list is not derived from the routers.

@@ -41,6 +41,19 @@ def _request_lines(caplog):
         ("/api/team/invites/tok123/redeem", "/api/team/invites/<redacted>/redeem"),
         ("/j/ABC234", "/j/<redacted>"),
         ("/m/MOD234", "/m/<redacted>"),
+        # A malformed request still reaches the middleware, so the bearer
+        # segment has to be redacted by prefix, not by the exact route.
+        ("/api/join/ABC234/", "/api/join/<redacted>/"),
+        ("/api/mod/join/MOD234/extra", "/api/mod/join/<redacted>/extra"),
+        (
+            "/api/team/invites/tok123/redeem/",
+            "/api/team/invites/<redacted>/redeem/",
+        ),
+        ("/api/team/invites/tok123/unknown", "/api/team/invites/<redacted>/unknown"),
+        ("/j/ABC234/", "/j/<redacted>/"),
+        # No credential, and a prefix must end at a path boundary.
+        ("/api/join/", "/api/join/"),
+        ("/api/joinfake/x", "/api/joinfake/x"),
         ("/api/leaderboard", "/api/leaderboard"),
         ("/api/team/invites", "/api/team/invites"),
         ("/api/events/ev1", "/api/events/ev1"),
@@ -79,6 +92,18 @@ def test_join_code_never_reaches_the_logs(admin, caplog):
     assert joined.status_code == 201
     text = _rendered(caplog)
     assert join_code not in text
+    assert f"/api/join/{app_logging.REDACTED}" in text
+
+
+def test_trailing_slash_join_code_never_reaches_the_logs(client, caplog):
+    """A path the router would redirect or 404 still passes the middleware."""
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+
+    client.post("/api/join/SECRETJOIN42/", json={"display_name": "Bruce Wayne"})
+
+    text = _rendered(caplog)
+    assert "SECRETJOIN42" not in text
     assert f"/api/join/{app_logging.REDACTED}" in text
 
 

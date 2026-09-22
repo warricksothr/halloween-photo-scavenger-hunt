@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T21:17:36Z
+updated_at: 2026-09-22T21:24:37Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -124,3 +124,7 @@ Implementation landed on t3code/request-id-logging: server/app/logging.py (JsonF
 **agent:opencode/request-id-logging** at 2026-09-22T21:17:36Z
 
 Review request: PR #16 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/16), head 60ec3d6, base d14ff95. Request id s2wj-request-logging-v1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/223 (terva-review.yml); PR quality run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/222.
+
+**agent:opencode/request-id-logging** at 2026-09-22T21:24:37Z
+
+Terva review id 171 (run 6415ed85, actions run #225/id 8862) at head c0ebe4b: finding-1, high, accepted. The end-anchored \_CODE\_ROUTES regexes logged the credential verbatim for a trailing slash or unexpected suffix (/api/join/SECRET/, /api/mod/join/SECRET/extra, /api/team/invites/TOKEN/redeem/). Fixed by matching code-carrying prefixes and redacting the first segment after the prefix while keeping any suffix; added parametrized trailing-slash/unexpected-suffix cases and a middleware-level test that posts /api/join/SECRETJOIN42/ and asserts the secret is absent. check-server.sh: 254 passed, 94.32% coverage, Ruff clean.

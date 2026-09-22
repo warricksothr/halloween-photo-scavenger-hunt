@@ -45,14 +45,15 @@ _INBOUND_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 # Routes whose bearer segment is a join code, a mod code, or an invite
 # token. The SPA links ``/j/<code>`` and ``/m/<code>`` are here too: a QR
 # link hits uvicorn directly, so they leak in an access log just as the
-# API does. The pattern is anchored, so a token cannot hide behind a
-# second slash.
-_CODE_ROUTES = (
-    re.compile(r"^(?P<head>/api/join)/[^/]+$"),
-    re.compile(r"^(?P<head>/api/mod/join)/[^/]+$"),
-    re.compile(r"^(?P<head>/api/team/invites)/[^/]+(?P<tail>/revoke|/redeem)?$"),
-    re.compile(r"^(?P<head>/j)/[^/]+$"),
-    re.compile(r"^(?P<head>/m)/[^/]+$"),
+# API does. Matched by prefix, not by the exact route: a trailing slash or
+# an unexpected suffix still reaches the middleware, and a malformed
+# request must not leak its credential.
+_CODE_PREFIXES = (
+    "/api/join",
+    "/api/mod/join",
+    "/api/team/invites",
+    "/j",
+    "/m",
 )
 
 # The standard LogRecord attributes. A formatter has to skip them or every
@@ -97,12 +98,20 @@ def current_redacted_path() -> str | None:
 
 
 def redact_path(path: str) -> str:
-    """Replace a bearer segment with ``<redacted>``; leave other paths be."""
-    for pattern in _CODE_ROUTES:
-        match = pattern.match(path)
-        if match:
-            tail = match.groupdict().get("tail") or ""
-            return f"{match['head']}/{REDACTED}{tail}"
+    """Replace a bearer segment with ``<redacted>``; leave other paths be.
+
+    The first segment after a code-carrying prefix is the bearer, so
+    ``/api/join/SECRET``, ``/api/join/SECRET/`` and
+    ``/api/mod/join/SECRET/extra`` all redact the credential. Anything
+    after it is kept, so the route stays readable.
+    """
+    for prefix in _CODE_PREFIXES:
+        if not path.startswith(prefix + "/"):
+            continue
+        credential, sep, suffix = path[len(prefix) + 1 :].partition("/")
+        if not credential:
+            return path
+        return f"{prefix}/{REDACTED}{sep}{suffix}"
     return path
 
 
