@@ -122,11 +122,29 @@ class TestPipelineUnit:
         with pytest.raises(TooManyPixelsError):
             process_upload(make_declared_size_jpeg(20000, 20000))
 
+    def test_decompression_bomb_warning_is_too_many_pixels(self):
+        # Between Pillow's ceiling and twice it, Pillow warns instead of
+        # raising; pytest's filterwarnings = ["error"] promotes that to an
+        # exception, so this is the branch that catches the warning.
+        with pytest.raises(TooManyPixelsError):
+            process_upload(make_declared_size_jpeg(10000, 10000))
+
     def test_declared_pixels_over_cap_is_too_many_pixels(self):
         # Declared size is under Pillow's ceiling, so this is our own
         # MAX_PIXELS check doing the refusing.
         with pytest.raises(TooManyPixelsError):
             process_upload(make_declared_size_jpeg(8000, 8000))
+
+    def test_derivative_failure_is_not_blamed_on_the_upload(self, monkeypatch):
+        # Only the decode is translated. A fault while building the
+        # derivative is the server's, so it must surface as an OSError
+        # (a 500), not be re-labelled NotAnImageError (a 415).
+        def boom(_img):
+            raise OSError("encoder exploded")
+
+        monkeypatch.setattr("app.images.average_hash", boom)
+        with pytest.raises(OSError):
+            process_upload(make_jpeg())
 
     def test_phash_is_stable_hex(self):
         # Flat-color images hash identically under aHash (all pixels equal

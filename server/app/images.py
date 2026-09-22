@@ -112,6 +112,9 @@ def process_upload(data: bytes) -> ProcessedPhoto:
     so the route can answer 415/413 instead of faulting on hostile bytes.
     """
     sniff_format(data)  # raises NotAnImageError on anything else
+    # Only the decode is translated: a failure past this point is ours
+    # (a bad EXIF tag, an encoder fault), not the client's bytes, and
+    # must stay a 500 rather than be blamed on the upload.
     try:
         img = Image.open(io.BytesIO(data))
         declared_pixels = img.width * img.height
@@ -120,24 +123,6 @@ def process_upload(data: bytes) -> ProcessedPhoto:
                 f"{img.width}x{img.height} exceeds {MAX_PIXELS} pixels"
             )
         img.load()
-
-        # Orientation FIRST: exif_transpose returns the image physically
-        # rotated per its EXIF tag; only then is it safe to drop metadata.
-        img = ImageOps.exif_transpose(img)
-
-        phash = average_hash(img)
-
-        # Cap the long edge, preserving aspect ratio; no-op when smaller.
-        if max(img.size) > MAX_DIMENSION:
-            img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
-
-        # Re-encode as a clean JPEG: no exif= argument means EXIF (incl.
-        # GPS) is stripped; every player-visible photo is now the same
-        # format regardless of what the phone sent.
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        out = io.BytesIO()
-        img.save(out, format="JPEG", quality=JPEG_QUALITY)
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         # Pillow refuses at twice its own pixel ceiling, and warns between
         # that ceiling and MAX_PIXELS; under warnings-as-errors the warning
@@ -148,6 +133,24 @@ def process_upload(data: bytes) -> ProcessedPhoto:
         # OSError a truncated file raises on load. Both are unreadable
         # bytes, not a server fault.
         raise NotAnImageError("could not decode the uploaded bytes") from None
+
+    # Orientation FIRST: exif_transpose returns the image physically
+    # rotated per its EXIF tag; only then is it safe to drop metadata.
+    img = ImageOps.exif_transpose(img)
+
+    phash = average_hash(img)
+
+    # Cap the long edge, preserving aspect ratio; no-op when smaller.
+    if max(img.size) > MAX_DIMENSION:
+        img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+
+    # Re-encode as a clean JPEG: no exif= argument means EXIF (incl.
+    # GPS) is stripped; every player-visible photo is now the same
+    # format regardless of what the phone sent.
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=JPEG_QUALITY)
     return ProcessedPhoto(
         derivative_bytes=out.getvalue(),
         phash=phash,
