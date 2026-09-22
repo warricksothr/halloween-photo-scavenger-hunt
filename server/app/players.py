@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 
 router = APIRouter(prefix="/api", tags=["player"])
 
@@ -31,7 +31,7 @@ class JoinBody(BaseModel):
 
 @router.post("/join/{join_code}", status_code=201)
 def join(join_code: str, body: JoinBody, request: Request):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE join_code = ?", (join_code,)
     ).fetchone()
@@ -57,27 +57,50 @@ def join(join_code: str, body: JoinBody, request: Request):
     now = int(time.time())
     team_id, player_id = ids.new_id(), ids.new_id()
     user_agent = request.headers.get("user-agent", "")
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): the reader serves the last
+        # committed snapshot, so a purge or a close can land between the
+        # read above and this transaction. Without this the team INSERT
+        # would fail the event foreign key after a purge.
+        event = writer.execute(
+            "SELECT * FROM event WHERE id = ?", (event["id"],)
+        ).fetchone()
+        if event is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "bad_join_code",
+                    "message": "That join link doesn't match any event.",
+                },
+            )
+        if event["status"] == "closed":
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "event_closed",
+                    "message": "This event has already ended.",
+                },
+            )
         # Team-of-one first: player.team_id is NOT NULL, so the team row
         # must exist before the player references it. Unnamed in MVP
         # (name arrives with the teams stretch goal).
-        conn.execute(
+        writer.execute(
             "INSERT INTO team (id, event_id, created_at) VALUES (?, ?, ?)",
             (team_id, event["id"], now),
         )
-        conn.execute(
+        writer.execute(
             "INSERT INTO player (id, team_id, display_name, created_at)"
             " VALUES (?, ?, ?, ?)",
             (player_id, team_id, body.display_name, now),
         )
         token = auth.issue_player_session(
-            conn,
+            writer,
             player_id=player_id,
             device_label=body.device_label,
             user_agent=user_agent,
         )
         log_action(
-            conn,
+            writer,
             event_id=event["id"],
             actor_type=ActorType.PLAYER,
             actor_id=player_id,
@@ -121,11 +144,10 @@ def join(join_code: str, body: JoinBody, request: Request):
 
 @router.post("/logout")
 def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = request.app.state.db
-    with locked_transaction(request):
-        auth.revoke_player_session(conn, ctx.session_id)
+    with locked_transaction(request) as writer:
+        auth.revoke_player_session(writer, ctx.session_id)
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -152,13 +174,15 @@ def notice_ack(
 
     Idempotent: acking with no pending notice is a no-op 200 — a
     double-tap must not be an error."""
-    conn: sqlite3.Connection = request.app.state.db
-    restriction = derive_restriction(conn, ctx.player_id)
-    if restriction.pending_notice_strike_id is None:
-        return {"ok": True}
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
+        # Derive on the writer (ADR 0013): a strike can be added or
+        # reversed between a reader read and this write, and the ack must
+        # name the strike this transaction can see.
+        restriction = derive_restriction(writer, ctx.player_id)
+        if restriction.pending_notice_strike_id is None:
+            return {"ok": True}
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,

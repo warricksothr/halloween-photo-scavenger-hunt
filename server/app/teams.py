@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, ids
 from app.audit import Action, ActorType, log_action
-from app.db import hold_request_lock, locked_transaction
+from app.db import hold_request_lock, locked_transaction, reader
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api", tags=["teams"])
@@ -76,7 +76,7 @@ def team_state(
     Roster device lines are the device_label + last_seen_at the
     moderator heuristics use (mocks/team.html) — a member can spot a
     dead device without waiting for a moderator."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     team = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()
     members = conn.execute(
         "SELECT p.id, p.display_name, p.created_at,"
@@ -128,16 +128,21 @@ def rename_team(
     row keeps the old name (team.renamed, audit-actions.md). The
     leaderboard label picks the name up immediately (leaderboard.py
     COALESCEs team.name before the display-name fallback)."""
-    conn: sqlite3.Connection = request.app.state.db
-    old = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()[
-        "name"
-    ]
-    if body.name == old:
-        return {"ok": True, "name": old}
-    with locked_transaction(request):
-        conn.execute("UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id))
+    with locked_transaction(request) as writer:
+        # Read the current name on the writer (ADR 0013): the reader
+        # serves the last committed snapshot, so a peer rename can commit
+        # before this request takes the lock. Both the no-op decision and
+        # the audit's old_name must come from this transaction.
+        old = writer.execute(
+            "SELECT name FROM team WHERE id = ?", (ctx.team_id,)
+        ).fetchone()["name"]
+        if body.name == old:
+            return {"ok": True, "name": old}
+        writer.execute(
+            "UPDATE team SET name = ? WHERE id = ?", (body.name, ctx.team_id)
+        )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -161,18 +166,17 @@ def create_invite(
     """Mint a single-use invite token for the caller's team. Any member
     may invite — the size limit is enforced at redemption, so creating
     one more invite than there are seats is harmless."""
-    conn: sqlite3.Connection = request.app.state.db
     now = int(time.time())
     token = ids.new_code(10)
     expires_at = now + INVITE_TTL_SECONDS
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        writer.execute(
             "INSERT INTO team_invite (token, team_id, created_by,"
             " expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
             (token, ctx.team_id, ctx.player_id, expires_at, now),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -181,7 +185,11 @@ def create_invite(
             entity_id=token,
             details={"expires_at": expires_at},
         )
-    row = conn.execute("SELECT * FROM team_invite WHERE token = ?", (token,)).fetchone()
+        # Build the response from the writer (ADR 0013): the row exists in
+        # this transaction, and the reader's snapshot need not include it.
+        row = writer.execute(
+            "SELECT * FROM team_invite WHERE token = ?", (token,)
+        ).fetchone()
     return _invite_json(row)
 
 
@@ -192,7 +200,7 @@ def revoke_invite(
     """Kill an open invite (mis-sent QR, or simply rotate). Only members
     of the invite's team may revoke it; already-redeemed tokens are
     history, not revocable."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     invite = conn.execute(
         "SELECT team_id, redeemed_by, revoked_at FROM team_invite WHERE token = ?",
         (token,),
@@ -202,13 +210,20 @@ def revoke_invite(
         return _err(404, "not_found", "No such invite.")
     if invite["redeemed_by"] is not None or invite["revoked_at"] is not None:
         return _err(409, "invite_closed", "That invite is already used or revoked.")
-    with locked_transaction(request):
-        conn.execute(
-            "UPDATE team_invite SET revoked_at = ? WHERE token = ?",
-            (int(time.time()), token),
+    with locked_transaction(request) as writer:
+        # Conditional on the open state (ADR 0013): the reader check above
+        # is the committed snapshot, and a redemption can commit between
+        # it and this UPDATE. Redeemed tokens are history, not revocable.
+        cur = writer.execute(
+            "UPDATE team_invite SET revoked_at = ?"
+            " WHERE token = ? AND team_id = ?"
+            " AND redeemed_by IS NULL AND revoked_at IS NULL",
+            (int(time.time()), token, ctx.team_id),
         )
+        if cur.rowcount == 0:
+            return _err(409, "invite_closed", "That invite is already used or revoked.")
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -226,7 +241,7 @@ def invite_info(token: str, request: Request):
     team name (so they know whose QR they scanned) and the event name.
     Works without a session — the QR scanner may be a brand-new phone.
     404s for dead/unknown tokens rather than explaining why."""
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     invite = conn.execute(
         "SELECT ti.expires_at, ti.redeemed_by, ti.revoked_at,"
         "       t.name AS team_name, e.name AS event_name, e.status"
@@ -273,7 +288,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
       client can show the warning ("evidence stays with your current
       team"); confirm_switch=true re-calls and completes.
     """
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     now = int(time.time())
     invite = conn.execute(
         "SELECT ti.team_id, ti.expires_at, ti.redeemed_by, ti.revoked_at,"
@@ -350,9 +365,9 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
         switched_from = player_ctx.team_id
         player_id = player_ctx.player_id
 
-    with locked_transaction(request):
+    with locked_transaction(request) as writer:
         if joining_fresh:
-            conn.execute(
+            writer.execute(
                 "INSERT INTO player (id, team_id, display_name, created_at)"
                 " VALUES (?, ?, ?, ?)",
                 (player_id, team_id, body.display_name, now),
@@ -361,7 +376,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
         # a race between two scanners loses here before any session or
         # team rows move. The fresh player row above is written but can
         # still roll back with the rest of the transaction (ADR 0002).
-        cur = conn.execute(
+        cur = writer.execute(
             "UPDATE team_invite SET redeemed_by = ? WHERE token = ?"
             " AND redeemed_by IS NULL AND revoked_at IS NULL"
             " AND expires_at > ?",
@@ -371,28 +386,28 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             # Lost the race, or the token died between the check above
             # and now. Roll back so the fresh player row (if any) does
             # not leak, and answer with an honest 410.
-            conn.rollback()
+            writer.rollback()
             return _err(410, "invite_closed", "That invite link was just used.")
         if not joining_fresh:
             # The switch: repoint the player; their old session rows are
             # revoked (a device that changed allegiance must re-present
             # itself) and a fresh session is minted on the new team.
-            conn.execute(
+            writer.execute(
                 "UPDATE session SET revoked_at = ?"
                 " WHERE player_id = ? AND revoked_at IS NULL",
                 (now, player_id),
             )
-            conn.execute(
+            writer.execute(
                 "UPDATE player SET team_id = ? WHERE id = ?", (team_id, player_id)
             )
         token_session = auth.issue_player_session(
-            conn,
+            writer,
             player_id=player_id,
             device_label=body.device_label,
             user_agent=user_agent,
         )
         log_action(
-            conn,
+            writer,
             event_id=invite["event_id"],
             actor_type=ActorType.PLAYER,
             actor_id=player_id,

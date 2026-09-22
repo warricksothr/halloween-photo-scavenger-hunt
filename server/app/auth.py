@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request
 
 from app import ids
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 
 COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
@@ -140,6 +140,30 @@ def issue_player_session(
     return token
 
 
+def _live_session_guard(table: str, session_id: str):
+    """Return a check that re-reads ``session_id`` on the writer.
+
+    ``current_player``/``current_moderator`` read on the reader, which
+    serves the last committed snapshot. A revocation that commits after
+    that read but before a handler's write would otherwise go unseen, so
+    ``db.locked_transaction`` re-runs this on the writer first."""
+
+    def guard(conn: sqlite3.Connection) -> None:
+        row = conn.execute(
+            f"SELECT revoked_at FROM {table} WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None or row["revoked_at"] is not None:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "not_authenticated",
+                    "message": "Your session was revoked; join again.",
+                },
+            )
+
+    return guard
+
+
 def current_player(request: Request) -> PlayerContext | None:
     """Resolve the session cookie to a live player context.
 
@@ -150,7 +174,7 @@ def current_player(request: Request) -> PlayerContext | None:
     token = request.cookies.get(PLAYER_COOKIE_NAME)
     if not token:
         return None
-    conn: sqlite3.Connection = request.app.state.db
+    conn = reader(request)
     row = conn.execute(
         "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
         "       p.id AS player_id, p.display_name, p.team_id, t.event_id"
@@ -162,12 +186,16 @@ def current_player(request: Request) -> PlayerContext | None:
     ).fetchone()
     if row is None or row["revoked_at"] is not None:
         return None
+    # Writes must re-check this on the writer: the reader read above is a
+    # committed snapshot, so a revocation can commit before the handler
+    # writes (ADR 0013).
+    request.state.session_guard = _live_session_guard("session", row["session_id"])
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         # Locked: this write must never commit another request's open
         # transaction (ADR 0004 atomicity — see locked_transaction).
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 "UPDATE session SET last_seen_at = ? WHERE id = ?",
                 (now, row["session_id"]),
             )
@@ -239,7 +267,7 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     token = request.cookies.get(MOD_COOKIE_NAME)
     if not token:
         return None
-    conn: sqlite3.Connection = request.app.state.db
+    conn = reader(request)
     row = conn.execute(
         "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
         "       m.id AS moderator_id, m.event_id, m.label"
@@ -250,12 +278,16 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     ).fetchone()
     if row is None or row["revoked_at"] is not None:
         return None
+    # Same writer-side re-check as current_player (ADR 0013).
+    request.state.session_guard = _live_session_guard(
+        "moderator_session", row["session_id"]
+    )
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         # Same lock rule as current_player: never commit a peer's
         # in-flight mutation (ADR 0004).
-        with locked_transaction(request):
-            conn.execute(
+        with locked_transaction(request) as writer:
+            writer.execute(
                 "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
                 (now, row["session_id"]),
             )

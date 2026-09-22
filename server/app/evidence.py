@@ -31,7 +31,7 @@ from app import auth, ids
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.conduct import now as conduct_now
-from app.db import locked_transaction
+from app.db import locked_transaction, reader
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -87,7 +87,7 @@ async def upload(
     riddle_id: str | None = None,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
 
     # Strike ladder gate (derived state, ADR 0001): level 2 blocks until
     # cooldown_until; level 3 blocks for the rest of the event.
@@ -139,8 +139,36 @@ async def upload(
     (photos_dir / "originals").mkdir(parents=True, exist_ok=True)
 
     now = int(time.time())
-    with locked_transaction(request):
-        conn.execute(
+    with locked_transaction(request) as writer:
+        # Re-check the gates on the writer (ADR 0013): the reader serves
+        # the last committed snapshot, and the Pillow work above is slow,
+        # so a strike, a purge, or a burst of uploads can land in between.
+        # The reader checks above are only a fast-fail before that work.
+        restriction = derive_restriction(writer, ctx.player_id)
+        if restriction.blocks_uploads(conduct_now()):
+            return _err(
+                403,
+                "upload_restricted",
+                "Uploads are temporarily disabled for your team.",
+            )
+        if riddle_id is not None:
+            riddle = writer.execute(
+                "SELECT 1 FROM riddle WHERE id = ? AND event_id = ?",
+                (riddle_id, ctx.event_id),
+            ).fetchone()
+            if riddle is None:
+                return _err(404, "riddle_not_found", "No such riddle on this event.")
+        recent = writer.execute(
+            "SELECT COUNT(*) FROM evidence_item WHERE team_id = ? AND created_at > ?",
+            (ctx.team_id, cutoff),
+        ).fetchone()[0]
+        if recent >= RATE_LIMIT_UPLOADS:
+            return _err(
+                429,
+                "rate_limited",
+                "Too many uploads — give it a minute and try again.",
+            )
+        writer.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
             " photo_path, phash, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -155,7 +183,7 @@ async def upload(
             ),
         )
         log_action(
-            conn,
+            writer,
             event_id=ctx.event_id,
             actor_type=ActorType.PLAYER,
             actor_id=ctx.player_id,
@@ -174,7 +202,7 @@ async def upload(
         # scale, spec). A flag is an audit row only; moderators see it
         # on the queue from increment 7 and resolve it there. The upload
         # itself always succeeds — the player did nothing actionable.
-        other_rows = conn.execute(
+        other_rows = writer.execute(
             "SELECT e.id, e.phash, e.team_id FROM evidence_item e"
             " JOIN team t ON t.id = e.team_id"
             " WHERE t.event_id = ? AND e.team_id != ? AND e.id != ?",
@@ -184,7 +212,7 @@ async def upload(
             distance = _hamming(processed.phash, other["phash"])
             if distance <= PHASH_FLAG_THRESHOLD:
                 log_action(
-                    conn,
+                    writer,
                     event_id=ctx.event_id,
                     actor_type=ActorType.SYSTEM,
                     actor_id=None,
@@ -199,21 +227,24 @@ async def upload(
                 )
                 break  # one flag per upload is enough to review
 
+        # Build the response from the writer (ADR 0013): the row exists in
+        # this transaction, and the reader's snapshot need not include it.
+        row = writer.execute(
+            "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
+        ).fetchone()
+
     # Files written after the row commits: a DB failure leaves no orphan
     # files, and a file-write failure here leaves a row whose 404-on-serve
     # the moderator can see (and the player simply re-uploads).
     (photos_dir / derivative_rel).write_bytes(processed.derivative_bytes)
     (photos_dir / original_rel).write_bytes(data)
 
-    row = conn.execute(
-        "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
-    ).fetchone()
     return _item_json(row)
 
 
 @router.get("")
 def drawer(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     # Team-scoped from day one (design.md): the drawer IS the team's
     # shared pool — a multi-member team sees every member's photos,
     # each labeled with who shot it.
@@ -234,7 +265,7 @@ def photo(
     request: Request,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
     row = conn.execute(
         "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
     ).fetchone()

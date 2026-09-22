@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app import auth
 from app.conduct import derive_restriction
+from app.db import reader
 from app.leaderboard import _standings
 
 router = APIRouter(prefix="/api", tags=["state"])
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/api", tags=["state"])
 
 @router.get("/state")
 def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = request.app.state.db
+    conn: sqlite3.Connection = reader(request)
 
     event = conn.execute("SELECT * FROM event WHERE id = ?", (ctx.event_id,)).fetchone()
 
