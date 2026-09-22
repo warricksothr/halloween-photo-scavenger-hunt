@@ -22,6 +22,14 @@ Size is bounded twice: the route rejects uploads over ``MAX_BYTES``
 dimensions (``MAX_PIXELS``) so a tiny-but-huge bomb (a 10 KB JPEG that
 inflates to 50 000×50 000) is refused without allocating the image.
 
+Pillow's own failures are translated into the two errors above, so the
+module keeps its promise of exactly two failure modes and nothing it
+decodes escapes as a 500: an unreadable file (``UnidentifiedImageError``,
+or the ``OSError`` a truncated file raises) is ``NotAnImageError``, and a
+bomb (``DecompressionBombError``, or the warning Pillow raises instead
+when it is between its own ceiling and twice it) is
+``TooManyPixelsError``.
+
 Result of processing one upload: ``ProcessedPhoto(derivative_bytes,
 phash, width, height)``. Writing rows/files is the route's job; this
 module is pure bytes-in/bytes-out so it is trivially testable.
@@ -51,7 +59,7 @@ _MAGIC = {
 
 
 class NotAnImageError(Exception):
-    """Magic bytes matched nothing we accept → 415."""
+    """We cannot decode the bytes as an accepted image → 415."""
 
 
 class TooManyPixelsError(Exception):
@@ -98,33 +106,48 @@ def average_hash(img: Image.Image) -> str:
 
 
 def process_upload(data: bytes) -> ProcessedPhoto:
-    """Blocking pipeline — call via run_in_threadpool, never in async code."""
+    """Blocking pipeline — call via run_in_threadpool, never in async code.
+
+    Raises ``NotAnImageError`` or ``TooManyPixelsError`` and nothing else,
+    so the route can answer 415/413 instead of faulting on hostile bytes.
+    """
     sniff_format(data)  # raises NotAnImageError on anything else
-    img = Image.open(io.BytesIO(data))
-    declared_pixels = img.width * img.height
-    if declared_pixels > MAX_PIXELS:
-        raise TooManyPixelsError(
-            f"{img.width}x{img.height} exceeds {MAX_PIXELS} pixels"
-        )
-    img.load()
+    try:
+        img = Image.open(io.BytesIO(data))
+        declared_pixels = img.width * img.height
+        if declared_pixels > MAX_PIXELS:
+            raise TooManyPixelsError(
+                f"{img.width}x{img.height} exceeds {MAX_PIXELS} pixels"
+            )
+        img.load()
 
-    # Orientation FIRST: exif_transpose returns the image physically
-    # rotated per its EXIF tag; only then is it safe to drop metadata.
-    img = ImageOps.exif_transpose(img)
+        # Orientation FIRST: exif_transpose returns the image physically
+        # rotated per its EXIF tag; only then is it safe to drop metadata.
+        img = ImageOps.exif_transpose(img)
 
-    phash = average_hash(img)
+        phash = average_hash(img)
 
-    # Cap the long edge, preserving aspect ratio; no-op when smaller.
-    if max(img.size) > MAX_DIMENSION:
-        img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+        # Cap the long edge, preserving aspect ratio; no-op when smaller.
+        if max(img.size) > MAX_DIMENSION:
+            img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
 
-    # Re-encode as a clean JPEG: no exif= argument means EXIF (incl.
-    # GPS) is stripped; every player-visible photo is now the same
-    # format regardless of what the phone sent.
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    out = io.BytesIO()
-    img.save(out, format="JPEG", quality=JPEG_QUALITY)
+        # Re-encode as a clean JPEG: no exif= argument means EXIF (incl.
+        # GPS) is stripped; every player-visible photo is now the same
+        # format regardless of what the phone sent.
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=JPEG_QUALITY)
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        # Pillow refuses at twice its own pixel ceiling, and warns between
+        # that ceiling and MAX_PIXELS; under warnings-as-errors the warning
+        # arrives here as an exception. Both are the same answer for us.
+        raise TooManyPixelsError("declared dimensions are too large") from None
+    except OSError:
+        # UnidentifiedImageError (a header we cannot parse) and the
+        # OSError a truncated file raises on load. Both are unreadable
+        # bytes, not a server fault.
+        raise NotAnImageError("could not decode the uploaded bytes") from None
     return ProcessedPhoto(
         derivative_bytes=out.getvalue(),
         phash=phash,

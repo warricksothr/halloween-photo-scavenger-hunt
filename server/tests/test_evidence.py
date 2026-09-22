@@ -12,7 +12,13 @@ import pytest
 from PIL import Image
 
 from app import evidence as evidence_module
-from app.images import MAX_BYTES, NotAnImageError, process_upload, sniff_format
+from app.images import (
+    MAX_BYTES,
+    NotAnImageError,
+    TooManyPixelsError,
+    process_upload,
+    sniff_format,
+)
 
 
 def make_jpeg(width=800, height=600, color=(30, 90, 140)) -> bytes:
@@ -20,6 +26,19 @@ def make_jpeg(width=800, height=600, color=(30, 90, 140)) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
     return buf.getvalue()
+
+
+def make_declared_size_jpeg(width, height) -> bytes:
+    """A real JPEG whose SOF0 header declares ``width``×``height``.
+
+    The bytes are tiny; only the declared dimensions are a lie. That is
+    the decompression-bomb shape — Pillow reads the size from the header
+    before it reads a single pixel."""
+    data = bytearray(make_jpeg(8, 8))
+    sof0 = data.index(b"\xff\xc0")  # SOF0: length, precision, height, width
+    data[sof0 + 5 : sof0 + 7] = height.to_bytes(2, "big")
+    data[sof0 + 7 : sof0 + 9] = width.to_bytes(2, "big")
+    return bytes(data)
 
 
 def make_exif_rotated(width=400, height=200) -> bytes:
@@ -85,6 +104,29 @@ class TestPipelineUnit:
         result = process_upload(make_exif_rotated(400, 200))
         # Rotated for display: 400x200 tagged rotate-90 becomes 200x400.
         assert (result.width, result.height) == (200, 400)
+
+    def test_garbage_after_magic_is_not_an_image(self):
+        # Magic bytes match, the rest is nonsense: Pillow raises
+        # UnidentifiedImageError, which must not reach the route as a 500.
+        with pytest.raises(NotAnImageError):
+            process_upload(b"\xff\xd8\xff" + b"garbage" * 16)
+
+    def test_truncated_jpeg_is_not_an_image(self):
+        raw = make_jpeg(800, 600)
+        with pytest.raises(NotAnImageError):
+            process_upload(raw[: len(raw) // 3])
+
+    def test_decompression_bomb_is_too_many_pixels(self):
+        # Declared size is past twice Pillow's own ceiling, so Pillow
+        # refuses during open.
+        with pytest.raises(TooManyPixelsError):
+            process_upload(make_declared_size_jpeg(20000, 20000))
+
+    def test_declared_pixels_over_cap_is_too_many_pixels(self):
+        # Declared size is under Pillow's ceiling, so this is our own
+        # MAX_PIXELS check doing the refusing.
+        with pytest.raises(TooManyPixelsError):
+            process_upload(make_declared_size_jpeg(8000, 8000))
 
     def test_phash_is_stable_hex(self):
         # Flat-color images hash identically under aHash (all pixels equal
@@ -158,6 +200,24 @@ class TestUploadEndpoint:
         _party(admin, client)
         resp = _upload(client, b"\xff\xd8\xff" + b"\x00" * (MAX_BYTES + 8))
         assert resp.status_code == 413
+
+    def test_malformed_image_is_415_not_500(self, admin, client):
+        # Magic bytes are right but nothing decodes: a header-only file
+        # and a truncated real one. Both are the client's bad bytes, so
+        # 415 — not a server fault.
+        _party(admin, client)
+        raw = make_jpeg(800, 600)
+        for data in (b"\xff\xd8\xff" + b"garbage" * 16, raw[: len(raw) // 3]):
+            resp = _upload(client, data, filename="broken.jpg")
+            assert resp.status_code == 415, resp.text
+            assert resp.json()["error"] == "not_an_image"
+
+    def test_decompression_bomb_is_413_not_500(self, admin, client):
+        # A few hundred bytes that claim 20000×20000 pixels.
+        _party(admin, client)
+        resp = _upload(client, make_declared_size_jpeg(20000, 20000))
+        assert resp.status_code == 413, resp.text
+        assert resp.json()["error"] == "too_large"
 
     def test_rate_limit_429(self, admin, client, monkeypatch):
         _party(admin, client)
