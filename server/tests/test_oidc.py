@@ -305,6 +305,34 @@ def test_wrong_audience_is_rejected(oidc_client, stub):
     assert response.status_code == 401
 
 
+def test_multiple_audiences_with_matching_azp_is_accepted(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    stub.nonce = query["nonce"][0]
+    stub.claims["aud"] = [CLIENT_ID, "another-client"]
+    stub.claims["azp"] = CLIENT_ID
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+
+
+def test_multiple_audiences_without_azp_is_rejected(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    stub.nonce = query["nonce"][0]
+    stub.claims["aud"] = [CLIENT_ID, "another-client"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_token"
+
+
+def test_multiple_audiences_with_mismatched_azp_is_rejected(oidc_client, stub):
+    _, query = start_login(oidc_client)
+    stub.nonce = query["nonce"][0]
+    stub.claims["aud"] = [CLIENT_ID, "another-client"]
+    stub.claims["azp"] = "another-client"
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_token"
+
+
 def test_tampered_signature_is_rejected(oidc_client, stub):
     _, query = start_login(oidc_client)
     stub.nonce = query["nonce"][0]

@@ -301,6 +301,15 @@ class OidcProvider:
             raise OidcFlowError(
                 "oidc_bad_token", "The identity token could not be verified."
             ) from exc
+        # OIDC Core 3.1.3.7: with more than one audience the token must name
+        # this client as the authorized party, or a token minted for another
+        # client would pass on our client id appearing as a secondary aud.
+        audience = token.claims.get("aud")
+        if isinstance(audience, list) and len(audience) > 1:
+            if token.claims.get("azp") != self.config.client_id:
+                raise OidcFlowError(
+                    "oidc_bad_token", "The identity token could not be verified."
+                )
         return token.claims
 
 
