@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T07:33:37Z
+updated_at: 2026-09-22T14:19:26Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -87,6 +87,16 @@ Open item: the final head `63011bb` has no review. Six dispatches for
 description, which is the silent-failure mode filed as TKT-01M33YG8AGGAW5VVVT3XY5FVS7
 in the terva-action store. The work is done; the review just needs re-dispatching
 once the action is healthy.
+
+**agent:opencode/review-system-design** at 2026-09-22T14:19:26Z
+
+Supersedes the earlier note about the unreviewed head. The credential failure
+behind the silent review runs was fixed, and head `a101f08` is now reviewed
+clean: no findings, runs `4880bdf3` and `c4e9372a` (Actions #81, #84) against
+head `a101f08` and base `09ae754`, recorded in the Terva review status comment
+on PR #4. Review 129's finding-1 is marked resolved there. Only 2 of 32
+dispatches in that window produced a review, which is the silent-failure gap
+filed as TKT-01M33YG8AGGAW5VVVT3XY5FVS7. PR #4 awaits merge authorization.
 
 ## Summary
 
