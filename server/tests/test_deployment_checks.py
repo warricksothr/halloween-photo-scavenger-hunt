@@ -199,6 +199,7 @@ def _restricted_path_without_sqlite_cli(
     failing_cp_marker: str = "",
     failing_rm_marker: str = "",
     failing_mktemp: bool = False,
+    mktemp_sequence: tuple[str, ...] = (),
 ) -> str:
     """Expose only the utilities backup.sh needs, never sqlite3.
 
@@ -206,7 +207,9 @@ def _restricted_path_without_sqlite_cli(
     on purpose rather than relying on the wall clock. `failing_cp_marker`
     leaves a short file where `cp` would have written and then fails, to stand
     in for a mirror copy cut short. `failing_rm_marker` and `failing_mktemp`
-    fail those utilities so a test can drive an error path.
+    fail those utilities so a test can drive an error path. `mktemp_sequence`
+    makes `mktemp` hand out those paths in order, so a test can pin the work
+    directory and archive names.
     """
 
     bin_dir = root / "bin"
@@ -249,6 +252,23 @@ def _restricted_path_without_sqlite_cli(
         _write_stub(
             bin_dir / "mktemp", 'echo "mktemp: simulated failure" >&2\nexit 1\n'
         )
+    elif mktemp_sequence:
+        state = root / "mktemp.count"
+        cases = "".join(
+            f'{index}) echo "{path}" ;;\n'
+            for index, path in enumerate(mktemp_sequence, start=1)
+        )
+        _write_stub(
+            bin_dir / "mktemp",
+            f'state="{state}"\n'
+            "i=0\n"
+            '[ -f "$state" ] && read -r i < "$state"\n'
+            "i=$((i + 1))\n"
+            'echo "$i" > "$state"\n'
+            'case "$i" in\n'
+            f"{cases}"
+            "esac\n",
+        )
     else:
         real_mktemp = shutil.which("mktemp")
         assert real_mktemp is not None, "test host lacks mktemp"
@@ -276,6 +296,7 @@ def _backup_env(
     failing_cp_marker: str = "",
     failing_rm_marker: str = "",
     failing_mktemp: bool = False,
+    mktemp_sequence: tuple[str, ...] = (),
     **extra: str,
 ) -> dict[str, str]:
     env = os.environ.copy()
@@ -287,6 +308,7 @@ def _backup_env(
                 failing_cp_marker=failing_cp_marker,
                 failing_rm_marker=failing_rm_marker,
                 failing_mktemp=failing_mktemp,
+                mktemp_sequence=mktemp_sequence,
             ),
         }
     )
@@ -487,6 +509,27 @@ def test_backup_publishes_no_archive_when_the_mirror_copy_fails(tmp_path):
     assert not list(mirror.glob("arkham-backup-*.tar.gz"))
     assert not list(mirror.glob(".arkham-backup-copy-*"))
     assert "failed to mirror" in result.stderr
+
+
+def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path):
+    """The archive name must not be the work directory's suffix.
+
+    That suffix is free for reuse once the work directory is removed, so a
+    later run in the same second could take it and overwrite the archive.
+    """
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    work = destination / ".backup-work-20260101-000000-WORKSU"
+    archive = destination / "arkham-backup-20260101-000000-ARCHSU.tar.gz"
+    env = _backup_env(source, tmp_path, mktemp_sequence=(str(work), str(archive)))
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode == 0, result.stderr
+    assert [path.name for path in destination.glob("arkham-backup-*.tar.gz")] == [
+        archive.name
+    ]
 
 
 def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):

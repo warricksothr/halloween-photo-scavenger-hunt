@@ -40,15 +40,18 @@ the script warns, because that is not off-host. `ARKHAM_BACKUP_KEEP` is
 normalised to decimal before the retention sum, because a POSIX shell reads a
 leading zero as octal and would abort on a value like `08`.
 
-Archive names carry the timestamp plus a `mktemp -d` suffix, so two runs in the
-same second cannot collide; pruning orders by name, which is chronological
-because names are timestamp-prefixed. The mirror copy happens before either
-prune: when several archives share a timestamp their names are interchangeable
-to the sort, so a prune can drop the run's own archive, and the off-host copy
-must not depend on it surviving locally. The copy goes to a temp name in the
-mirror and is renamed into place, because a `cp` cut short by a full disk or a
-dropped mount would otherwise leave a truncated file under the final name that
-retention keeps and the restore recipe might select.
+Archive names carry the timestamp plus a random suffix, and `mktemp` reserves
+the archive name itself, so two runs in the same second cannot collide; pruning
+orders by name, which is chronological because names are timestamp-prefixed.
+The tarball is built in a `mktemp -d` work directory and moved into the
+reserved name, rather than naming the archive after the work directory, which a
+later run could reuse once the directory was removed. The mirror copy happens
+before either prune: when several archives share a timestamp their names are
+interchangeable to the sort, so a prune can drop the run's own archive, and the
+off-host copy must not depend on it surviving locally. The copy goes to a temp
+name in the mirror and is renamed into place, because a `cp` cut short by a full
+disk or a dropped mount would otherwise leave a truncated file under the final
+name that retention keeps and the restore recipe might select.
 
 ## Consequences
 

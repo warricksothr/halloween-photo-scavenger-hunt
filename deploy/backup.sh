@@ -58,14 +58,17 @@ fi
 
 mkdir -p "$DEST_DIR"
 # mktemp -d is atomic, so two backups in the same second get distinct
-# work directories; the archive borrows the same suffix and cannot
-# collide either.
+# work directories.
 WORK="$(mktemp -d "$DEST_DIR/.backup-work-$STAMP-XXXXXX")"
-OUT="$DEST_DIR/arkham-backup-$STAMP-${WORK##*-}.tar.gz"
+STAGED="$WORK/arkham-backup.tar.gz"
+# PENDING is an archive name mktemp has reserved but tar has not filled
+# yet; the trap removes it if the script dies in between.
+PENDING=""
 MIRROR_TMP=""
 
 cleanup() {
     rm -rf "$WORK"
+    [ -z "$PENDING" ] || rm -f "$PENDING"
     [ -z "$MIRROR_TMP" ] || rm -f "$MIRROR_TMP"
 }
 trap cleanup EXIT
@@ -92,7 +95,15 @@ else
 fi
 [ -d "$DATA_DIR/photos" ] && cp -r "$DATA_DIR/photos/." "$WORK/photos/"
 
-tar -czf "$OUT" -C "$WORK" arkham.db photos
+tar -czf "$STAGED" -C "$WORK" arkham.db photos
+
+# Reserve the archive name with mktemp and move the tarball in. Naming it
+# after the work directory would let a later run in the same second reuse
+# that suffix once the directory is gone, and overwrite the archive.
+OUT="$(mktemp --suffix=.tar.gz "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
+PENDING="$OUT"
+mv "$STAGED" "$OUT"
+PENDING=""
 rm -rf "$WORK"
 echo "backup written: $OUT"
 
