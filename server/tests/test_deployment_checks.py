@@ -177,33 +177,50 @@ def test_systemd_unit_hardens_the_data_dir():
     assert "ReadWritePaths=%h/arkham/data" in unit
 
 
+def _write_stub(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}")
+    path.chmod(0o755)
+
+
+def _fail_on_marker_stub(real: str, marker: str) -> str:
+    return (
+        'for arg in "$@"; do\n'
+        f'  case "$arg" in *"{marker}"*)'
+        ' echo "simulated failure" >&2; exit 1;; esac\n'
+        "done\n"
+        f'exec "{real}" "$@"\n'
+    )
+
+
 def _restricted_path_without_sqlite_cli(
-    root: Path, *, stamp: str = "20260101-000000", failing_cp_marker: str = ""
+    root: Path,
+    *,
+    stamp: str = "20260101-000000",
+    failing_cp_marker: str = "",
+    failing_rm_marker: str = "",
+    failing_mktemp: bool = False,
 ) -> str:
     """Expose only the utilities backup.sh needs, never sqlite3.
 
-    `date` is a stub pinned to `stamp`, so a test can put two runs in the same
-    second on purpose rather than relying on the wall clock. With
-    `failing_cp_marker`, `cp` fails whenever an argument contains that string,
-    which lets a test cut the mirror copy short without touching the photos.
+    `date` is pinned to `stamp`, so a test can put two runs in the same second
+    on purpose rather than relying on the wall clock. `failing_cp_marker`
+    leaves a short file where `cp` would have written and then fails, to stand
+    in for a mirror copy cut short. `failing_rm_marker` and `failing_mktemp`
+    fail those utilities so a test can drive an error path.
     """
 
     bin_dir = root / "bin"
     bin_dir.mkdir()
-    real_cp = shutil.which("cp")
-    assert real_cp is not None, "test host lacks cp"
-    for name in ("dirname", "gzip", "mkdir", "mktemp", "mv", "rm", "stat", "tar"):
+    for name in ("dirname", "gzip", "mkdir", "mv", "stat", "tar"):
         source = shutil.which(name)
         assert source is not None, f"test host lacks {name}"
         (bin_dir / name).symlink_to(source)
-    date_stub = bin_dir / "date"
-    date_stub.write_text(f"#!/bin/sh\necho {stamp}\n")
-    date_stub.chmod(0o755)
-    failure = ""
+    _write_stub(bin_dir / "date", f"echo {stamp}\n")
+
+    real_cp = shutil.which("cp")
+    assert real_cp is not None, "test host lacks cp"
     if failing_cp_marker:
-        # Leave a short file where cp would have written, then fail, so the
-        # test sees the truncated-copy case and not just a refused copy.
-        failure = (
+        body = (
             'for arg in "$@"; do\n'
             f'  case "$arg" in *"{failing_cp_marker}"*)\n'
             '    src="$1"; last="";\n'
@@ -215,10 +232,27 @@ def _restricted_path_without_sqlite_cli(
             "    ;;\n"
             "  esac\n"
             "done\n"
+            f'exec "{real_cp}" "$@"\n'
         )
-    cp_stub = bin_dir / "cp"
-    cp_stub.write_text(f'#!/bin/sh\n{failure}exec "{real_cp}" "$@"\n')
-    cp_stub.chmod(0o755)
+    else:
+        body = f'exec "{real_cp}" "$@"\n'
+    _write_stub(bin_dir / "cp", body)
+
+    real_rm = shutil.which("rm")
+    assert real_rm is not None, "test host lacks rm"
+    if failing_rm_marker:
+        _write_stub(bin_dir / "rm", _fail_on_marker_stub(real_rm, failing_rm_marker))
+    else:
+        (bin_dir / "rm").symlink_to(real_rm)
+
+    if failing_mktemp:
+        _write_stub(
+            bin_dir / "mktemp", 'echo "mktemp: simulated failure" >&2\nexit 1\n'
+        )
+    else:
+        real_mktemp = shutil.which("mktemp")
+        assert real_mktemp is not None, "test host lacks mktemp"
+        (bin_dir / "mktemp").symlink_to(real_mktemp)
     return str(bin_dir)
 
 
@@ -236,14 +270,23 @@ def _live_data(root: Path) -> Path:
 
 
 def _backup_env(
-    source: Path, root: Path, *, failing_cp_marker: str = "", **extra: str
+    source: Path,
+    root: Path,
+    *,
+    failing_cp_marker: str = "",
+    failing_rm_marker: str = "",
+    failing_mktemp: bool = False,
+    **extra: str,
 ) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
             "ARKHAM_DATA_DIR": str(source),
             "PATH": _restricted_path_without_sqlite_cli(
-                root, failing_cp_marker=failing_cp_marker
+                root,
+                failing_cp_marker=failing_cp_marker,
+                failing_rm_marker=failing_rm_marker,
+                failing_mktemp=failing_mktemp,
             ),
         }
     )
@@ -444,3 +487,33 @@ def test_backup_publishes_no_archive_when_the_mirror_copy_fails(tmp_path):
     assert not list(mirror.glob("arkham-backup-*.tar.gz"))
     assert not list(mirror.glob(".arkham-backup-copy-*"))
     assert "failed to mirror" in result.stderr
+
+
+def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):
+    """An empty WORK would resolve $WORK/arkham.db at the filesystem root."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(source, tmp_path, failing_mktemp=True)
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode != 0
+    assert "backup written:" not in result.stdout
+    assert not list(destination.glob("arkham-backup-*.tar.gz"))
+
+
+def test_backup_fails_when_retention_cannot_delete_an_archive(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(
+        source,
+        tmp_path,
+        failing_rm_marker="arkham-backup-",
+        ARKHAM_BACKUP_KEEP="1",
+    )
+
+    for _ in range(2):
+        result = _run_backup(destination, env)
+    assert result.returncode != 0
+    assert "simulated failure" in result.stderr
