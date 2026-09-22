@@ -1,6 +1,6 @@
 # git-ticket canvas layout. Positions and frames; tickets live in their own files.
 # One line per card, sorted by ticket ID, so a drag is a one-line diff.
-schema: 3
+schema: 4
 board: "default"
 cards:
   "TKT-01M24G5WDNA3KER19GWBC2F688": {x: -767, y: 685}
