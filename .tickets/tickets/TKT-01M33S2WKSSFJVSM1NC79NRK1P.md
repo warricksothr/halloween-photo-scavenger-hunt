@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:19:33Z
+updated_at: 2026-09-22T23:24:05Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -159,3 +159,28 @@ not, and the body secret is absent.
 
 Evidence: head 65f6f82, `bash scripts/check-server.sh` green — 326 tests,
 coverage 95.19%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:24:05Z
+
+Supersedes the note at head 65f6f82.
+
+### high (review 190, run #275, request truncated-body-fix): repeated form fields
+Terva resolved the truncated-body finding (`finding-1` resolved: the middleware
+records a short copy and the logger omits the message). The same review opened a
+high: `_body_secrets` folded the form pairs through `dict(parse_qsl(...))`, which
+keeps only the last value of a repeated field. The app can read an earlier value
+from the form's multi-value interface, so a body like
+`password=firstsecret&password=secondsecret` could quote `firstsecret` in a
+`raise` while the scrub set held only `secondsecret`.
+
+Accepted. The form branch now keeps the `(name, value)` values as a list, so
+every repeated value enters the scrub set; the JSON branch is unchanged and
+still yields values only, never keys, which is why the field names stay out.
+
+Tests: the unit test gains a duplicate-field case asserting both values; a new
+`test_a_repeated_form_value_is_scrubbed` posts the repeated form and has the
+route raise with `form.getlist('password')[0]`, asserting neither value reaches
+the log.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 327
+tests, coverage 95.45%, Ruff clean (45 files formatted). Re-review requested.
