@@ -97,11 +97,26 @@ fi
 
 tar -czf "$STAGED" -C "$WORK" arkham.db photos
 
-# Reserve the archive name with mktemp and move the tarball in. Naming it
-# after the work directory would let a later run in the same second reuse
-# that suffix once the directory is gone, and overwrite the archive.
-OUT="$(mktemp --suffix=.tar.gz "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
-PENDING="$OUT"
+# Reserve the archive name and move the tarball in. Naming it after the work
+# directory would let a later run in the same second reuse that suffix once
+# the directory is gone, and overwrite the archive. BusyBox mktemp needs the
+# Xs to end the template, so it cannot produce a name ending in .tar.gz:
+# take a random suffix from mktemp, then create the suffixed name under
+# noclobber, which fails rather than clobber an archive from an earlier run.
+# PENDING follows whichever file exists, so the trap removes it if the run
+# dies here.
+while :; do
+    RESERVED="$(mktemp "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
+    PENDING="$RESERVED"
+    OUT="$RESERVED.tar.gz"
+    if (set -C; : > "$OUT") 2>/dev/null; then
+        PENDING="$OUT"
+        rm -f "$RESERVED"
+        break
+    fi
+    rm -f "$RESERVED"
+    PENDING=""
+done
 mv "$STAGED" "$OUT"
 PENDING=""
 rm -rf "$WORK"
