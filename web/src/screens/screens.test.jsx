@@ -145,6 +145,28 @@ describe('player screens', () => {
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
+  it('re-enables the warning controls when the refresh fails', async () => {
+    window.history.replaceState(null, '', '/t/invite-token');
+    mocks.api.inviteInfo.mockResolvedValue({
+      team_name: 'GCPD',
+      event_name: 'The Hunt',
+    });
+    mocks.api.redeemInvite.mockResolvedValue({ error: 'switch_needs_confirm' });
+    mocks.refresh.mockRejectedValueOnce(new Error('offline'));
+
+    render(<TeamJoinScreen token="invite-token" copy={copy} />);
+
+    const codename = await screen.findByLabelText('Codename');
+    fireEvent.input(codename, { target: { value: 'Robin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join the Team' }));
+
+    const stay = await screen.findByRole('button', { name: 'Stay' });
+    fireEvent.click(stay);
+
+    await waitFor(() => expect(stay.disabled).toBe(false));
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('switches team only after the warning is confirmed', async () => {
     window.history.replaceState(null, '', '/t/invite-token');
     mocks.api.inviteInfo.mockResolvedValue({

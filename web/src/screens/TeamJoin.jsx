@@ -80,8 +80,15 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
     if (busy) return;
     setBusy(true);
     window.history.replaceState(null, '', '/');
-    await refresh();
-    setBusy(false);
+    try {
+      await refresh();
+    } catch {
+      // refresh() folds read failures into the store's error phase and
+      // does not reject on them; the store owns the error surface, so
+      // this only has to put the warning controls back.
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!copy) return <div class="frame" />;
