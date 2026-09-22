@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:13:42Z
+updated_at: 2026-09-22T18:17:29Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -57,13 +57,18 @@ hashed bundles against the new API. Bumping the cache name by hand is the only
 way to release it, and nothing enforces that.
 
 ### Approach
-- Rewrite `web/public/sw.js` around a per-request-type policy:
-  - navigations (`request.mode === 'navigate'`) — network-first, cache the
-    successful response, fall back to the exact cached URL then `/index.html`
-    when offline;
-  - same-origin GET assets (hashed `assets/*`) — cache-first, since the
-    filename changes with the content;
-  - `/api/` — untouched (network only).
+- Rewrite `web/public/sw.js` around a single rule: every same-origin GET is
+  network-first, and the cache is the offline fallback. A navigation that
+  misses falls back to `/index.html` so a deep link still opens offline.
+  Successful responses refresh the cached copy.
+- Leave `/api/` and cross-origin requests alone (no interception): the
+  snapshot contract owns game state, and this worker does not answer for
+  another origin.
+- An earlier revision kept a cache-first path for hashed `assets/*` bundles.
+  Review found the predicate could not tell a hashed bundle from any other
+  file under `/assets/`, so that path was removed rather than pattern-matched;
+  network-first is simpler and nothing can be served stale. Hashed bundles
+  stay cheap via the server's `Cache-Control: immutable` plus the HTTP cache.
 - Rename the cache to `arkham-shell-v2`, so this deploy's install evicts the
   stale v1 shell in `activate` and the change is observable.
 - The server already sends `Cache-Control: no-cache` for `sw.js` and
@@ -74,17 +79,18 @@ way to release it, and nothing enforces that.
 - `web/src/service-worker.test.js`: load the worker source, run it against a
   fake `self`/`caches`/`fetch`, and assert install prefetch, activate eviction,
   navigation network-first (old shell cached, new build served), offline
-  fallback, `/api/` bypass, and cache-first hashed assets.
+  navigation and asset fallback, a fresh asset winning over a cached one,
+  `/api/` and cross-origin bypass, and that the cache write is awaited.
 - `web/e2e/service-worker.spec.js`: real browser against the built app — load,
   wait for the worker to control the page, rewrite `dist/index.html` to stand
   in for a deploy, reload, and assert the new markup is served.
-- Both fail on the pre-fix worker (verified), so they prove the change rather
-  than describe it.
+- The load-bearing unit tests and the smoke fail on the pre-fix worker
+  (verified), so they prove the change rather than describe it.
 - `playwright.config.js` gets `workers: 1`: the specs share one served build
   and the smoke rewrites it.
 
 ### Verification
-- `npm --prefix web test` (32 pass), `npm run test:e2e` (both specs pass),
+- `npm --prefix web test` (35 pass), `npm run test:e2e` (both specs pass),
   `bash scripts/check-quality.sh` exit 0.
 
 ## Notes
@@ -111,3 +117,24 @@ Actions run #158 (id 8724).
   the worker-lifetime failure the finding described.
 
 Fixed in `1c1989f`. Re-requesting review.
+
+**agent:opencode/sw-deploy-safe** at 2026-09-22T18:17:29Z
+
+### Round 2 — one resolved, one accepted by removing the special case
+
+Reviewed head `ab206444cfdf135e4a8095b163e8c215d80aa555` (review id 154), Terva
+run `2dfb557c-f969-476f-b9c0-c74d12798da4` for `request:sw-deploy-safe-2`,
+Actions run #161 (id 8727).
+
+- **finding-2 (awaited cache writes) — resolved** by the reviewer's reading.
+- **finding-1 — present, narrowed** to the `/assets/` predicate: cache-first
+  still accepted any same-origin path under `/assets/`, hashed or not.
+  Accepted. Rather than pattern-match Vite's filename hash, the cache-first
+  path is gone entirely: every same-origin GET is network-first with the cache
+  as the offline fallback. That is one rule instead of two, and no path can be
+  served stale. `/api/` and cross-origin requests remain unintercepted. The
+  hashed bundles stay cheap because the server marks them `immutable` and a
+  worker `fetch()` reads through the HTTP cache.
+
+The plan on this ticket has been revised to the final policy. Fixed in
+`bd9ddec`; the PR description was updated to match. Re-requesting review.
