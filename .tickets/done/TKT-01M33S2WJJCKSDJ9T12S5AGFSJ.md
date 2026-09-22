@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WJJCKSDJ9T12S5AGFSJ
 title: Add request-ID structured logging with secret redaction
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/request-id-logging
-  branch: t3code/request-id-logging
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-request-id-logging
-  commit: d14ff957630888d5b9a4c2b294f4c93ee1fb81c7
-  session: null
-  claimed_at: 2026-09-22T21:07:21Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T21:41:03Z
+updated_at: 2026-09-22T21:43:17Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -140,3 +133,7 @@ Terva review rounds on PR #16 (base d14ff95):
 - Review 172, head ff345bc (run 12969b50, request s2wj-request-logging-v2, actions #228/id 8868): finding-1 of 171 resolved; new finding-1 medium, accepted; fixed in 0900faee.
 - Clean review, head 0900faee (run e51005e2, request s2wj-request-logging-v3, actions #231/id 8871): findings [], both prior findings resolved. Comment https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/16#issuecomment-9906
 Ready to merge; awaiting the user's merge authorization.
+
+## Summary
+
+Merged as 4911546 on main (PR #16). RequestLogMiddleware logs one JSON line per request with a redacted path and a request id; the id is echoed on responses including unhandled 500s, and uvicorn's raw access line is dropped. ADR 0016. Clean Terva review at code head 0900faee (run e51005e2, request s2wj-request-logging-v3, actions #231/id 8871); two findings fixed (prefix redaction for trailing-slash/suffix paths, request id on the ServerErrorMiddleware 500). check-quality.sh passes.
