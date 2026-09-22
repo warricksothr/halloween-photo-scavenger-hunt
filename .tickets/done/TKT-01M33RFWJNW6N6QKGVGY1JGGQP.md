@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWJNW6N6QKGVGY1JGGQP
 title: Require CSRF tokens and rate-limit unauthenticated endpoints
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/csrf
-  branch: t3code/csrf-tokens
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: 22198c9ee26422c83cca7b13a670e503c8274a6c
-  session: null
-  claimed_at: 2026-09-22T19:15:54Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T19:58:28Z
+updated_at: 2026-09-22T20:02:27Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -284,3 +277,24 @@ acceptance criteria ticked, gate green (229 server tests, 94.27% coverage,
 Ruff clean, 40 web tests, deploy checks 19). Awaiting the user's merge
 authorization; the ticket stays in-progress until the PR lands, then close it
 on `main` as the earlier tickets were.
+
+## Summary
+
+Merged as PR #13 into `main` (`15db8eb`).
+
+Shipped three request guards for the unauthenticated entry points, per ADR
+0015: a signed double-submit CSRF token on every state-changing request, an
+application-level request-body cap (16 MiB, matching nginx), and in-memory
+rate limits on join, moderator join, invite redemption, and admin login.
+
+The Terva review ran three rounds. Round 1 (review 162) found four issues —
+a stale CSRF cookie survived a secret rotation, guess-keyed rate-limit buckets
+never filled under enumeration, check-then-record could overshoot under
+concurrency, and a body with no declared length escaped the cap. All four were
+fixed, each with a test that fails against the pre-fix code. Round 2 (review
+164) confirmed all four resolved and found one more: a non-ASCII CSRF value
+raised instead of being rejected. Fixed, and round 3 (review 197) came back
+clean at head `fde4c80`.
+
+Gate: 229 server tests at 94.27% coverage, Ruff clean, 40 web tests, 19 deploy
+checks.
