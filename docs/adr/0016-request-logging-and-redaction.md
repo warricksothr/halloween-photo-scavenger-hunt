@@ -61,29 +61,30 @@ request does not control: app code can put a value it was handed into a `raise`,
 and `exc_info` would write that message verbatim. `log_unhandled_exception`
 therefore formats the traceback itself and replaces each value the request
 carried — the bearer path segment, the query values, the `Authorization` value,
-each cookie value, and the string values of a JSON or form body — with
-`<redacted>`, longest first. The type, the frames, and the message survive
-unless the message names one of them. This is the one place the middleware
-reads `Authorization` and `Cookie`, and it reads them only to seed the scrub
-set; neither reaches a sink.
+each cookie value, and the strings of a JSON or form body, including keys and
+field names — with `<redacted>`, longest first. The type, the frames, and the
+message survive unless the message names one of them. This is the one place the
+middleware reads `Authorization` and `Cookie`, and it reads them only to seed
+the scrub set; neither reaches a sink.
 
 Reading the body for that set costs a copy, so it is bounded: the middleware
 buffers a parsed body up to `_BUFFERED_BODY_BYTES` and only for the two media
 types `_body_secrets` understands, and it parses the buffer in the `except`
-branch alone. The form branch keeps every `(name, value)` value rather than
+branch alone. The form branch keeps every `(name, value)` pair rather than
 folding the pairs into a dict, because a repeated field is readable through the
-form's multi-value interface while a dict holds only the last. A request that
-succeeds pays nothing but the copy, a photo upload is never buffered or parsed,
-and the bytes are dropped when the request ends. The scrub set is mutated in
-place across the request so the exception handler — which runs after the
-middleware's `finally` resets the contextvars — still sees what the body added.
+form's multi-value interface while a dict holds only the last, and the set takes
+keys and field names as well as values — a route can quote either. A request
+that succeeds pays nothing but the copy, a photo upload is never buffered or
+parsed, and the bytes are dropped when the request ends. The scrub set is
+mutated in place across the request so the exception handler — which runs after
+the middleware's `finally` resets the contextvars — still sees what the body
+added.
 
-A body larger than the buffer is the one case the scrub set cannot cover: the
-app reads the whole request while the scrubber holds the first
-`_BUFFERED_BODY_BYTES`. The middleware records that the copy is short and the
-handler logs the frames and the exception type *without the message*, which is
-the only place a value the scrubber never saw could appear. Failing safe is
-worth losing the message for a body that large; every other request keeps it.
+Two cases cannot be represented by the scrub set, and both drop the message
+rather than log a value the set never saw. A body larger than the buffer is the
+first: the app reads the whole request while the scrubber holds the first
+`_BUFFERED_BODY_BYTES`. The second is a body that does not parse — malformed
+JSON — where the route's raw read and the scrub set's parse disagree.
 
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same

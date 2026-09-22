@@ -46,9 +46,13 @@ when the increment runs and its tests pass.
   `{"error": "internal_error", "message": "Something went wrong.",
   "request_id": …}` with the id echoed in `X-Request-ID`. The id and
   redacted path ride the scope, because the request middleware resets its
-  contextvars before `ServerErrorMiddleware` reaches the handler. Headers,
-  cookies, and the body are never read. 313 server tests pass; coverage
-  95.34%.
+  contextvars before `ServerErrorMiddleware` reaches the handler. To seed
+  the traceback scrub set the middleware does read the `Authorization`
+  and `Cookie` headers and buffers a JSON or form body; those values are
+  used to redact the log line and are never written to it. A body larger
+  than the buffer, or one that does not parse, loses the exception
+  message rather than risk a value the scrub set never held. 329 server
+  tests pass; coverage 95.47%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

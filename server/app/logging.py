@@ -197,14 +197,18 @@ def _media_type(scope: Scope) -> str:
     return ""
 
 
-def _body_secrets(media: str, body: bytes) -> tuple[str, ...]:
-    """The string values a JSON or form body carried.
+def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
+    """The strings a JSON or form body carried, or ``None`` if unparsable.
 
     The traceback is the one log line request code does not control, so a
     value the body handed to app code can reach it through a ``raise``.
     Only the two media types the API parses are read; a photo upload is
     binary and yields nothing. The bytes this parses are dropped when the
     request ends and are never logged.
+
+    ``None`` means the body did not parse, so the app may have read a
+    value this set does not hold. The caller then treats the message as
+    unsafe rather than log it unscanned.
     """
     if media not in _PARSED_MEDIA:
         return ()
@@ -212,21 +216,26 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...]:
         if media == _JSON_MEDIA:
             parsed: Any = json.loads(body)
         else:
-            # The values, not a dict: a form can repeat a field name, and
-            # the app can read every value while a dict keeps only the
-            # last. Names are not secrets, so only the values are kept.
-            parsed = [value for _, value in parse_qsl(body.decode("utf-8", "replace"))]
+            # Pairs, not a dict: a form can repeat a field name, and the
+            # app reads every value while a dict keeps only the last.
+            parsed = parse_qsl(body.decode("utf-8", "replace"))
     except ValueError:
-        return ()
+        return None
     return tuple(value for value in _strings_in(parsed) if len(value) >= _MIN_SECRET)
 
 
 def _strings_in(value: Any) -> Iterator[str]:
-    """Every string leaf of a decoded body, whatever its shape."""
+    """Every request-controlled string of a decoded body.
+
+    Mapping keys and form field names are yielded alongside the values:
+    app code can quote either, so both belong in the scrub set.
+    """
     if isinstance(value, str):
         yield value
     elif isinstance(value, Mapping):
-        for item in value.values():
+        for key, item in value.items():
+            if isinstance(key, str):
+                yield key
             yield from _strings_in(item)
     elif isinstance(value, (list, tuple)):
         for item in value:
@@ -451,10 +460,15 @@ class RequestLogMiddleware:
             await self.app(scope, receiving, sending)
         except BaseException:
             # The route read the body before it raised, so the values are
-            # in the buffer now. If the buffer is short, the app saw bytes
-            # the scrubber did not, so the message is logged without.
-            carried.extend(_body_secrets(media, bytes(body)))
-            state["safe_traceback"] = truncated
+            # in the buffer now. If the buffer is short, or the body did
+            # not parse, the app saw something the scrubber did not, so
+            # the message is logged without.
+            body_secrets = _body_secrets(media, bytes(body))
+            if body_secrets is None:
+                state["safe_traceback"] = True
+            else:
+                carried.extend(body_secrets)
+                state["safe_traceback"] = truncated
             raise
         finally:
             _log_request(scope, request_id, path, status, started)

@@ -188,18 +188,19 @@ def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
 
 
 def test_body_secrets_reads_json_and_form_values():
+    # Keys as well as values: a route can quote either.
     assert set(
         app_logging._body_secrets(
             "application/json",
             b'{"display_name": "Bruce Wayne", "password": "hunter2"}',
         )
-    ) == {"Bruce Wayne", "hunter2"}
+    ) == {"display_name", "Bruce Wayne", "password", "hunter2"}
 
     assert set(
         app_logging._body_secrets(
             "application/x-www-form-urlencoded", b"code=JOIN234&password=hunter2"
         )
-    ) == {"JOIN234", "hunter2"}
+    ) == {"password", "JOIN234", "hunter2"}
 
     # A repeated field keeps every value, not just the last: the app can
     # read them all through the form's multi-value interface.
@@ -208,14 +209,15 @@ def test_body_secrets_reads_json_and_form_values():
             "application/x-www-form-urlencoded",
             b"password=firstsecret&password=secondsecret",
         )
-    ) == {"firstsecret", "secondsecret"}
+    ) == {"password", "firstsecret", "secondsecret"}
 
 
 def test_body_secrets_skips_binary_and_malformed_bodies():
     # A photo upload is not text; mining it would redact noise.
     assert app_logging._body_secrets("image/jpeg", b"\xff\xd8\xff\xe0topsecret") == ()
-    # A body that does not parse yields nothing rather than raising.
-    assert app_logging._body_secrets("application/json", b"{not json") == ()
+    # A body that does not parse is not a body the scrub set can stand
+    # for: ``None`` tells the caller to drop the message.
+    assert app_logging._body_secrets("application/json", b"{not json") is None
 
 
 def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
@@ -361,6 +363,77 @@ def test_a_repeated_form_value_is_scrubbed(tmp_path, caplog):
     text = _rendered(caplog)
     assert "firstsecret" not in text
     assert "secondsecret" not in text
+
+
+def test_a_json_key_quoted_by_route_code_is_scrubbed(tmp_path, caplog):
+    """A request-controlled key is as much a secret as a value."""
+    app = create_app(
+        tmp_path / "json-key.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom key={next(iter(payload))}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"topsecretkey": None},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "topsecretkey" not in text
+    # The message itself survives; only the key inside it goes.
+    assert "RuntimeError: kaboom key=" in text
+
+
+def test_a_malformed_json_body_drops_the_exception_message(tmp_path, caplog):
+    """A body that will not parse cannot be represented by the scrub set.
+
+    The route reads the raw bytes, so it sees a value the scrub set does
+    not; the message is dropped rather than logged unscanned.
+    """
+    app = create_app(
+        tmp_path / "malformed-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b'{"password": "topsecret", not json',
+            headers={"content-type": "application/json"},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    assert "topsecret" not in text
+    assert "RuntimeError: kaboom" not in text
 
 
 def test_query_string_is_redacted(client, caplog):
