@@ -24,9 +24,10 @@ jobs:
         uses: Actions-Mirrors/forgejo-actions-checkout@v6
 
       # AGENTS.md says CI verifies the ticket store. Pin the tool to the
-      # version installed locally so the two agree.
+      # version installed locally so the two agree. The main package lives
+      # under cmd/, so the module path alone has nothing to build.
       - name: Install git ticket
-        run: go install github.com/terva-sh/git-ticket@v0.23.0
+        run: go install github.com/terva-sh/git-ticket/cmd/git-ticket@v0.23.0
 
       - name: Check the ticket store
         run: git ticket check --fix --dry-run --strict

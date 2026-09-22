@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:51Z
-updated_at: 2026-09-22T20:06:52Z
+updated_at: 2026-09-22T20:16:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -56,9 +56,9 @@ runs that check.
 
 ## Acceptance criteria
 
-- [ ] AGENTS.md describes the built state accurately.
-- [ ] The ticket-store check is wired into CI, or the claim that it runs is removed.
-- [ ] The store passes its own strict check.
+- [x] AGENTS.md describes the built state accurately.
+- [x] The ticket-store check is wired into CI, or the claim that it runs is removed.
+- [x] The store passes its own strict check.
 
 ## Implementation plan
 
@@ -101,3 +101,29 @@ local claim is false today.
   "Check the ticket store" step must pass. If the runner cannot reach the
   Go module proxy, fall back to rewording the AGENTS.md sentence to match
   what CI actually runs, and record why in a note.
+
+## Notes
+
+**agent:opencode/agents-md-state** at 2026-09-22T20:16:49Z
+
+### CI wiring verified, and a pre-existing CI failure found
+
+The plan named the wrong Go package: `go install github.com/terva-sh/git-ticket@v0.23.0` fails with
+`module ... found, but does not contain package`. The main package lives under `cmd/`, so the workflow
+now installs `github.com/terva-sh/git-ticket/cmd/git-ticket@v0.23.0`.
+
+Verified in the exact CI container (`golang:1.25-alpine`), read-only mount of this branch:
+
+- `go install .../cmd/git-ticket@v0.23.0` succeeds and `git-ticket` lands on `PATH`.
+- `git ticket check --fix --dry-run --strict` prints "No problems found." and exits 0.
+
+So the new steps are correct. The Quality run on this PR (`8820`, `0fffd4f`) is still red, but for a
+reason that predates the branch: `deploy/backup.sh:103` uses `mktemp --suffix=.tar.gz`, a GNU-only
+option that BusyBox rejects, so 8 tests in `server/tests/test_deployment_checks.py` fail under the
+alpine `mktemp` and `scripts/check-server.sh` stops there. Reproduced both on the host with a BusyBox
+`mktemp` symlink (8 failed, 11 passed) and in the CI container (8 failed, 221 passed). `main` has been
+red since run 8763 (`49e418ef`), the merge of PR #12; the last green run is 8761 (`ee1a473b`).
+
+Filed TKT-01M35C6QJ1AF1QW1FE30Q63TT4 (Fix GNU-only mktemp --suffix in deploy/backup.sh breaking CI)
+with the reproduction and the fix. The frontend steps pass in the same container (`npm ci`, 40 tests,
+`npm run build`), so the deploy tests are the only failure.
