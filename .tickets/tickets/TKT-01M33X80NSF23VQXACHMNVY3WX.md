@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:13:02Z
+updated_at: 2026-09-22T17:27:15Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -176,3 +176,45 @@ Terva review on `91c9b3dce95a76035069aefedc9f933a597eafe7`, request `ready-revie
 Gate on the fixed head: `bash scripts/check-quality.sh` exit 0 — 163 tests, 94.29% coverage, ruff clean, 23 frontend tests, vite build.
 
 Requesting a fresh review of head `07bf6b3` (request `ready-review-4`).
+
+**agent:opencode/read-isolation** at 2026-09-22T17:27:15Z
+
+### Terva review round 4 — review 148 on `df41f244`
+
+Request `ready-review-4`; run `d6d0b65b-cc5a-43ca-8303-b87f9f17b3e4`; Actions run #134 (id 8662); model `gpt-5.6-sol` (thinking low); review hash `baa8a02850b43159c89491a8601e70bfc1438d44091febb817c996d45684130a`.
+
+Both round-3 findings are resolved:
+
+- `auth.py` session revocation — the writer transaction re-checks the session (`_revalidate_session`), so a write after a revocation commits is refused.
+- `events.py` `create_riddle` FK race vs purge — the event is re-checked on the writer and answers 404.
+
+Three new findings, all the same class (a reader read that gates a writer):
+
+- high `server/app/evidence.py:87` — `upload` evaluated `derive_restriction` on the reader, then inserted in a writer transaction without re-evaluating; a strike committed in between did not stop the upload.
+- medium `server/app/players.py:34` — `players.join` (and `mod.join`) validated the event on the reader, then inserted a `team`/`moderator` referencing it on the writer; a purge in between failed the foreign key and surfaced as a 500.
+- medium `server/app/teams.py:204` — `revoke_invite` checked the invite open on the reader, then ran an unconditional UPDATE; a concurrent redemption could be revoked.
+
+### Decision: complete the class in this PR
+
+The maintainer chose to finish the whole class here rather than split the remaining handlers into a follow-up ticket. An audit found 23 functions holding both a `reader(request)` read and a `locked_transaction(request)` write; 12 were unprotected. All are now writer-re-checked at `4a91d37`:
+
+- `evidence.upload` — restriction, riddle, and rate-limit re-checked on the writer before the INSERT; the response row is read from the writer.
+- `players.join`, `mod.join` — the event is re-read on the writer; a purged event 404s, a closed one 409s, and the response is built from the writer row.
+- `teams.revoke_invite` — the UPDATE is conditional on `team_id = ? AND redeemed_by IS NULL AND revoked_at IS NULL`; `rowcount == 0` answers 409 `invite_closed`.
+- `events.purge_event` — the event, the photo list, and the counts are re-read on the writer inside the transaction.
+- `mod.resolve_flag` — the open flag is re-checked on the writer.
+- `mod.remove_member` — the player's team is re-checked on the writer.
+- `players.notice_ack` — the pending strike is derived on the writer (the reader read is gone).
+- `teams.rename_team` — the audit's `old_name` is re-read on the writer.
+- `events.create_event`, `teams.create_invite` — the response row is read from the writer.
+
+Already safe and left as they are: `events.reverse_strike` (conditional UPDATE with a `rowcount` check), `auth.current_player`/`current_moderator` (covered by the session guard), and the handlers behind `hold_request_lock` (`close_event`, `verdict`, `inappropriate`, `redeem_invite`).
+
+### Evidence
+
+- Eight new regression tests in `server/tests/test_regressions.py`: upload-after-strike, player join and mod join after the event vanishes, revoke-vs-redeem, double purge, double resolve, double remove-member, and the ack deriving on the writer. Each was run with the app changes stashed and each fails; with the fixes they pass.
+- `server/.venv/bin/python -m pytest server -q` → 171 passed.
+- `bash scripts/check-quality.sh` → exit 0 (23 frontend tests, production build).
+- `bash scripts/check-server.sh` → 93.76% coverage, ruff clean.
+
+Fix head: `4a91d37`.
