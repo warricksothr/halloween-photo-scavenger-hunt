@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T16:36:49Z
+updated_at: 2026-09-22T17:12:37Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -124,3 +124,55 @@ under a held lock, which is a code-reading question, not a backlog one.
 Re-verified before promotion: `main.py:99` still builds the single `RLock`,
 `db.py:58` still takes it around writes only, and read handlers still use the
 shared `app.state.db` unguarded. The defect is present, not stale.
+
+**agent:opencode/read-isolation** at 2026-09-22T16:50:27Z
+
+### PR and review request
+
+- PR [#9](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/9) — Isolate reads from another request's uncommitted transaction.
+- Head `861c44f72b308e3f5a93aae73cf58e46b54b5727`, base `74250922b185ddf33c9371dacd69770ef1d7cf0c` (main).
+- Commits: `a3a587b` reader connection + ADR 0013, `d9ee24a` router reroutes, `861c44f` tests + ticket.
+- Gate: `bash scripts/check-quality.sh` exit 0 — 160 tests, 94.82% coverage, ruff clean, 23 frontend tests, vite build.
+- Terva review request-id: `ready-review`; dispatching now.
+
+**agent:opencode/read-isolation** at 2026-09-22T16:54:15Z
+
+### Review round 1 (head 861c44f)
+
+Terva review [144](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/9#issuecomment-0) on `861c44f72b308e3f5a93aae73cf58e46b54b5727`, request `ready-review`, [Actions run #127](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/127) (id 8628), run `9a6781f4-5d17-4cd2-8e1e-62611549852f`.
+
+- finding-1 (high, `server/app/main.py:99`) **accepted, fixed** in `6e043d27ddc29c8e0638cf686f2c62feec1bda68`. Opening `read_conn` with a second `connect(":memory:")` gave the reader a private empty database. `db.resolve_dsn` now resolves the path once and maps `:memory:` to a unique shared-cache URI, so both connections reach the migrated database. Regression test `test_memory_database_is_shared_with_the_reader` starts the app with `:memory:` and exercises a reader-backed endpoint (health then the event list). ADR 0013 records the resolver.
+
+Gate on the fixed head: `bash scripts/check-quality.sh` exit 0 — 161 tests, 94.92% coverage.
+
+Requesting a fresh review of head `6e043d2` (request `ready-review-2`).
+
+**agent:opencode/read-isolation** at 2026-09-22T16:58:13Z
+
+### Review round 2 (head 6e043d2)
+
+Terva review [145](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/9) on `6e043d27ddc29c8e0638cf686f2c62feec1bda68`, request `ready-review-2`, [Actions run #129](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/129) (id 8633), run `7d2257ba-ca57-41a7-a728-f259a8034582`.
+
+- review 144 finding-1 **resolved**.
+- review 145 finding-1 (medium, `server/app/db.py:91`) **accepted, fixed** in `91c9b3dce95a76035069aefedc9f933a597eafe7`. The shared-cache `:memory:` DSN made both connections see the schema, but in-memory SQLite cannot enter WAL, so an interleaved read of a table the writer holds fails with `SQLITE_LOCKED` rather than reading a snapshot — verified directly (`journal_mode` returns `memory`; a parked write makes the reader fail). `connect()` now refuses `:memory:` with a `ValueError` pointing at a file path, and `test_memory_database_is_rejected` covers it. Temp-file tests already exercise the real WAL path.
+
+Gate on the fixed head: `bash scripts/check-quality.sh` exit 0 — 161 tests, 94.89% coverage.
+
+Requesting a fresh review of head `91c9b3d` (request `ready-review-3`).
+
+**agent:opencode/read-isolation** at 2026-09-22T17:12:37Z
+
+**agent:opencode/read-isolation** at 2026-09-22T17:05:00Z
+
+### Review round 3 (head 91c9b3d)
+
+Terva review on `91c9b3dce95a76035069aefedc9f933a597eafe7`, request `ready-review-3`,
+[Actions run #131](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/131) (id 8637), run `16a6866a-dc9f-4089-97e9-1034f9b83c6b`.
+
+- review 145 finding-1 **resolved** (the shared-cache `:memory:` DSN is gone; `connect()` rejects it).
+- finding-1 (high, `server/app/auth.py:153`) **accepted, fixed** in `07bf6b3`. Auth reads the session on the reader, so a logout that commits after that read is invisible there and a request could write under a revoked session — a regression against the pre-X80 single connection, which saw the uncommitted revocation. `locked_transaction` now re-checks the session on the writer (`_revalidate_session` reads `request.state.session_guard`, registered by `current_player`/`current_moderator`) and answers 401 `not_authenticated`. Regression test `test_write_after_a_session_revocation_commits_is_rejected` parks a logout inside its transaction, submits against the pre-revocation snapshot, and asserts 401 and no `submission` row; confirmed to fail (201) with the re-check removed.
+- finding-2 (medium, `server/app/events.py:405`) **accepted, fixed** in `07bf6b3`. `create_riddle` checked the event on the reader, so a `purge_event` committing in between made the INSERT fail its foreign key as a 500. The read-then-write handlers — `create_riddle`, `patch_riddle`, `delete_riddle`, `open_event`, `patch_event` — now re-check on the writer inside the transaction and build the response from the writer-read row; `submit` moved all of its checks (event status, riddle, evidence, restriction) inside the transaction. Regression test `test_create_riddle_after_the_event_is_purged_is_not_a_500` parks a purge, creates against the pre-purge snapshot, and asserts 404; confirmed to fail with `sqlite3.IntegrityError: FOREIGN KEY constraint failed` with the re-check removed.
+
+Gate on the fixed head: `bash scripts/check-quality.sh` exit 0 — 163 tests, 94.29% coverage, ruff clean, 23 frontend tests, vite build.
+
+Requesting a fresh review of head `07bf6b3` (request `ready-review-4`).
