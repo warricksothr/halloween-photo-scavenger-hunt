@@ -100,7 +100,12 @@ def test_request_credentials_never_survive():
 
 def test_dsn_secret_and_local_variables_never_serialize():
     event = {
-        "extra": {"dsn": DSN, "key": "public-key"},
+        "extra": {
+            "dsn": DSN,
+            "key": "public-key",
+            # A tuple serializes as a JSON array, so a secret can ride one.
+            "values": (DSN, ("secret-key", "public-key")),
+        },
         "exception": {
             "values": [
                 {

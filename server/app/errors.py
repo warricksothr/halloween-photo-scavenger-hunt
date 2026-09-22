@@ -178,6 +178,10 @@ class Scrubber:
             return scrubbed
         if isinstance(value, list):
             return [self._scrub_strings(item) for item in value]
+        if isinstance(value, tuple):
+            # The SDK serializes a tuple as a JSON array, so a secret can
+            # ride one out. A list is the same shape on the wire.
+            return [self._scrub_strings(item) for item in value]
         return value
 
 
