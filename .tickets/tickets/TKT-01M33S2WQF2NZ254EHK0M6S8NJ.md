@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T22:43:25Z
+updated_at: 2026-09-22T22:52:50Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -93,3 +93,7 @@ Add `sentry-sdk>=2.0` to `server/pyproject.toml` runtime deps; regenerate `serve
 **agent:opencode/t3code-0691bbb1** at 2026-09-22T22:43:25Z
 
 Implemented and verified locally. server/app/errors.py adds Scrubber (before_send/before_breadcrumb) and init_error_reporting; create_app wires ARKHAM_ERROR_DSN and stays inert when unset. sentry-sdk>=2.0 added to server/pyproject.toml with uv.lock and server/requirements.lock regenerated together. bash scripts/check-server.sh is green: 320 tests, 95.09% coverage, Ruff check and format clean. All four acceptance criteria ticked. NOT yet committed or pushed, no PR opened.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T22:52:50Z
+
+Opened PR #18 (branch t3code/error-reporting-layer, head f7844af45b3e327a97f9c271721b8e41ba449a4b, base 794e300ea673ca01c905ba02abde408613aa4eb1) and requested a Terva review: request-id ready-review, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/260. Awaiting review and merge; the ticket closes with a separate store commit on main after the merge, as TKT-01M33S2WJ did.
