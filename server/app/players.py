@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids
+from app import auth, ids, ratelimit
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import locked_transaction, reader
@@ -31,11 +31,28 @@ class JoinBody(BaseModel):
 
 @router.post("/join/{join_code}", status_code=201)
 def join(join_code: str, body: JoinBody, request: Request):
+    # Refuse a source that has already exhausted its failures, and a code
+    # that has been ground at, before the comparison (ADR 0015).
+    source_key = ("join:source", ratelimit.source(request))
+    target_key = ("join:code", join_code)
+    throttled = ratelimit.throttle(
+        request,
+        (source_key, ratelimit.JOIN_SOURCE),
+        (target_key, ratelimit.JOIN_TARGET),
+    )
+    if throttled is not None:
+        return throttled
+
     conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE join_code = ?", (join_code,)
     ).fetchone()
     if event is None:
+        ratelimit.fail(
+            request,
+            (source_key, ratelimit.JOIN_SOURCE),
+            (target_key, ratelimit.JOIN_TARGET),
+        )
         # 404, not 401: the code is a URL path, so an invalid one is
         # simply a bad address — same treatment as any unknown route.
         return JSONResponse(

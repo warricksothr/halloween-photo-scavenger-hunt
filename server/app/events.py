@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids, sse
+from app import auth, ids, ratelimit, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import hold_request_lock, locked_transaction, reader
@@ -70,9 +70,28 @@ class LoginBody(BaseModel):
 
 @router.post("/login")
 def login(body: LoginBody, request: Request):
+    # Password guessing is the other brute-force surface (ADR 0015): a
+    # tight per-source cap and a looser global one so a botnet cannot
+    # spread the guesses across addresses. Checked before the argon2
+    # verify so a locked-out source costs nothing.
+    source_key = ("login:source", ratelimit.source(request))
+    global_key = ("login:global", "all")
+    throttled = ratelimit.throttle(
+        request,
+        (source_key, ratelimit.LOGIN_SOURCE),
+        (global_key, ratelimit.LOGIN_GLOBAL),
+    )
+    if throttled is not None:
+        return throttled
+
     if not auth.check_admin_password(
         request.app.state.admin_config, body.username, body.password
     ):
+        ratelimit.fail(
+            request,
+            (source_key, ratelimit.LOGIN_SOURCE),
+            (global_key, ratelimit.LOGIN_GLOBAL),
+        )
         return _err(401, "bad_credentials", "Wrong username or password.")
     token = auth.issue_admin_session(request)
     resp = JSONResponse(content={"ok": True})

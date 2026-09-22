@@ -31,6 +31,7 @@ from app import (
     limits,
     mod,
     players,
+    ratelimit,
     sse,
     state,
     submissions,
@@ -116,6 +117,10 @@ def create_app(
         app.state.csrf_secret = os.environ.get("ARKHAM_CSRF_SECRET", "").encode() or (
             secrets.token_bytes(32)
         )
+        # Per-process failure counters for the unauthenticated entry
+        # points (app/ratelimit.py, ADR 0015). In-memory on purpose: the
+        # deployment is one worker and a restart may as well clear them.
+        app.state.rate_limiter = ratelimit.RateLimiter()
         app.state.photos_dir = photos_dir
         # The broker captures the running loop: sync endpoints publish
         # from the threadpool, and asyncio queues can only be fed from
