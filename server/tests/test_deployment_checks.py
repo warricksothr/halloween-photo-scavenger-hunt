@@ -528,8 +528,8 @@ def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path
     archive. The stub creates the path it returns and records its arguments, so
     the test fails if the script stops asking mktemp for the archive name. The
     reserved name has no extension: BusyBox mktemp rejects a template whose
-    trailing characters follow the `X`s, so the script renames the reserved
-    name to add `.tar.gz`.
+    trailing characters follow the `X`s, so the script creates the suffixed
+    name itself under noclobber.
     """
 
     source = _live_data(tmp_path)
@@ -550,12 +550,49 @@ def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path
         f"-d {destination}/.backup-work-20260101-000000-XXXXXX",
         f"{destination}/arkham-backup-20260101-000000-XXXXXX",
     ]
-    # The stub left an empty file at the reserved name; publication must have
-    # replaced it with the finished tarball.
+    # The script created an empty file at the suffixed name under noclobber;
+    # publication must have replaced it with the finished tarball.
     with tarfile.open(archive) as tarball:
         names = tarball.getnames()
     assert "arkham.db" in names
     assert any(name.startswith("photos/") for name in names)
+
+
+def test_backup_keeps_an_archive_whose_suffixed_name_is_already_taken(tmp_path):
+    """mktemp reserves only the bare name, so the suffixed name can collide.
+
+    The suffixed name is created under noclobber; when it is already taken the
+    script must drop that reservation, ask mktemp again, and leave the earlier
+    archive untouched.
+    """
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    destination.mkdir()
+    work = destination / ".backup-work-20260101-000000-WORKSU"
+    taken = destination / "arkham-backup-20260101-000000-TAKEN0"
+    taken_archive = taken.with_name(f"{taken.name}.tar.gz")
+    taken_archive.write_bytes(b"earlier-archive")
+    free = destination / "arkham-backup-20260101-000000-FREESU"
+    env = _backup_env(
+        source, tmp_path, mktemp_sequence=(str(work), str(taken), str(free))
+    )
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode == 0, result.stderr
+    assert taken_archive.read_bytes() == b"earlier-archive"
+    assert not taken.exists()
+    assert sorted(
+        path.name for path in destination.glob("arkham-backup-*.tar.gz")
+    ) == sorted([taken_archive.name, f"{free.name}.tar.gz"])
+    assert (tmp_path / "mktemp.args").read_text().splitlines() == [
+        f"-d {destination}/.backup-work-20260101-000000-XXXXXX",
+        f"{destination}/arkham-backup-20260101-000000-XXXXXX",
+        f"{destination}/arkham-backup-20260101-000000-XXXXXX",
+    ]
+    with tarfile.open(f"{free}.tar.gz") as tarball:
+        assert "arkham.db" in tarball.getnames()
 
 
 def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):

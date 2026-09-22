@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T20:16:36Z
-updated_at: 2026-09-22T20:37:01Z
+updated_at: 2026-09-22T20:41:12Z
 created_by:
   id: agent:opencode/agents-md-state
   name: ""
@@ -137,3 +137,9 @@ workflow has been red on `main` and on PRs since PR #12 (run 8763,
 - `bash scripts/check-quality.sh` passes.
 - `git ticket check --fix --dry-run --strict` passes.
 - In the CI container, `bash scripts/check-server.sh` passes.
+
+## Notes
+
+**agent:opencode/fix-mktemp-portability** at 2026-09-22T20:41:12Z
+
+Fix pushed: branch t3code/fix-mktemp-portability, PR #15, head c7f0b2c60303443b8734bf7669def0fd5a62e9d2, base main d73ff1f30132775b0e380875006378fad3694b48. Terva request id mktemp-portability-v1, dispatch run 8841. Verified in the CI container (golang:1.25-alpine, BusyBox mktemp): check-server.sh 229 passed, coverage 94.27%, Ruff clean; BusyBox-mktemp repro on the host 19 passed; test discrimination confirmed against the pre-fix script.

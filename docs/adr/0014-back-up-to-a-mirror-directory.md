@@ -46,9 +46,11 @@ orders by name, which is chronological because names are timestamp-prefixed.
 The tarball is built in a `mktemp -d` work directory and moved into the
 reserved name, rather than naming the archive after the work directory, which a
 later run could reuse once the directory was removed. The reserved name has no
-extension and is renamed to add `.tar.gz`: BusyBox `mktemp`, which the CI image
-ships, rejects a template whose trailing characters follow the `X`s, so
-`mktemp --suffix` is not portable. The mirror copy happens
+extension: BusyBox `mktemp`, which the CI image ships, rejects a template whose
+trailing characters follow the `X`s, so `mktemp --suffix` is not portable.
+The script takes the random suffix from `mktemp` and creates the suffixed
+`.tar.gz` name under noclobber, retrying on collision, so an archive from an
+earlier run is never overwritten and the archive name itself stays reserved. The mirror copy happens
 before either prune: when several archives share a timestamp their names are
 interchangeable to the sort, so a prune can drop the run's own archive, and the
 off-host copy must not depend on it surviving locally. The copy goes to a temp

@@ -76,11 +76,12 @@ when the increment runs and its tests pass.
   `deploy/backup.sh` reserved the archive name with
   `mktemp --suffix=.tar.gz`, which BusyBox `mktemp` rejects, so the Quality
   workflow failed on `main` and on every PR from PR #12 until this fix.
-  The script now asks `mktemp` for an extension-less name and renames it to
-  add `.tar.gz`, which both GNU and BusyBox accept, and keeps `PENDING`
-  pointing at whichever path exists so the trap still cleans up. The
-  reservation test now asserts the extension-less argument and the renamed
-  archive. TKT-01M35C6QJ1AF1QW1FE30Q63TT4.
+  The script now asks `mktemp` for an extension-less name and creates the
+  `.tar.gz` name under noclobber, retrying on collision, which both GNU and
+  BusyBox accept and still never overwrites an earlier archive. `PENDING`
+  follows whichever path exists so the trap still cleans up. The reservation
+  test asserts the extension-less argument and the suffixed archive, and a new
+  test pins the collision path. TKT-01M35C6QJ1AF1QW1FE30Q63TT4.
 
 - **2026-09-22 — Container runtime pinned, nginx and systemd hardened.**
   The `Containerfile` now installs `server/requirements.lock`, the hash-pinned
