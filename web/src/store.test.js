@@ -19,6 +19,7 @@ import {
   join,
   logout,
   refresh,
+  retry,
   subscribe,
   subscribeDeltas,
 } from './store';
@@ -98,9 +99,9 @@ describe('store', () => {
     const unsubscribe = subscribeDeltas(delta);
     FakeEventSource.instances[0].emit('event_status', { status: 'closed' });
 
-    await vi.waitFor(() => expect(mocks.api.snapshot).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getState().snapshot).toEqual(updated));
     expect(delta).toHaveBeenCalledWith('event_status', { status: 'closed' });
-    expect(getState().snapshot).toEqual(updated);
+    expect(mocks.api.snapshot).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
 
@@ -145,5 +146,48 @@ describe('store', () => {
     stream.emit('verdict', { submission_id: 'sub-1' });
     expect(stateListener).not.toHaveBeenCalled();
     expect(deltaListener).not.toHaveBeenCalled();
+  });
+
+  it('retries a transient failure with backoff before showing the error phase', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(mocks.api.snapshot).toHaveBeenCalledTimes(4);
+    expect(getState()).toMatchObject({ phase: 'error' });
+    vi.useRealTimers();
+  });
+
+  it('recovers when a retried request succeeds', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot
+      .mockResolvedValueOnce({ error: 'network_error', network: true })
+      .mockResolvedValueOnce(playerSnapshot);
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await done;
+
+    expect(mocks.api.snapshot).toHaveBeenCalledTimes(2);
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    vi.useRealTimers();
+  });
+
+  it('retry returns to booting and refreshes to ready', async () => {
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+
+    const done = retry();
+    expect(getState().phase).toBe('booting');
+    await done;
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
   });
 });

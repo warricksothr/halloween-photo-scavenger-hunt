@@ -14,6 +14,7 @@ vi.mock('../store', () => ({ refresh: mocks.refresh }));
 
 import { RiddleDetailScreen } from './RiddleDetail';
 import { StrikeNoticeScreen } from './StrikeNotice';
+import { ConnectionErrorScreen } from './ConnectionError';
 
 const copy = {
   verdicts: {
@@ -90,5 +91,19 @@ describe('player screens', () => {
       expect(mocks.api.noticeAck).toHaveBeenCalledTimes(1);
       expect(mocks.refresh).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('offers a retry from the connection-error screen', () => {
+    const onRetry = vi.fn();
+    render(
+      <ConnectionErrorScreen
+        message="Could not reach the server. Check your connection."
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(screen.getByText('Connection Failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

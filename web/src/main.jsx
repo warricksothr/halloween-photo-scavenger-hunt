@@ -1,8 +1,9 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
-import { getState, refresh, subscribe } from './store';
+import { getState, refresh, retry, subscribe } from './store';
 import { Header } from './components/Header';
+import { ConnectionErrorScreen } from './screens/ConnectionError';
 import { JoinScreen } from './screens/Join';
 import { ModJoinScreen } from './screens/ModJoin';
 import { TeamJoinScreen } from './screens/TeamJoin';
@@ -33,19 +34,7 @@ function App() {
   }
 
   if (state.phase === 'error') {
-    return (
-      <div class="frame">
-        <main style={{ padding: 16 }}>
-          <div class="verdict-banner sev-red">
-            <div class="verdict-chip">!</div>
-            <div>
-              <div class="verdict-headline">Connection Failed</div>
-              <p class="subtext" style={{ marginTop: 6 }}>{state.error}</p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+    return <ConnectionErrorScreen message={state.error} onRetry={retry} />;
   }
 
   // A /t/<token> invite link decides the screen in EVERY phase before

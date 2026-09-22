@@ -9,11 +9,20 @@ async function request(path, options = {}) {
   // FormData bodies (photo upload) must NOT set Content-Type — the
   // browser sets it with the multipart boundary.
   const isForm = options.body instanceof FormData;
-  const resp = await fetch(path, {
-    headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
-    ...options,
-    body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
-  });
+  let resp;
+  try {
+    resp = await fetch(path, {
+      headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
+      ...options,
+      body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
+    });
+  } catch {
+    // A dropped connection or an offline phone rejects the promise rather
+    // than resolving, so fold it into the same error shape the rest of the
+    // client branches on. Callers never see a rejection, and a screen that
+    // is waiting on a mutation cannot stay busy forever.
+    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true };
+  }
   if (resp.status === 401) {
     // Not joined (or session revoked) — the store routes to the join
     // screen; it is not an error from the player's point of view.

@@ -55,4 +55,14 @@ describe('api client', () => {
       status: 409,
     });
   });
+
+  it('folds a rejected fetch into the network error shape', async () => {
+    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+  });
 });

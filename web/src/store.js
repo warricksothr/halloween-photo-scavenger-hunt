@@ -91,14 +91,46 @@ export function getState() {
   return state;
 }
 
+// Boot and resync failures are usually a flaky phone connection, so a
+// transient failure retries before the UI gives up. The schedule is short:
+// a player on the boot screen reaches either the game or the retry
+// affordance within a few seconds, and never hangs there.
+const RETRY_DELAYS_MS = [500, 1000, 2000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// A network rejection or a 5xx is worth retrying; a 4xx or a 401 is not
+// (the store routes a 401 itself).
+function isTransient(result) {
+  return result.network === true || result.status >= 500;
+}
+
+async function loadSnapshot() {
+  let result = await api.snapshot();
+  for (const delay of RETRY_DELAYS_MS) {
+    if (!isTransient(result)) return result;
+    await sleep(delay);
+    result = await api.snapshot();
+  }
+  return result;
+}
+
 // The resync point. Called on boot, after every mutation, and on SSE
 // deltas (increment 7). Role detection: the player snapshot 401s for a
 // mod-only cookie, so a 401 means "try the moderator probe" before
 // concluding the visitor is unauthenticated.
 export async function refresh() {
-  const result = await api.snapshot();
+  const result = await loadSnapshot();
   if (result.unauthenticated) {
     const mod = await api.modState();
+    if (mod.error) {
+      // The probe failed too, so this is a connection problem, not an
+      // unauthenticated visitor — do not drop them on the join screen.
+      set({ phase: 'error', error: mod.message });
+      return;
+    }
     if (mod.event) {
       const copy =
         state.copy && state.themeName === mod.event.theme
@@ -126,6 +158,13 @@ export async function refresh() {
   set({ phase: 'ready', role: 'player', snapshot: result, copy,
         themeName: result.event.theme, modEvent: null });
   startStream();
+}
+
+// The retry affordance on the connection-error screen: back to booting so
+// the retry shows progress, then the full refresh (with its backoff).
+export function retry() {
+  set({ phase: 'booting', error: null });
+  return refresh();
 }
 
 export async function modJoin(modCode) {
