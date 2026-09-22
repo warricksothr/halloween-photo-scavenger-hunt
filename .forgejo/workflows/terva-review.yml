@@ -27,7 +27,9 @@ jobs:
     if: ${{ github.event_name != 'issue_comment' || (contains(fromJSON('["warricksothr"]'), github.actor) && github.event.issue.pull_request && startsWith(github.event.comment.body, '/terva ')) }}
     runs-on: docker
     container:
-      image: container.local.sothr.com/library/golang:1.27-alpine
+      # Pinned by digest: the job holds review credentials, so a moved tag must
+      # not be able to change the code it runs.
+      image: container.local.sothr.com/library/golang:1.27-alpine@sha256:a6c2a4b91494a9f838334a6343d05f541f9aea9f5583b1f72fdb2b901d42f877
     steps:
       - name: Install runtime dependencies
         run: |
