@@ -53,7 +53,18 @@ the exact route, is deliberate: a trailing slash or an unexpected suffix
 (`/api/join/SECRET/`, `/api/mod/join/SECRET/extra`) still reaches the
 middleware, and a malformed request must not leak its credential. The query
 string is dropped from the path and reported as `query: "<redacted>"` when one
-was present; cookies and `Authorization` are simply never read.
+was present; cookies and `Authorization` are never logged.
+
+**The exception traceback is scrubbed, not handed to `exc_info`.** The request
+line never reads the body, but the exception's own message is a channel the
+request does not control: app code can put a value it was handed into a `raise`,
+and `exc_info` would write that message verbatim. `log_unhandled_exception`
+therefore formats the traceback itself and replaces each of the request's own
+secret values — the bearer path segment, the query values, the `Authorization`
+value, and each cookie value — with `<redacted>`, longest first. The type, the
+frames, and the message survive unless the message names a secret. This is the
+one place the middleware reads `Authorization` and `Cookie`, and it reads them
+only to seed the scrub set; neither reaches a sink.
 
 **uvicorn's access log is dropped, not rewritten.** The line duplicates the
 structured one and writes the raw path; the middleware already logs the same
@@ -75,3 +86,9 @@ on so pytest's `caplog` still sees records.
 - Redaction is a list of prefixes, so a new code-carrying route must be added to
   `_CODE_PREFIXES`. The `redact_path` tests make the omission visible, but the
   list is not derived from the routers.
+- The exception scrubber knows only what the request carried in its path, query,
+  `Authorization`, and `Cookie`. A secret that reached the app only in the body
+  and then into a `raise` message would still be logged; the body stays unread
+  by design, and this is a constraint on app code rather than a hole in the
+  scrubber. Values shorter than `_MIN_SECRET` are left alone, because replacing
+  a short string verbatim would mangle ordinary words.

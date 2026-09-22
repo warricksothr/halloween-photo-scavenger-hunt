@@ -7,6 +7,7 @@ import logging
 import re
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from support import arm_csrf
 
@@ -65,6 +66,54 @@ def _request_lines(caplog):
 )
 def test_redact_path(path, expected):
     assert app_logging.redact_path(path) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/api/join/ABC234", ("ABC234",)),
+        ("/api/mod/join/MOD234/extra", ("MOD234",)),
+        ("/api/team/invites/tok123/redeem", ("tok123",)),
+        ("/j/ABC234", ("ABC234",)),
+        ("/m/MOD234/", ("MOD234",)),
+        # The same prefix rules as ``redact_path``: no credential, none back.
+        ("/api/leaderboard", ()),
+        ("/api/join/", ()),
+        ("/api/joinfake/x", ()),
+    ],
+)
+def test_bearer_secrets_returns_the_credential(path, expected):
+    assert app_logging.bearer_secrets(path) == expected
+
+
+def test_request_secrets_collects_the_requests_own_values():
+    secrets = app_logging._request_secrets(
+        {
+            "path": "/api/team/invites/tok123/redeem",
+            "query_string": b"code=querysecret",
+            "headers": [
+                (b"authorization", b"Bearer topsecrettoken"),
+                (b"cookie", b"arkham_session=cookiesecret; theme=dark"),
+            ],
+        }
+    )
+
+    assert set(secrets) >= {
+        "tok123",
+        "querysecret",
+        "topsecrettoken",
+        "cookiesecret",
+    }
+    # Below the floor: replacing a short ordinary word would mangle the
+    # message it is meant to protect.
+    assert "dark" not in secrets
+    # Longest first, so a secret containing another cannot leave a fragment.
+    assert list(secrets) == sorted(secrets, key=len, reverse=True)
+
+
+def test_scrub_secrets_replaces_the_longest_first():
+    scrubbed = app_logging._scrub_secrets("a abcdef abc", ("abc", "abcdef"))
+    assert scrubbed == "a <redacted> <redacted>"
 
 
 def test_every_request_logs_one_structured_line(client, caplog):
@@ -140,7 +189,13 @@ def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
 
 def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     """TKT-01M33S2WK: one traceback, tied to the request, without the
-    cookie, the Authorization header, or the body."""
+    cookie, the Authorization header, or the body.
+
+    The route raises with the request's own secrets in the message — the
+    one way a traceback could smuggle a credential past the middleware —
+    so the assertions show the scrubber, not merely that an unused value
+    was left out.
+    """
     app = create_app(
         tmp_path / "boom.db",
         admin_config=("admin", hash_password("pw")),
@@ -150,8 +205,10 @@ def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     )
 
     @app.post("/api/team/invites/{token}/boom")
-    def boom(token: str, payload: dict):
-        raise RuntimeError("kaboom")
+    def boom(token: str, request: Request, payload: dict):
+        raise RuntimeError(
+            f"kaboom token={token} auth={request.headers['authorization']}"
+        )
 
     caplog.set_level(logging.INFO)
     with TestClient(app, raise_server_exceptions=False) as c:
@@ -179,13 +236,15 @@ def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
     assert record.request_id == request_id
     assert record.method == "POST"
     assert record.path == "/api/team/invites/<redacted>/boom"
+    assert record.exception_type == "RuntimeError"
 
     text = _rendered(caplog)
     assert "kaboom" in text
     assert "Traceback" in text
+    assert app_logging.REDACTED in text
     assert "SUPERSECRETCODE" not in text
-    assert "hunter2" not in text
     assert "topsecrettoken" not in text
+    assert "hunter2" not in text
 
 
 def test_query_string_is_redacted(client, caplog):

@@ -20,8 +20,11 @@ import logging
 import re
 import secrets
 import time
+import traceback
+from collections.abc import Iterable
 from contextvars import ContextVar
 from typing import Any
+from urllib.parse import parse_qsl
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -55,6 +58,11 @@ _CODE_PREFIXES = (
     "/j",
     "/m",
 )
+
+# A candidate shorter than this is too likely to be an ordinary word. The
+# scrubber replaces verbatim, so a two-character query value would mangle
+# the message it is meant to protect. Real codes and tokens are longer.
+_MIN_SECRET = 6
 
 # The standard LogRecord attributes. A formatter has to skip them or every
 # line would carry the level, the pathname, the thread name, and so on.
@@ -103,6 +111,7 @@ def log_unhandled_exception(
     request_id: str | None,
     method: str | None,
     path: str | None,
+    request_secrets: Iterable[str] = (),
 ) -> None:
     """Log one correlated traceback for an exception nothing caught.
 
@@ -110,8 +119,21 @@ def log_unhandled_exception(
     middleware resets those in its ``finally`` before
     ``ServerErrorMiddleware`` reaches its handler. Only the method and the
     redacted path are attached — headers, cookies, and the body are never
-    read, so a session cookie or a join code cannot reach the sink.
+    logged.
+
+    The traceback is rendered and scrubbed here rather than handed to
+    ``exc_info``. The exception's own message is the one part of the log
+    the request does not control: app code can put a value it was handed
+    into a ``raise``. ``exc_info`` would write that message verbatim, so
+    it is formatted instead and each of the request's own secrets is
+    replaced with ``<redacted>``. Nothing is lost that matters — the
+    type, the frames, and the message all survive unless the message
+    names a secret.
     """
+    rendered = _scrub_secrets(
+        "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+        request_secrets,
+    )
     logging.getLogger(LOGGER_NAME).error(
         "unhandled_exception",
         extra={
@@ -119,9 +141,65 @@ def log_unhandled_exception(
             "request_id": request_id,
             "method": method,
             "path": path,
+            "exception_type": type(exc).__name__,
+            "traceback": rendered,
         },
-        exc_info=exc,
     )
+
+
+def bearer_secrets(path: str) -> tuple[str, ...]:
+    """The raw bearer credential in ``path``, for scrubbing a traceback.
+
+    ``redact_path`` discards what it removes; the exception logger needs
+    the original back, so an exception message that echoes the credential
+    can be scrubbed. Same prefixes as ``redact_path``, so the two can
+    never disagree about which segment is the secret.
+    """
+    for prefix in _CODE_PREFIXES:
+        if not path.startswith(prefix + "/"):
+            continue
+        credential, _, _ = path[len(prefix) + 1 :].partition("/")
+        if credential:
+            return (credential,)
+    return ()
+
+
+def _request_secrets(scope: Scope) -> tuple[str, ...]:
+    """The secret values this request carried, longest first.
+
+    Nothing collected here is logged; it exists so a traceback that
+    quotes one of them can be scrubbed. The body is not read: this module
+    never touches it, and a body value reaches a message only if app code
+    raised with it.
+    """
+    candidates: list[str] = list(bearer_secrets(scope.get("path", "")))
+
+    query = (scope.get("query_string") or b"").decode("latin-1")
+    for _, value in parse_qsl(query):
+        candidates.append(value)
+
+    for name, value in scope.get("headers", []):
+        header = value.decode("latin-1")
+        lowered = name.lower()
+        if lowered == b"authorization":
+            _, _, token = header.partition(" ")
+            candidates.extend((header, token))
+        elif lowered == b"cookie":
+            candidates.append(header)
+            for cookie in header.split(";"):
+                _, _, cookie_value = cookie.partition("=")
+                candidates.append(cookie_value.strip())
+
+    distinct = {value for value in candidates if len(value) >= _MIN_SECRET}
+    return tuple(sorted(distinct, key=len, reverse=True))
+
+
+def _scrub_secrets(text: str, request_secrets: Iterable[str]) -> str:
+    """Replace each secret wherever it appears; the longest first so a
+    secret that contains another cannot leave a fragment behind."""
+    for secret in sorted(set(request_secrets), key=len, reverse=True):
+        text = text.replace(secret, REDACTED)
+    return text
 
 
 def redact_path(path: str) -> str:
@@ -249,11 +327,14 @@ class RequestLogMiddleware:
 
         # ServerErrorMiddleware builds an unhandled exception's 500 outside
         # this middleware, so that response misses the ``sending`` wrapper
-        # below. The id and the redacted path ride the scope for the app's
-        # exception handler, which runs after this middleware's ``finally``
-        # has reset the contextvars.
-        scope.setdefault("state", {})["request_id"] = request_id
-        scope.setdefault("state", {})["redacted_path"] = path
+        # below. The id, the redacted path, and the secrets the exception
+        # logger scrubs all ride the scope for the app's exception handler,
+        # which runs after this middleware's ``finally`` has reset the
+        # contextvars.
+        state = scope.setdefault("state", {})
+        state["request_id"] = request_id
+        state["redacted_path"] = path
+        state["request_secrets"] = _request_secrets(scope)
 
         id_token = _request_id.set(request_id)
         path_token = _redacted_path.set(path)
