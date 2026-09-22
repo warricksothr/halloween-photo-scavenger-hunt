@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import sqlite3
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
 from app import db as db_module
+from app import submissions
 from app.main import create_app
 from app.sse import SseBroker, _stream
 
@@ -70,6 +72,108 @@ def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
             "SELECT COUNT(*) FROM audit_event"
             " WHERE action = 'team_invite.redeemed' AND entity_id = ?",
             (token,),
+        ).fetchone()[0]
+        == 1
+    )
+
+
+def test_auth_read_cannot_commit_another_requests_mutation(
+    admin, client, tmp_path, monkeypatch
+):
+    """A throttled last_seen_at write must not commit a peer's in-flight
+    mutation without its audit row (ADR 0004).
+
+    The mutation is parked between its INSERT and its log_action call; the
+    auth read that would otherwise commit it must block on the shared
+    lock instead. A fresh connection must still see nothing, and the
+    mutation and its audit row must land together."""
+    party = mod_party(admin, client)
+
+    reader = TestClient(client.app)
+    reader_join = reader.post(
+        f"/api/join/{party['join_code']}", json={"display_name": "Robin"}
+    )
+    assert reader_join.status_code == 201, reader_join.text
+
+    # Age Robin's session so their next read takes the throttled
+    # last_seen_at write path (the write that used to commit a peer).
+    conn = client.app.state.db
+    conn.execute(
+        "UPDATE session SET last_seen_at = 0 WHERE player_id = ?",
+        (reader_join.json()["player"]["id"],),
+    )
+    conn.commit()
+
+    mutation_written = threading.Event()
+    release = threading.Event()
+    real_log_action = submissions.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        mutation_written.set()
+        assert release.wait(timeout=5), "mutation was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(submissions, "log_action", blocking_log_action)
+
+    def count_submissions():
+        # A separate connection: the shared one is mid-transaction and
+        # would see its own uncommitted INSERT.
+        observer = db_module.connect(tmp_path / "api.db")
+        try:
+            return observer.execute("SELECT COUNT(*) FROM submission").fetchone()[0]
+        finally:
+            observer.close()
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(client.cookies),
+            ) as mutator_api,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(reader.cookies),
+            ) as reader_api,
+        ):
+            mutation = asyncio.create_task(
+                mutator_api.post(
+                    "/api/submissions",
+                    json={
+                        "riddle_id": party["riddle_ids"][0],
+                        "evidence_item_id": party["evidence_id"],
+                    },
+                )
+            )
+            assert await asyncio.to_thread(mutation_written.wait, 5)
+
+            reader_task = asyncio.create_task(reader_api.get("/api/evidence"))
+            # With the bug the reader's commit lands here and finishes;
+            # with the lock it parks behind the mutator and stays pending.
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 1.0
+            while not reader_task.done() and loop.time() < deadline:
+                await asyncio.sleep(0.02)
+            mid_flight = count_submissions()
+
+            release.set()
+            mutation_response = await mutation
+            await reader_task
+            return mutation_response, mid_flight
+
+    try:
+        mutation_response, mid_flight = asyncio.run(interleave())
+    finally:
+        reader.close()
+
+    assert mutation_response.status_code == 201, mutation_response.text
+    assert mid_flight == 0, "mutation was visible before its audit row committed"
+    assert count_submissions() == 1
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM audit_event WHERE action = 'submission.created'"
         ).fetchone()[0]
         == 1
     )

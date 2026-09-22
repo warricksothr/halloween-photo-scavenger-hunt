@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
-from app.db import hold_request_lock
+from app.db import hold_request_lock, locked_transaction
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/mod", tags=["moderation"])
@@ -54,7 +54,7 @@ def join(mod_code: str, request: Request):
 
     now = int(time.time())
     moderator_id = ids.new_id()
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "INSERT INTO moderator (id, event_id, label, created_at)"
             " VALUES (?, ?, ?, ?)",
@@ -195,7 +195,7 @@ def claim(
     never blocks another moderator, is overwritten by the latest viewer,
     and is never audited (audit-actions.md: high-churn advisory)."""
     conn: sqlite3.Connection = request.app.state.db
-    with conn:
+    with locked_transaction(request):
         cur = conn.execute(
             "UPDATE submission SET claimed_by = ?, claimed_at = ?"
             " WHERE id = ? AND status = 'pending'"
@@ -242,7 +242,7 @@ def verdict(
         return _err(404, "not_found", "No such submission.")
 
     now = int(time.time())
-    with request.app.state.db_lock, conn:
+    with locked_transaction(request):
         cur = conn.execute(
             "UPDATE submission SET status = ? WHERE id = ? AND status = 'pending'",
             (body.verdict, submission_id),
@@ -354,7 +354,7 @@ def inappropriate(
 
     strike_id = ids.new_id()
     now = int(time.time())
-    with conn:
+    with locked_transaction(request):
         cur = conn.execute(
             "UPDATE submission SET status = 'inappropriate'"
             " WHERE id = ? AND status = 'pending'",
@@ -525,7 +525,7 @@ def resolve_flag(
     if evidence_id not in open_flags:
         return _err(404, "not_found", "No open flag for that evidence.")
 
-    with conn:
+    with locked_transaction(request):
         log_action(
             conn,
             event_id=ctx.event_id,
@@ -709,7 +709,7 @@ def remove_member(
         return _err(404, "not_found", "That player is not on that team.")
 
     now = int(time.time())
-    with conn:
+    with locked_transaction(request):
         new_team_id = ids.new_id()
         conn.execute(
             "INSERT INTO team (id, event_id, created_at) VALUES (?, ?, ?)",

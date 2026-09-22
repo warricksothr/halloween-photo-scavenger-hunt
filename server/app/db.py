@@ -20,6 +20,7 @@ import re
 import sqlite3
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import Request
@@ -37,6 +38,25 @@ def hold_request_lock(request: Request) -> Iterator[None]:
     """Serialize sync database handlers using the app's shared connection."""
     with request.app.state.db_lock:
         yield
+
+
+@contextmanager
+def locked_transaction(request: Request) -> Iterator[sqlite3.Connection]:
+    """Run ``with conn:`` while holding the shared-connection lock.
+
+    The app shares one sqlite3.Connection across threadpool threads
+    (ADR 0008). ``with conn:`` alone is not enough: a commit applies to
+    the connection's whole open transaction, so a second request's commit
+    — a throttled ``last_seen_at`` write, say — can land between a
+    handler's mutation and its ``log_action`` call, persisting the
+    mutation with no audit row (ADR 0004). Holding ``db_lock`` across the
+    transaction makes each request's commit boundary its own. The lock is
+    reentrant, so a handler that already holds it for the full request
+    (``hold_request_lock``) nests safely.
+    """
+    conn: sqlite3.Connection = request.app.state.db
+    with request.app.state.db_lock, conn:
+        yield conn
 
 
 def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:

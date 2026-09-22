@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction, now
+from app.db import locked_transaction
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -84,7 +85,7 @@ def submit(
 
     submission_id = ids.new_id()
     try:
-        with conn:
+        with locked_transaction(request):
             conn.execute(
                 "INSERT INTO submission (id, riddle_id, team_id, submitted_by,"
                 " evidence_item_id, created_at)"

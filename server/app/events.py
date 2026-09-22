@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from app import auth, ids, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
-from app.db import hold_request_lock
+from app.db import hold_request_lock, locked_transaction
 from app.leaderboard import publish_leaderboard
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -130,7 +130,7 @@ def create_event(
     now = int(time.time())
     event_id = ids.new_id()
     join_code, mod_code = ids.new_code(), ids.new_code()
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "INSERT INTO event (id, name, theme, leaderboard_visibility,"
             " team_size_limit, join_code, mod_code, created_at)"
@@ -179,11 +179,14 @@ def patch_event(
     updates = body.model_dump(exclude_none=True)
     if updates:
         assignments = ", ".join(f"{k} = ?" for k in updates)
-        conn.execute(
-            f"UPDATE event SET {assignments} WHERE id = ?",
-            (*updates.values(), event_id),
-        )
-        conn.commit()
+        # A locked transaction, not a bare execute + commit: an
+        # unlocked commit here could land mid-mutation in another
+        # handler (ADR 0004).
+        with locked_transaction(request):
+            conn.execute(
+                f"UPDATE event SET {assignments} WHERE id = ?",
+                (*updates.values(), event_id),
+            )
     return _event_json(_get_event(conn, event_id))
 
 
@@ -210,7 +213,7 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
             409, "no_riddles", "Add at least one riddle before opening the round."
         )
     now = int(time.time())
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "UPDATE event SET status = 'open', opened_at = ? WHERE id = ?",
             (now, event_id),
@@ -248,7 +251,7 @@ def close_event(event_id: str, request: Request, _: str = Depends(auth.require_a
             f"Event is {row['status']}; only an open event can close.",
         )
     now = int(time.time())
-    with request.app.state.db_lock, conn:
+    with locked_transaction(request):
         # One transaction (spec): flip status, stamp closed_at, expire
         # pending submissions, log with the expired count. Pending subs
         # become EXPIRED — moderators can no longer race verdicts in
@@ -314,7 +317,7 @@ def reverse_strike(
         return _err(404, "not_found", "No such strike.")
 
     now = int(time.time())
-    with conn:
+    with locked_transaction(request):
         cur = conn.execute(
             "UPDATE strike SET reversed_at = ? WHERE id = ? AND reversed_at IS NULL",
             (now, strike_id),
@@ -401,7 +404,7 @@ def create_riddle(
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     riddle_id = ids.new_id()
-    with conn:
+    with locked_transaction(request):
         conn.execute(
             "INSERT INTO riddle (id, event_id, text, sort_order, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
@@ -434,7 +437,7 @@ def patch_riddle(
         return _err(404, "riddle_not_found", "No such riddle on this event.")
     updates = body.model_dump(exclude_none=True)
     if updates:
-        with conn:
+        with locked_transaction(request):
             assignments = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(
                 f"UPDATE riddle SET {assignments} WHERE id = ?",
@@ -482,7 +485,7 @@ def delete_riddle(
         return _err(
             409, "riddle_in_use", "Submissions reference this riddle; edit it instead."
         )
-    with conn:
+    with locked_transaction(request):
         conn.execute("DELETE FROM riddle WHERE id = ?", (riddle_id,))
         log_action(
             conn,
@@ -553,7 +556,7 @@ def purge_event(
         "evidence": len(evidence_rows),
     }
 
-    with conn:
+    with locked_transaction(request):
         # The final audit row: the purge records what it destroyed,
         # then disappears with the event's log.
         log_action(

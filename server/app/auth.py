@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request
 
 from app import ids
+from app.db import locked_transaction
 
 COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
@@ -163,10 +164,13 @@ def current_player(request: Request) -> PlayerContext | None:
         return None
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
-        conn.execute(
-            "UPDATE session SET last_seen_at = ? WHERE id = ?", (now, row["session_id"])
-        )
-        conn.commit()
+        # Locked: this write must never commit another request's open
+        # transaction (ADR 0004 atomicity — see locked_transaction).
+        with locked_transaction(request):
+            conn.execute(
+                "UPDATE session SET last_seen_at = ? WHERE id = ?",
+                (now, row["session_id"]),
+            )
     return PlayerContext(
         session_id=row["session_id"],
         player_id=row["player_id"],
@@ -248,11 +252,13 @@ def current_moderator(request: Request) -> ModeratorContext | None:
         return None
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
-        conn.execute(
-            "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
-            (now, row["session_id"]),
-        )
-        conn.commit()
+        # Same lock rule as current_player: never commit a peer's
+        # in-flight mutation (ADR 0004).
+        with locked_transaction(request):
+            conn.execute(
+                "UPDATE moderator_session SET last_seen_at = ? WHERE id = ?",
+                (now, row["session_id"]),
+            )
     return ModeratorContext(
         session_id=row["session_id"],
         moderator_id=row["moderator_id"],
