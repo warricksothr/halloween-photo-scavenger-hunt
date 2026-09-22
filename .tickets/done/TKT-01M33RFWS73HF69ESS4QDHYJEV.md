@@ -190,5 +190,5 @@ Four rounds, three of which found something, all accepted and fixed:
   `7c04c4912631c3fc477f3d75c259c02eb53e69b5`; PR comment 9711 records it and
   marks all prior findings resolved.
 
-### Acceptance criteria
+### Criteria met
 Both ticked; the clean round-4 review covers the head that carries them.

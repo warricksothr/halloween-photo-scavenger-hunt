@@ -21,7 +21,18 @@ jobs:
         run: apk add --no-cache bash ca-certificates git nodejs npm python3 uv
 
       - name: Check out repository
-        uses: Actions-Mirrors/forgejo-actions-checkout@v6
+        uses: Actions-Mirrors/forgejo-actions-checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # AGENTS.md says CI verifies the ticket store. The main package lives
+      # under cmd/, so the module path alone has nothing to build. Pin the
+      # commit, not the tag: v0.23.0 is fd32d73b1301f562215f66d567bfbe5670e1bf12
+      # (the revision the Go module proxy resolved for that tag), so a moved
+      # tag cannot change the code CI runs.
+      - name: Install git ticket
+        run: go install github.com/terva-sh/git-ticket/cmd/git-ticket@fd32d73b1301f562215f66d567bfbe5670e1bf12
+
+      - name: Check the ticket store
+        run: git ticket check --fix --dry-run --strict
 
       - name: Run the shared fast quality command
         run: bash scripts/check-quality.sh
@@ -31,7 +42,7 @@ jobs:
       # docs/impl/testing.md for their commands and artifact locations.
       - name: Upload failure diagnostics
         if: ${{ failure() }}
-        uses: Actions-Mirrors/forgejo-upload-artifact@v4
+        uses: Actions-Mirrors/forgejo-upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:
           name: quality-diagnostics
           if-no-files-found: ignore

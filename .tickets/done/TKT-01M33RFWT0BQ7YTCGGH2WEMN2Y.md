@@ -53,7 +53,7 @@ Give Stay its own handler that mirrors redeem's success path (`TeamJoin.jsx:66-6
 
 Extend `web/src/screens/screens.test.jsx`: mock `api.inviteInfo` to return invite info and `api.redeemInvite` to answer `switch_needs_confirm`, render `TeamJoinScreen` at `/t/tok`, name a codename and join to reach the warning, then click Stay and assert the pathname is `/` and `refresh` ran. Also assert Switch calls `redeemInvite` with `confirmSwitch = true`.
 
-### Acceptance criteria
+### Criteria addressed
 
 - Stay returns the player to a usable state — observable as the invite path clearing and the snapshot refreshing.
 - The path is covered by a vitest case.
