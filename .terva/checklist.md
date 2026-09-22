@@ -1,0 +1,6 @@
+- Does the change do what the PR title and description say, and nothing they do not say?
+- Does the change follow docs/design.md, the specification of record, rather than inventing game behavior?
+- Does a changed workflow, Containerfile or compose file still pin every action, image and download by full commit SHA, checksum or digest?
+- Does the change add or alter a test for the behavior it changes, and does the test exercise the failure it guards against?
+- Does the server re-check authorization on every write, keeping the client's role cosmetic?
+- Is the ticket-store change committed beside the code it describes?

@@ -15,6 +15,7 @@ in `docs/` — read it before writing any code:
   verdict copy bank, reference screenshot source URLs.
 - `docs/adr/` — architecture decision records, one per non-obvious
   decision. Add one whenever you make one.
+- `docs/pr-reviews.md` — how to request and read a Terva PR review.
 
 ## Decisions already made (do not relitigate)
 
@@ -33,7 +34,9 @@ in `docs/` — read it before writing any code:
 - Write ADRs for non-obvious decisions (`docs/adr/NNNN-title.md`).
 - Comment the *why*, not the what. Docs carry design, code carries
   mechanism — this project is a teaching vehicle.
-- Commit early and often; imperative commit messages; push to `origin main`.
+- Work on a branch and open a pull request for each change; commit early and
+  often with imperative messages. Request a Terva review when the work is
+  ready — see [Reviews](#reviews).
 - Ops docs (`deploy/*.md`) carry only commands that were actually run
   and verified in a live smoke — plus the gotchas that run surfaced.
 
@@ -289,3 +292,32 @@ what an agent does.
 Text that opens with a dash goes after a bare `--`.
 
 <!-- git-ticket:end -->
+
+## Reviews
+
+Follow [docs/pr-reviews.md](docs/pr-reviews.md) when requesting or responding to
+reviews. Use the trusted pinned action and workflow revision; never execute PR
+code with reviewer credentials. Serialize publishers for a target PR.
+
+Record the reviewed head and base, and the request/run/review links, in the
+ticket. Assess each finding and record accepted fixes, evidence for
+disagreement, or a linked deferral. Reuse request IDs for delivery recovery and
+explain intentional fresh reviews. Do not rerun or weaken gates merely to seek a
+pass.
+
+### Ask for a review when the work is ready
+
+A change is ready for review when its ticket's criteria are ticked or the note
+says which are not and why, `bash scripts/check-quality.sh` passes, the branch is
+pushed, and a PR is open. At that point, request a Terva review yourself, before
+reporting the work as done or asking whether to merge: dispatch the workflow as
+[docs/pr-reviews.md](docs/pr-reviews.md#request-a-review) describes, naming the
+PR and a request ID that says what the review is for, and record the PR, head and
+base SHAs, request ID and run URL in the ticket. Do not wait to be asked, and do
+not ask permission for it: the review is part of finishing, and the user decides
+what to do with the findings. Request it again after a substantive fix, not after
+a bookkeeping commit; a changed head is an unreviewed head.
+
+Verify which revision passed before reporting completion. A clean automated
+review is evidence, not merge authorization. Merge only when the user or an
+applicable maintainer policy authorizes it.
