@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:36:39Z
+updated_at: 2026-09-22T23:49:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -230,3 +230,33 @@ a DSN secret, it was only ever absent because the frame `vars` are dropped.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
 tests, coverage 95.21%, Ruff clean (47 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:49:08Z
+
+Supersedes the note at head 9af02b03.
+
+### medium (review 197, run #289, request tuple-scrub-fix)
+Terva resolved the tuple finding (`finding-1` resolved: tuples are normalized to
+lists and the serialization test nests a secret in one). The same review opened
+a medium.
+
+**medium: a sequential replacement can rescan its own marker.** `_scrub_strings`
+replaced each secret in turn, `value.replace(secret, REDACTED)`, so a later
+secret could match the `<redacted>` text an earlier replacement had inserted. A
+key that is a substring of the marker (`redact`, `acted`, `dact`) survives
+verbatim — `hunter2 redact` became `<<redacted>>ed>` rather than two markers —
+which breaks the guarantee that the key never serializes.
+
+Accepted. `Scrubber.__init__` now compiles one alternation of the secrets,
+longest first, and `_scrub_strings` runs a single `re.sub`. Python does not
+rescan replacement text, so the marker is inserted once and left alone; the
+longest-first ordering keeps the previous preference for matching a secret
+whole. `re.escape` keeps a secret containing regex metacharacters literal.
+
+Tests: `test_replacing_a_secret_does_not_rescan_the_marker` uses the secrets
+`hunter2` and `redact` (a substring of the marker) with the value
+`hunter2 redact` and asserts `f"{REDACTED} {REDACTED}"`.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 327
+tests, coverage 95.22%, Ruff clean (47 files formatted); `bash
+scripts/check-quality.sh` also green. Re-review requested.
