@@ -23,6 +23,14 @@ jobs:
       - name: Check out repository
         uses: Actions-Mirrors/forgejo-actions-checkout@v6
 
+      # AGENTS.md says CI verifies the ticket store. Pin the tool to the
+      # version installed locally so the two agree.
+      - name: Install git ticket
+        run: go install github.com/terva-sh/git-ticket@v0.23.0
+
+      - name: Check the ticket store
+        run: git ticket check --fix --dry-run --strict
+
       - name: Run the shared fast quality command
         run: bash scripts/check-quality.sh
 
