@@ -58,9 +58,11 @@ mkdir -p "$DEST_DIR"
 # collide either.
 WORK="$(mktemp -d "$DEST_DIR/.backup-work-$STAMP-XXXXXX")"
 OUT="$DEST_DIR/arkham-backup-$STAMP-${WORK##*-}.tar.gz"
+MIRROR_TMP=""
 
 cleanup() {
     rm -rf "$WORK"
+    [ -z "$MIRROR_TMP" ] || rm -f "$MIRROR_TMP"
 }
 trap cleanup EXIT
 
@@ -125,9 +127,18 @@ else
         echo "warning: ARKHAM_BACKUP_MIRROR is on the same device as the data" >&2
     fi
     # Mirror before pruning: a prune can drop this run's archive, and the
-    # off-host copy must not depend on it surviving locally.
-    cp "$OUT" "$MIRROR/"
-    echo "backup mirrored: $MIRROR/${OUT##*/}"
+    # off-host copy must not depend on it surviving locally. Copy to a
+    # temp name and rename, so a copy cut short by a full disk or a
+    # dropped mount never appears under the final name, where retention
+    # would keep it and the restore recipe might pick it.
+    MIRROR_TMP="$(mktemp "$MIRROR/.arkham-backup-copy-XXXXXX")"
+    if cp "$OUT" "$MIRROR_TMP" && mv "$MIRROR_TMP" "$MIRROR/${OUT##*/}"; then
+        MIRROR_TMP=""
+        echo "backup mirrored: $MIRROR/${OUT##*/}"
+    else
+        echo "failed to mirror $OUT to $MIRROR" >&2
+        exit 1
+    fi
 fi
 
 prune "$DEST_DIR"

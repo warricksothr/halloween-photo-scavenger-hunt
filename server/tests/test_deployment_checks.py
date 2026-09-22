@@ -178,23 +178,47 @@ def test_systemd_unit_hardens_the_data_dir():
 
 
 def _restricted_path_without_sqlite_cli(
-    root: Path, *, stamp: str = "20260101-000000"
+    root: Path, *, stamp: str = "20260101-000000", failing_cp_marker: str = ""
 ) -> str:
     """Expose only the utilities backup.sh needs, never sqlite3.
 
     `date` is a stub pinned to `stamp`, so a test can put two runs in the same
-    second on purpose rather than relying on the wall clock.
+    second on purpose rather than relying on the wall clock. With
+    `failing_cp_marker`, `cp` fails whenever an argument contains that string,
+    which lets a test cut the mirror copy short without touching the photos.
     """
 
     bin_dir = root / "bin"
     bin_dir.mkdir()
-    for name in ("cp", "dirname", "gzip", "mkdir", "mktemp", "rm", "stat", "tar"):
+    real_cp = shutil.which("cp")
+    assert real_cp is not None, "test host lacks cp"
+    for name in ("dirname", "gzip", "mkdir", "mktemp", "mv", "rm", "stat", "tar"):
         source = shutil.which(name)
         assert source is not None, f"test host lacks {name}"
         (bin_dir / name).symlink_to(source)
     date_stub = bin_dir / "date"
     date_stub.write_text(f"#!/bin/sh\necho {stamp}\n")
     date_stub.chmod(0o755)
+    failure = ""
+    if failing_cp_marker:
+        # Leave a short file where cp would have written, then fail, so the
+        # test sees the truncated-copy case and not just a refused copy.
+        failure = (
+            'for arg in "$@"; do\n'
+            f'  case "$arg" in *"{failing_cp_marker}"*)\n'
+            '    src="$1"; last="";\n'
+            '    for a in "$@"; do last="$a"; done\n'
+            '    [ -d "$last" ] && last="$last/${src##*/}"\n'
+            '    printf "partial-copy" > "$last" 2>/dev/null || true\n'
+            '    echo "cp: simulated failure" >&2\n'
+            "    exit 1\n"
+            "    ;;\n"
+            "  esac\n"
+            "done\n"
+        )
+    cp_stub = bin_dir / "cp"
+    cp_stub.write_text(f'#!/bin/sh\n{failure}exec "{real_cp}" "$@"\n')
+    cp_stub.chmod(0o755)
     return str(bin_dir)
 
 
@@ -211,12 +235,16 @@ def _live_data(root: Path) -> Path:
     return source
 
 
-def _backup_env(source: Path, root: Path, **extra: str) -> dict[str, str]:
+def _backup_env(
+    source: Path, root: Path, *, failing_cp_marker: str = "", **extra: str
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
             "ARKHAM_DATA_DIR": str(source),
-            "PATH": _restricted_path_without_sqlite_cli(root),
+            "PATH": _restricted_path_without_sqlite_cli(
+                root, failing_cp_marker=failing_cp_marker
+            ),
         }
     )
     env.update(extra)
@@ -394,3 +422,25 @@ def test_backup_refuses_an_unmounted_mirror(tmp_path):
 
     assert result.returncode != 0
     assert "not a directory" in result.stderr
+
+
+def test_backup_publishes_no_archive_when_the_mirror_copy_fails(tmp_path):
+    """A copy cut short must not land under the final name."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    mirror = tmp_path / "off-host"
+    mirror.mkdir()
+    env = _backup_env(
+        source,
+        tmp_path,
+        failing_cp_marker="off-host",
+        ARKHAM_BACKUP_MIRROR=str(mirror),
+    )
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode != 0
+    assert not list(mirror.glob("arkham-backup-*.tar.gz"))
+    assert not list(mirror.glob(".arkham-backup-copy-*"))
+    assert "failed to mirror" in result.stderr

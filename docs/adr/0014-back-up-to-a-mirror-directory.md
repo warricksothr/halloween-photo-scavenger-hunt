@@ -43,7 +43,10 @@ same second cannot collide; pruning orders by name, which is chronological
 because names are timestamp-prefixed. The mirror copy happens before either
 prune: when several archives share a timestamp their names are interchangeable
 to the sort, so a prune can drop the run's own archive, and the off-host copy
-must not depend on it surviving locally.
+must not depend on it surviving locally. The copy goes to a temp name in the
+mirror and is renamed into place, because a `cp` cut short by a full disk or a
+dropped mount would otherwise leave a truncated file under the final name that
+retention keeps and the restore recipe might select.
 
 ## Consequences
 
