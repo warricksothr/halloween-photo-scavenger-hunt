@@ -28,6 +28,7 @@ from app import (
     events,
     evidence,
     leaderboard,
+    limits,
     mod,
     players,
     sse,
@@ -130,9 +131,11 @@ def create_app(
         conn.close()
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
-    # Outermost concern: reject a hostile request before any route work.
-    # Added last so it wraps the routing stack.
+    # Middleware is added inner-to-outer: the last one added wraps the
+    # rest. The body cap goes on first so an oversized request is refused
+    # before CSRF or any route touches it; CSRF sits just inside it.
     app.add_middleware(csrf.CsrfMiddleware)
+    app.add_middleware(limits.BodyLimitMiddleware)
     app.include_router(events.router)
     app.include_router(players.router)
     app.include_router(state.router)
