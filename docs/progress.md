@@ -39,6 +39,19 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Error reporting behind scrubbers, inert without a DSN.**
+  TKT-01M33S2WQ. `app/errors.py` puts the Sentry-compatible SDK behind
+  `init_error_reporting`, which `create_app` calls with `ARKHAM_ERROR_DSN`;
+  unset — the local and test default — leaves reporting off entirely. A
+  `Scrubber` bound to `before_send` and `before_breadcrumb` redacts bearer
+  path segments with the same `redact_path` the request log uses, collapses
+  query strings, drops request headers, cookies, body, and server env, strips
+  exception frame locals, and deep-scrubs the DSN and its key out of any
+  string that survives; the request id rides along as a tag. `send_default_pii`
+  stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
+  `server/requirements.lock` regenerated together. 320 server tests pass;
+  coverage 95.09%.
+
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`
   adds `GET /api/auth/oidc/login` and `/callback`: the authorization-code

@@ -16,6 +16,7 @@ dependencies = [
     # 1.x's TestClient uses. Pinning it explicitly avoids authlib's
     # deprecated fallback to the original httpx package.
     "httpx2>=2.0,<3.0",
+    "sentry-sdk>=2.0",
 ]
 
 [project.optional-dependencies]
