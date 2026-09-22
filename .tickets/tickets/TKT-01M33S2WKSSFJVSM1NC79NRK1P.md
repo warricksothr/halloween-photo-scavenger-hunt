@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T22:53:54Z
+updated_at: 2026-09-22T22:57:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -73,3 +73,9 @@ one correlated traceback.
   request never appear in the rendered record, while the exception's own
   message does.
 - `docs/progress.md`: add the increment note.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T22:57:08Z
+
+Opened PR #19 (branch t3code/unhandled-exception-handler, head c828e786af8978f749954b30a2cee297582d56e0, base 794e300ea673ca01c905ba02abde408613aa4eb1) and requested a Terva review: request-id ready-review, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/263. bash scripts/check-server.sh green: 313 tests, coverage 95.34%, Ruff clean.
