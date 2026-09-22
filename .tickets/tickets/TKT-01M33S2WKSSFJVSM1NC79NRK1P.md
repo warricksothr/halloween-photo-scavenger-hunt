@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:50:15Z
+updated_at: 2026-09-22T23:56:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -310,3 +310,43 @@ covers it.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 333
 tests, coverage 95.49%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:56:49Z
+
+Supersedes the note at head 5486e4a5.
+
+### Review 199 (`json-scalar-fix`, head 0826a938) and review 201 (`marker-single-pass-fix`, head 5486e4a5)
+Review 199 opened two highs and review 201 confirmed both still present. Review
+201 also resolved nothing outstanding on the scalars (that fix held).
+
+**high: a length floor left short request-derived secrets in the message.**
+`_MIN_SECRET = 6` dropped every candidate shorter than six characters — a
+four-digit PIN, a five-character code, a short cookie value — while the message
+still logged them. Accepted as the review's first option: there is no floor now.
+Every non-empty candidate is scrubbed, so a short value is replaced wherever it
+appears, even when that touches an ordinary word. The guarantee is worth more
+than a tidy message; the traceback frames still carry the diagnosis.
+
+Removing the floor also means the JSON-key test's earlier worry about short
+values is gone.
+
+**high: a quoted cookie value bypassed literal scrubbing.** The collector split
+the raw `Cookie` header and stripped whitespace, which left the quotes on, while
+the framework's `SimpleCookie` parser strips them: a route reading
+`request.cookies` saw `topsecret` and the scrub set held only
+`"topsecret"`. Now the header is also loaded into a `SimpleCookie` (a
+`CookieError` is ignored, since the framework would reject it too) and each
+`morsel.value` joins the candidates. Both representations are scrubbed, matching
+the raw-and-decoded approach already used for query strings and form bodies.
+
+Tests: `test_request_secrets_collects_the_requests_own_values` now asserts a
+short value is kept, with the floor comment replaced;
+`test_request_secrets_unquotes_a_cookie_value`; and integration
+`test_a_short_query_value_is_scrubbed` and
+`test_a_quoted_cookie_value_is_scrubbed`.
+
+Docs: ADR 0016 drops the floor paragraph for one that states no length floor and
+the two cookie representations; `docs/progress.md` #19 entry follows.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 336
+tests, coverage 95.43%, Ruff clean (45 files formatted). Re-review requested.
