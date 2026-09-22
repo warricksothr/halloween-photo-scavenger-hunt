@@ -121,12 +121,12 @@ describe('service worker shell policy', () => {
     expect(worker.fetch).not.toHaveBeenCalled();
   });
 
-  it('leaves unhashed and cross-origin requests to the network', () => {
+  it('leaves cross-origin requests to the network', () => {
     const worker = loadWorker();
 
-    expect(worker.request('/manifest.webmanifest')).toBeUndefined();
     expect(worker.request('https://fonts.googleapis.com/css?family=Spectral'))
       .toBeUndefined();
+    expect(worker.fetch).not.toHaveBeenCalled();
   });
 
   it('commits the refreshed shell before the navigation response settles', async () => {
@@ -148,14 +148,26 @@ describe('service worker shell policy', () => {
     expect((await pending).body).toBe('new shell');
   });
 
-  it('serves hashed assets from the cache without a network read', async () => {
+  it('takes a fresh asset from the network even when one is cached', async () => {
+    const worker = loadWorker();
+    const asset = `${ORIGIN}/assets/config.js`;
+    worker.entries.set(asset, response('stale'));
+    worker.fetch.mockResolvedValue(response('fresh'));
+
+    const resp = await worker.request('/assets/config.js');
+
+    expect(resp.body).toBe('fresh');
+    expect(worker.entries.get(asset).body).toBe('fresh');
+  });
+
+  it('serves a cached asset when the network is down', async () => {
     const worker = loadWorker();
     const asset = `${ORIGIN}/assets/index-abc123.js`;
     worker.entries.set(asset, response('cached bundle'));
+    worker.fetch.mockRejectedValue(new Error('offline'));
 
     const resp = await worker.request('/assets/index-abc123.js');
 
     expect(resp.body).toBe('cached bundle');
-    expect(worker.fetch).not.toHaveBeenCalled();
   });
 });

@@ -1,21 +1,23 @@
-// Service worker: network-first shell, cache-first hashed assets,
-// everything else left alone.
+// Service worker: network-first for every same-origin GET, cache as the
+// offline fallback.
 //
-// Why this split: the party runs on venue wifi that *will* hiccup, so
-// the shell (HTML/JS/CSS) must still load offline — but a phone must
-// never run an old shell against a new API after a redeploy. A
-// navigation therefore goes to the network first and only falls back to
-// the cache when the network is down, so a deploy takes effect without
-// anyone bumping a cache name by hand. Hashed bundles
-// (assets/index-<hash>.js) keep the cache-first path: the name changes
-// with the content, so a cache hit is always the build that shipped it.
+// Why one rule instead of a per-path split: the party runs on venue wifi
+// that *will* hiccup, so the shell and its bundles must still load
+// offline — but a phone must never run an old shell against a new API
+// after a redeploy. A network-first request with a cache fallback does
+// both, and it keeps working when a file that was assumed immutable
+// turns out not to be: whatever the URL, the network wins when it is
+// reachable, so no path can be served stale.
 //
-// Only those two cases are intercepted. /api always goes to the network
-// (the snapshot contract, ADR 0003, owns resync and game state must
-// never be served stale), and so does everything unhashed or
-// cross-origin: the server already sends `Cache-Control: no-cache` for
-// sw.js, index.html, and the manifest (server/app/main.py:156-187), so
-// serving those from here could only make them stale.
+// Assets are still cheap here: the server sends `Cache-Control:
+// immutable` for the hashed `assets/*` bundles
+// (server/app/main.py:175-184), and a service-worker `fetch()` reads
+// through the HTTP cache, so a repeat load resolves without a round
+// trip. The service-worker cache only matters when the network is gone.
+//
+// /api and cross-origin requests are left alone: the snapshot contract
+// (ADR 0003) owns resync and game state must never be served stale, and
+// this worker has no business answering for another origin.
 const SHELL_CACHE = 'arkham-shell-v2';
 const SHELL_ASSETS = ['/', '/index.html'];
 
@@ -42,20 +44,12 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (url.pathname.startsWith('/api/')) return; // network only
   if (url.origin !== self.location.origin) return; // leave to the network
-  if (event.request.mode === 'navigate') {
-    event.respondWith(networkFirst(event.request));
-    return;
-  }
-  if (url.pathname.startsWith('/assets/')) {
-    event.respondWith(cacheFirst(event.request));
-  }
+  event.respondWith(networkFirst(event.request));
 });
 
-// A navigation is the request whose freshness decides whether the phone
-// runs the new build: fetch it, refresh the cached copy, and fall back
-// to the cached shell only when the network is down. The fallback tries
-// the exact URL first, then the shell, so a deep link (/j/<code>,
-// /t/<token>) still opens offline.
+// Fetch, refresh the cached copy, and fall back to the cache only when
+// the network is down. A navigation that misses falls back to the shell,
+// so a deep link (/j/<code>, /t/<token>) still opens offline.
 async function networkFirst(request) {
   try {
     const resp = await fetch(request);
@@ -67,21 +61,11 @@ async function networkFirst(request) {
     }
     return resp;
   } catch (err) {
-    const hit = (await caches.match(request)) ||
-      (await caches.match('/index.html'));
+    let hit = await caches.match(request);
+    if (!hit && request.mode === 'navigate') {
+      hit = await caches.match('/index.html');
+    }
     if (hit) return hit;
     throw err;
   }
-}
-
-// Hashed assets are immutable, so a cache hit is always the right build.
-async function cacheFirst(request) {
-  const hit = await caches.match(request);
-  if (hit) return hit;
-  const resp = await fetch(request);
-  if (resp.ok) {
-    const cache = await caches.open(SHELL_CACHE);
-    await cache.put(request, resp.clone());
-  }
-  return resp;
 }
