@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T14:26:56Z
+updated_at: 2026-09-22T14:36:01Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -69,3 +69,17 @@ a rung.
    concurrently. Assert the two strike rows are levels 1 and 2 (a rung each),
    not 1 and 1.
 3. Run `bash scripts/check-server.sh` and tick the acceptance criteria.
+
+## Notes
+
+**agent:opencode/review-system-design** at 2026-09-22T14:36:01Z
+
+PR #5 opened (base `b558f44`, head `8c9b07e`); branch `t3code/strike-derivation-race`.
+Two Terva rounds, both on the same request family:
+
+- Round 1, request `tkt-01m33rfwh1-1`, [Actions run #89](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/89) (id 8546), review 133, head `8c9b07e`, base `b558f44`. One `low`: the regression test's `threading.Barrier(2, timeout=2)` swallowed `BrokenBarrierError`, so a peer that arrived late let the pre-fix code produce `[1, 2]` and pass. Disposition accepted, fixed in `e20875b`; recorded as `/terva disposition 133 finding-1 accepted fixed:e20875b` plus the hand-written record (comments 9484, 9485).
+- Round 2, request `tkt-01m33rfwh1-2`, [Actions run #93](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/93) (id 8552), head `e20875b`, base `b558f44`. Clean: zero findings, `finding-1` resolved. Published as a "Terva review status" comment (id 9488) rather than a review object; run `040675e8-b92a-4494-b65e-9aa4201b1b34`.
+
+The fix wraps the app lock in `_ObservedLock` to count threads parked on it; the barrier-timeout path now waits for the peer to park on the request lock and fails if it never does, so a rendezvous that never happened cannot pass as serialization. Re-verified against `origin/main`'s `mod.py`: fails `assert [1, 1] == [1, 2]` in 0.18s. `bash scripts/check-server.sh` passes, 142 tests, 94.52% coverage.
+
+Awaiting merge authorization.
