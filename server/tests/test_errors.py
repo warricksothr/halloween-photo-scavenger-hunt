@@ -164,6 +164,18 @@ def test_replacing_a_secret_does_not_rescan_the_marker():
     assert scrubbed["extra"]["value"] == f"{REDACTED} {REDACTED}"
 
 
+def test_secrets_in_a_set_never_serialize():
+    """A set is not JSON, but the SDK normalizes one to an array."""
+    event = {"extra": {"tags": {DSN, "public-key"}}}
+
+    scrubbed = Scrubber.for_dsn(DSN).scrub_event(event)
+    blob = json.dumps(scrubbed)
+
+    assert DSN not in blob
+    assert "public-key" not in blob
+    assert scrubbed["extra"]["tags"] == [REDACTED, REDACTED]
+
+
 def test_request_id_becomes_a_tag():
     token = app_logging._request_id.set("req-abc123")
     try:

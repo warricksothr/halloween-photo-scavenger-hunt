@@ -47,15 +47,16 @@ when the increment runs and its tests pass.
   path segments with the same `redact_path` the request log uses, collapses
   query strings, drops request headers, cookies, body, and server env, strips
   exception frame locals, and deep-scrubs the DSN and its key out of any
-  string that survives — keys as well as values, through lists and tuples
-  too, in a breadcrumb's `data` and on the breadcrumb itself, since a
+  string that survives — keys as well as values, through lists, tuples, and
+  sets (a set is not JSON, but the SDK normalizes one to an array), too, in
+  a breadcrumb's `data` and on the breadcrumb itself, since a
   navigation crumb carries its own `url` and
   `query_string`; the replacement runs in one pass, so a key that is a
   substring of `<redacted>` cannot be reintroduced by a later secret. The
   request id rides along as a tag. `send_default_pii`
   stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
-  `server/requirements.lock` regenerated together. 327 server tests pass;
-  coverage 95.22%.
+  `server/requirements.lock` regenerated together. 328 server tests pass;
+  coverage 95.23%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

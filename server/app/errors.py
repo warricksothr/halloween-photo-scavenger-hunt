@@ -194,6 +194,10 @@ class Scrubber:
             # The SDK serializes a tuple as a JSON array, so a secret can
             # ride one out. A list is the same shape on the wire.
             return [self._scrub_strings(item) for item in value]
+        if isinstance(value, (set, frozenset)):
+            # A set is not a JSON type either, but the SDK normalizes one to
+            # an array, and app-provided ``extra`` can hold a secret in it.
+            return [self._scrub_strings(item) for item in value]
         return value
 
 
