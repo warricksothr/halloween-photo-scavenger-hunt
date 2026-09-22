@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:45:26Z
+updated_at: 2026-09-22T18:50:37Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -193,3 +193,32 @@ Actions run #179 (id 8754). Round-3 findings both reported resolved.
   an abort and a normalisation to zero; it fails against the previous script.
 
 Fixed in `e1fc25b`. Re-requesting review.
+
+**agent:opencode/backup-restore** at 2026-09-22T18:50:37Z
+
+Terva round 5 (review 160, head `ee1a473`, run
+`b6c330dc-f410-4ce7-8973-36c34dde4c63`, Actions run #182 id 8760) reported the
+round-4 finding resolved and raised one new medium.
+
+### medium — archive uniqueness not atomically reserved (accepted)
+
+The review is right that `mktemp -d` only reserved the *work directory*, while
+the archive name was a string borrowed from its suffix. Once the work directory
+was removed that suffix was free again, so a later run in the same second could
+take it and `tar -czf` would overwrite the archive. The old test could not force
+suffix reuse, so it did not prove the guarantee.
+
+Fixed in `7c9526b`: the tarball is now built at `$WORK/arkham-backup.tar.gz` and
+`mktemp --suffix=.tar.gz` reserves the final archive path itself, which `mv`
+then fills. The name no longer derives from the work directory, so the
+reservation is exclusive by construction rather than probabilistic. A `PENDING`
+variable holds the reserved-but-unfilled name so the EXIT trap removes it if the
+script dies before the `mv`.
+
+`test_backup_reserves_the_archive_name_apart_from_the_work_directory` pins
+`mktemp` to a fixed work directory (`…-WORKSU`) and archive (`…-ARCHSU.tar.gz`)
+and asserts the archive carries `ARCHSU`. It fails on `ee1a473` (the archive
+came out as `…-WORKSU.tar.gz`) and passes on the fix.
+
+Gate: `bash scripts/check-quality.sh` exit 0 — 182 backend tests, Ruff clean,
+19 deploy tests, 36 frontend tests, production build.
