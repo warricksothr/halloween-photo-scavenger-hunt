@@ -43,28 +43,24 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 def join(mod_code: str, request: Request):
     # Same brute-force gate as the player join (ADR 0015).
     source_key = ("mod_join:source", ratelimit.source(request))
-    target_key = ("mod_join:code", mod_code)
-    throttled = ratelimit.throttle(
+    global_key = ("mod_join:global", "all")
+    reservation, wait = ratelimit.admit(
         request,
         (source_key, ratelimit.MOD_JOIN_SOURCE),
-        (target_key, ratelimit.MOD_JOIN_TARGET),
+        (global_key, ratelimit.MOD_JOIN_GLOBAL),
     )
-    if throttled is not None:
-        return throttled
+    if reservation is None:
+        return ratelimit.retry_response(wait)
 
     conn: sqlite3.Connection = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE mod_code = ?", (mod_code,)
     ).fetchone()
     if event is None:
-        ratelimit.fail(
-            request,
-            (source_key, ratelimit.MOD_JOIN_SOURCE),
-            (target_key, ratelimit.MOD_JOIN_TARGET),
-        )
         # Same rule as the player join code: 404, a bad code is a bad
         # address (api.md).
         return _err(404, "bad_mod_code", "That moderator link doesn't match any event.")
+    ratelimit.release(request, reservation)
     if event["status"] == "closed":
         return _err(409, "event_closed", "This event has already ended.")
 

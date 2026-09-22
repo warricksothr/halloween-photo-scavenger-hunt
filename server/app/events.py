@@ -76,23 +76,19 @@ def login(body: LoginBody, request: Request):
     # verify so a locked-out source costs nothing.
     source_key = ("login:source", ratelimit.source(request))
     global_key = ("login:global", "all")
-    throttled = ratelimit.throttle(
+    reservation, wait = ratelimit.admit(
         request,
         (source_key, ratelimit.LOGIN_SOURCE),
         (global_key, ratelimit.LOGIN_GLOBAL),
     )
-    if throttled is not None:
-        return throttled
+    if reservation is None:
+        return ratelimit.retry_response(wait)
 
     if not auth.check_admin_password(
         request.app.state.admin_config, body.username, body.password
     ):
-        ratelimit.fail(
-            request,
-            (source_key, ratelimit.LOGIN_SOURCE),
-            (global_key, ratelimit.LOGIN_GLOBAL),
-        )
         return _err(401, "bad_credentials", "Wrong username or password.")
+    ratelimit.release(request, reservation)
     token = auth.issue_admin_session(request)
     resp = JSONResponse(content={"ok": True})
     # httpOnly: JS never reads it. Secure: party runs over HTTPS on the

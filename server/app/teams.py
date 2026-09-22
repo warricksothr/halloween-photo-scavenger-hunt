@@ -290,17 +290,17 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
     """
     conn: sqlite3.Connection = reader(request)
     # Invite tokens are guessable if short, so throttle the 404s
-    # (ADR 0015). A used or expired token answers 410 and is not a
-    # failure — the token was real.
+    # (ADR 0015). The reservation is released as soon as the token turns
+    # out to be real, so a used or expired token is not a failure.
     source_key = ("invite:source", ratelimit.source(request))
-    target_key = ("invite:token", token)
-    throttled = ratelimit.throttle(
+    global_key = ("invite:global", "all")
+    reservation, wait = ratelimit.admit(
         request,
         (source_key, ratelimit.INVITE_SOURCE),
-        (target_key, ratelimit.INVITE_TARGET),
+        (global_key, ratelimit.INVITE_GLOBAL),
     )
-    if throttled is not None:
-        return throttled
+    if reservation is None:
+        return ratelimit.retry_response(wait)
 
     now = int(time.time())
     invite = conn.execute(
@@ -310,12 +310,8 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
         (token,),
     ).fetchone()
     if invite is None:
-        ratelimit.fail(
-            request,
-            (source_key, ratelimit.INVITE_SOURCE),
-            (target_key, ratelimit.INVITE_TARGET),
-        )
         return _err(404, "bad_invite", "That invite link is invalid.")
+    ratelimit.release(request, reservation)
     if (
         invite["redeemed_by"] is not None
         or invite["revoked_at"] is not None
