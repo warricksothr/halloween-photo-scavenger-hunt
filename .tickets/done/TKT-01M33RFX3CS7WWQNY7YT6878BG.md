@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFX3CS7WWQNY7YT6878BG
 title: Correct the project-state and CI claims in AGENTS.md
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/agents-md-state
-  branch: t3code/agents-md-state
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: d73ff1f30132775b0e380875006378fad3694b48
-  session: null
-  claimed_at: 2026-09-22T20:06:29Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:51Z
-updated_at: 2026-09-22T20:34:47Z
+updated_at: 2026-09-22T20:59:50Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -172,48 +165,10 @@ The prior finding is resolved. One new high finding, accepted and fixed here.
 Both SHAs come from the local Forgejo mirror's tag API
 (`/api/v1/repos/Actions-Mirrors/<action>/tags`), not from a third party.
 
+**agent:opencode/agents-md-state** at 2026-09-22T20:59:50Z
+
+PR #14 merged to main as 54d9fbe. Terva rounds: v1 review 165 (request agents-md-state-v1, run 8826/#204, head 315495c) high — pin the git-ticket download, fixed in 908b254; v2 review 168 (agents-md-state-v2, run 8832/#206, head 908b254) finding-1 resolved, high — pin the checkout action, fixed in 163eef9 (checkout d23441a4, upload-artifact 16871d9e); v3 clean at 163eef9 (run 8834/#208). After the mktemp fix merged, main was merged in and the duplicate draft ticket removed (b99c0fd); v4 clean at b99c0fd, base 1cac243 (request agents-md-state-v4, run 8851/#219, clean comment 9859). Strict store check passes on main.
+
 ## Summary
 
-### Where it landed
-
-Branch `t3code/agents-md-state`, PR #14
-(https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/14),
-base `d73ff1f30132775b0e380875006378fad3694b48`, head
-`163eef988cc6dc8621a25468d1d9c87433b6648f`. Not merged; awaiting authorization.
-
-- `fc6c14d` rewrote the "Project state" section of `AGENTS.md` to describe the
-  built app instead of "no code exists yet".
-- `0fffd4f` added "Install git ticket" and "Check the ticket store"
-  (`git ticket check --fix --dry-run --strict`) to
-  `.forgejo/workflows/quality.yml`, and renamed two colliding
-  `### Acceptance criteria` sub-headings in done tickets so the strict check
-  passes.
-- `315495c` installed the main package from `cmd/git-ticket`, not the module
-  root, which has nothing to build.
-- `908b254` pinned that install to the commit the Go module proxy resolved for
-  v0.23.0, `fd32d73b1301f562215f66d567bfbe5670e1bf12`.
-- `163eef9` pinned both workflow actions to full commit SHAs.
-
-All three acceptance criteria are ticked: the project state is accurate, the
-store check runs in CI, and the store passes it (verified locally and inside
-the `golang:1.25-alpine` container: "No problems found.", exit 0).
-
-### Reviews
-
-| Round | Request id | Run | Head | Outcome |
-| --- | --- | --- | --- | --- |
-| 1 | `agents-md-state-v1` | 8826 (#204), review 165 | `315495c` | high: pin the git-ticket download |
-| 2 | `agents-md-state-v2` | 8832 (#206), review 168 | `908b254` | finding-1 resolved; high: pin the checkout action |
-| 3 | `agents-md-state-v3` | 8834 (#208), clean comment 9859 | `163eef9` | clean |
-
-Both findings were accepted and fixed; the clean review records head
-`163eef988cc6dc8621a25468d1d9c87433b6648f` at base `d73ff1f3`.
-
-### Known red CI, filed separately
-
-The Quality workflow on this PR (and on `main`) is red for a reason that
-predates the branch: `deploy/backup.sh:103` calls `mktemp --suffix`, which
-BusyBox rejects, failing 8 deploy tests. Filed as
-TKT-01M35C6QJ1AF1QW1FE30Q63TT4 (Fix GNU-only mktemp --suffix in
-deploy/backup.sh breaking CI) with the reproduction. The new ticket-store
-steps themselves pass; they run before the failing command.
+Landed on main as 54d9fbe (PR #14, head b99c0fd, Terva-clean). AGENTS.md's project-state section now matches the built application; the Quality workflow installs git-ticket from the pinned commit fd32d73b, runs git ticket check --fix --dry-run --strict, and pins both actions by commit SHA; the two done-ticket heading warnings are cleared so the store passes its own strict check.
