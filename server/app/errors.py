@@ -42,6 +42,9 @@ from app.logging import (
 _URL_KEYS = ("url", "to", "from")
 _QUERY_KEYS = ("query", "query_string")
 _DROPPED_REQUEST_KEYS = ("headers", "cookies", "data", "env")
+# A breadcrumb's data can be an HTTP request of its own, so it carries the
+# same credential-bearing headers and cookies the request scrub drops.
+_DROPPED_BREADCRUMB_KEYS = ("headers", "cookies")
 
 
 def _scrub_url(value: Any) -> Any:
@@ -129,11 +132,13 @@ class Scrubber:
     def _scrub_breadcrumb(self, crumb: Mapping[str, Any]) -> None:
         # A breadcrumb's data can be an HTTP request of its own, and a
         # navigation breadcrumb can carry the URL it navigated to.
-        crumb.pop("headers", None)
+        for key in _DROPPED_BREADCRUMB_KEYS:
+            crumb.pop(key, None)
         data = crumb.get("data")
         if isinstance(data, Mapping):
             _scrub_mapping(data)
-            data.pop("headers", None)
+            for key in _DROPPED_BREADCRUMB_KEYS:
+                data.pop(key, None)
 
     def _scrub_frames(self, event: Mapping[str, Any]) -> None:
         for value in self._exception_values(event):

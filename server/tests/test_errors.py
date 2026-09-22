@@ -130,24 +130,28 @@ def test_request_id_becomes_a_tag():
     assert scrubbed["tags"]["request_id"] == "req-abc123"
 
 
-def test_breadcrumb_url_and_headers_are_scrubbed():
+def test_breadcrumb_url_headers_and_cookies_are_scrubbed():
     crumb = {
         "category": "navigation",
         "data": {
             "url": f"https://hunt.example/m/{JOIN_CODE}",
             "from": "/",
-            "headers": {"Cookie": "SESSIONVALUE"},
+            "headers": {"Cookie": "arkham_player=SESSIONVALUE"},
+            "cookies": {"arkham_player": "SESSIONVALUE"},
         },
-        "headers": {"Cookie": "SESSIONVALUE"},
+        "headers": {"Cookie": "arkham_player=SESSIONVALUE"},
+        "cookies": {"arkham_player": "SESSIONVALUE"},
     }
 
     scrubbed = Scrubber().scrub_breadcrumb(crumb)
     blob = json.dumps(scrubbed)
 
     assert JOIN_CODE not in blob
+    # The session is in no scrub set: only the drop removes it.
     assert "SESSIONVALUE" not in blob
-    assert "headers" not in scrubbed
-    assert "headers" not in scrubbed["data"]
+    for dropped in ("headers", "cookies"):
+        assert dropped not in scrubbed
+        assert dropped not in scrubbed["data"]
 
 
 def test_event_embedded_breadcrumbs_are_scrubbed():
