@@ -318,11 +318,18 @@ def _request_secrets(scope: Scope) -> tuple[str, ...]:
 
 
 def _scrub_secrets(text: str, request_secrets: Iterable[str]) -> str:
-    """Replace each secret wherever it appears; the longest first so a
-    secret that contains another cannot leave a fragment behind."""
-    for secret in sorted(set(request_secrets), key=len, reverse=True):
-        text = text.replace(secret, REDACTED)
-    return text
+    """Replace each secret wherever it appears, in a single pass.
+
+    The alternation is longest first so a secret that contains another
+    matches whole, and one pass so a later secret cannot match the
+    ``<redacted>`` text an earlier replacement inserted — a secret that is
+    a substring of the marker would otherwise survive verbatim.
+    """
+    secrets = sorted(set(request_secrets), key=len, reverse=True)
+    if not secrets:
+        return text
+    pattern = "|".join(re.escape(secret) for secret in secrets)
+    return re.sub(pattern, REDACTED, text)
 
 
 def redact_path(path: str) -> str:

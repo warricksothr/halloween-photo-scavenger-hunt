@@ -55,7 +55,9 @@ when the increment runs and its tests pass.
   string or form body also adds its raw, still-encoded text beside the
   decoded values, because a route can quote the bytes it read, and a JSON
   body with a number, boolean, or null drops the message too, since no
-  string candidate covers the text that value formats to. 332 server
+  string candidate covers the text that value formats to. Every secret is
+  replaced in one pass, so a value that is a substring of `<redacted>`
+  cannot be reintroduced by a later secret. 333 server
   tests pass; coverage 95.49%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,

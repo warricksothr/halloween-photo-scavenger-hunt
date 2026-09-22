@@ -116,6 +116,16 @@ def test_scrub_secrets_replaces_the_longest_first():
     assert scrubbed == "a <redacted> <redacted>"
 
 
+def test_scrub_secrets_does_not_rescan_the_marker():
+    """A secret inside ``<redacted>`` must not survive the next pass.
+
+    ``redact`` is a substring of the marker, so a second sequential
+    replace would rewrite the marker and keep the value in the traceback.
+    """
+    scrubbed = app_logging._scrub_secrets("hunter2 redact", ("hunter2", "redact"))
+    assert scrubbed == f"{app_logging.REDACTED} {app_logging.REDACTED}"
+
+
 def test_every_request_logs_one_structured_line(client, caplog):
     caplog.set_level(logging.INFO)
     caplog.clear()
