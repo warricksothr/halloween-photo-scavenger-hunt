@@ -8,7 +8,7 @@ function response({ status = 200, body = {}, json = true } = {}) {
     ok: status >= 200 && status < 300,
     json: json
       ? vi.fn().mockResolvedValue(body)
-      : vi.fn().mockRejectedValue(new Error('not JSON')),
+      : vi.fn().mockRejectedValue(new SyntaxError('not JSON')),
   };
 }
 
@@ -115,6 +115,20 @@ describe('api client', () => {
     globalThis.fetch.mockResolvedValue({
       status: 200,
       ok: true,
+      json: () => Promise.reject(new TypeError('terminated')),
+    });
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+  });
+
+  it('classifies a dropped body on an error response as a network error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      status: 503,
+      ok: false,
       json: () => Promise.reject(new TypeError('terminated')),
     });
 

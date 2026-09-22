@@ -38,15 +38,16 @@ async function request(path, options = {}) {
     // inside this block to remain under the timeout. A body read can fail
     // three ways, and they are not the same: the timeout aborted it, the
     // connection dropped mid-stream, or the body was not JSON. Only the last
-    // is a request failure; the first two are network errors, and a body that
-    // failed to parse must not be handed back as a successful empty object.
+    // is a request failure, whatever the status; the other two are network
+    // errors, and a body that failed to parse must not be handed back as a
+    // successful empty object.
     let body = {};
     let bodyMalformed = false;
     try {
       body = await resp.json();
     } catch (err) {
       if (controller.signal.aborted) throw err;
-      if (resp.ok && !(err instanceof SyntaxError)) throw err;
+      if (!(err instanceof SyntaxError)) throw err;
       bodyMalformed = true;
     }
     if (!resp.ok) {
