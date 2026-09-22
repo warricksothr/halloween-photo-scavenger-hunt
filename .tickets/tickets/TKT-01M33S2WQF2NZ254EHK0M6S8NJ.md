@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T22:52:50Z
+updated_at: 2026-09-22T23:09:53Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -97,3 +97,14 @@ Implemented and verified locally. server/app/errors.py adds Scrubber (before_sen
 **agent:opencode/t3code-0691bbb1** at 2026-09-22T22:52:50Z
 
 Opened PR #18 (branch t3code/error-reporting-layer, head f7844af45b3e327a97f9c271721b8e41ba449a4b, base 794e300ea673ca01c905ba02abde408613aa4eb1) and requested a Terva review: request-id ready-review, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/260. Awaiting review and merge; the ticket closes with a separate store commit on main after the merge, as TKT-01M33S2WJ did.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:09:53Z
+
+Terva review of head 8a21fd09 (run #265, request ready-review) published one finding.
+
+### medium: malformed DSN can abort application startup
+Accepted. `init_error_reporting` passed every non-empty value straight to `sentry_sdk.init`, and the SDK raises `sentry_sdk.utils.BadDsn` on a malformed DSN — confirmed against the pinned 2.70.0, where `not a dsn`, `https://`, and `ftp://...` all raise. A typo in `ARKHAM_ERROR_DSN` would therefore propagate through `create_app` and stop the server, contradicting the contract that a malformed DSN leaves reporting inert. Fixed by catching `BadDsn`, logging one `error_reporting_disabled` warning that names the reason but never the DSN (a DSN carries a key), and returning `False`.
+
+Tests: `test_init_is_inert_with_a_malformed_dsn` (unit; asserts the warning and that the DSN text never appears) and `test_malformed_dsn_does_not_stop_the_app` (sets `ARKHAM_ERROR_DSN=not a dsn`, builds the app, and serves `/api/health`).
+
+Evidence: head c1d38cb, `bash scripts/check-server.sh` green — 323 tests, coverage 95.18%, Ruff clean. Re-review requested after the push.
