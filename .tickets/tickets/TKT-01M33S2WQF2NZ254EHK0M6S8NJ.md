@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:21:04Z
+updated_at: 2026-09-22T23:25:36Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -152,3 +152,27 @@ the drop removes it.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 325
 tests, coverage 95.19%, Ruff clean (47 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:25:36Z
+
+Supersedes the note at head 46fa8f3.
+
+### medium (review 191, run #278, request breadcrumb-cookie-fix): secrets in mapping keys
+Terva resolved the breadcrumb-cookie finding (`finding-1` resolved: headers and
+cookies both dropped from the crumb and its `data`, with the test carrying
+session cookies in both). The same review opened a medium: `_scrub_strings`
+scrubbed mapping values but copied keys unchanged, and keys serialize. A DSN,
+userinfo, or public key used as an `extra` key was therefore sent intact, which
+the ticket's "the DSN never appears in the serialized event" criterion forbids.
+
+Accepted. The dict branch now scrubs string keys through the same replacement as
+values. Two keys that collapse onto `<redacted>` collide, and the first wins —
+an event may lose a field, never send a secret.
+
+Tests: `test_secrets_in_mapping_keys_never_serialize` puts the DSN and the public
+key in nested mapping keys, serializes the event, and asserts neither leaks
+while the surviving redacted key keeps its value. The pre-existing assertions
+that the DSN and key stay out of the blob still hold.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 326
+tests, coverage 95.20%, Ruff clean (47 files formatted). Re-review requested.
