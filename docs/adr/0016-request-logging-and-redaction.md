@@ -70,11 +70,13 @@ set; neither reaches a sink.
 Reading the body for that set costs a copy, so it is bounded: the middleware
 buffers a parsed body up to `_BUFFERED_BODY_BYTES` and only for the two media
 types `_body_secrets` understands, and it parses the buffer in the `except`
-branch alone. A request that succeeds pays nothing but the copy, a photo upload
-is never buffered or parsed, and the bytes are dropped when the request ends.
-The scrub set is mutated in place across the request so the exception handler —
-which runs after the middleware's `finally` resets the contextvars — still sees
-what the body added.
+branch alone. The form branch keeps every `(name, value)` value rather than
+folding the pairs into a dict, because a repeated field is readable through the
+form's multi-value interface while a dict holds only the last. A request that
+succeeds pays nothing but the copy, a photo upload is never buffered or parsed,
+and the bytes are dropped when the request ends. The scrub set is mutated in
+place across the request so the exception handler — which runs after the
+middleware's `finally` resets the contextvars — still sees what the body added.
 
 A body larger than the buffer is the one case the scrub set cannot cover: the
 app reads the whole request while the scrubber holds the first

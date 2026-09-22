@@ -212,7 +212,10 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...]:
         if media == _JSON_MEDIA:
             parsed: Any = json.loads(body)
         else:
-            parsed = dict(parse_qsl(body.decode("utf-8", "replace")))
+            # The values, not a dict: a form can repeat a field name, and
+            # the app can read every value while a dict keeps only the
+            # last. Names are not secrets, so only the values are kept.
+            parsed = [value for _, value in parse_qsl(body.decode("utf-8", "replace"))]
     except ValueError:
         return ()
     return tuple(value for value in _strings_in(parsed) if len(value) >= _MIN_SECRET)

@@ -201,6 +201,15 @@ def test_body_secrets_reads_json_and_form_values():
         )
     ) == {"JOIN234", "hunter2"}
 
+    # A repeated field keeps every value, not just the last: the app can
+    # read them all through the form's multi-value interface.
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded",
+            b"password=firstsecret&password=secondsecret",
+        )
+    ) == {"firstsecret", "secondsecret"}
+
 
 def test_body_secrets_skips_binary_and_malformed_bodies():
     # A photo upload is not text; mining it would redact noise.
@@ -318,6 +327,40 @@ def test_a_truncated_body_drops_the_exception_message(tmp_path, caplog, monkeypa
     assert "Traceback" not in text
     assert "RuntimeError: kaboom" not in text
     assert "hunter2" not in text
+
+
+def test_a_repeated_form_value_is_scrubbed(tmp_path, caplog):
+    """A form field the app reads past the last is still scrubbed.
+
+    The route raises with the *first* of two fields sharing a name, which
+    a dict parse would have dropped from the scrub set.
+    """
+    app = create_app(
+        tmp_path / "duplicate-form.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        form = await request.form()
+        raise RuntimeError(f"kaboom password={form.getlist('password')[0]}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            data={"password": ["firstsecret", "secondsecret"]},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "firstsecret" not in text
+    assert "secondsecret" not in text
 
 
 def test_query_string_is_redacted(client, caplog):
