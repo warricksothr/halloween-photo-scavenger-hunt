@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFX1NWMMY7GTKFYYF18MK
 title: Add security headers and harden the systemd unit
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -21,12 +21,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T05:12:50Z
+updated_at: 2026-09-22T15:13:20Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:claude-code/groom-ticket-store
   name: ""
 extensions: {}
 ---

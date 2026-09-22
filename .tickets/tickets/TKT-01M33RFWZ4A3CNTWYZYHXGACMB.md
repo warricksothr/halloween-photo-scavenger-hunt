@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWZ4A3CNTWYZYHXGACMB
 title: Pin the container runtime to uv.lock
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: high
 due_on: null
@@ -20,12 +20,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T05:12:50Z
+updated_at: 2026-09-22T15:13:19Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:claude-code/groom-ticket-store
   name: ""
 extensions: {}
 ---

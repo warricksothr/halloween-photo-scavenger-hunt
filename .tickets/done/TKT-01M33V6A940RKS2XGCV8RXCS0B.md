@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33V6A940RKS2XGCV8RXCS0B
 title: Install the Terva PR review process
 type: chore
-status: draft
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,12 +18,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T06:00:02Z
-updated_at: 2026-09-22T06:05:57Z
+updated_at: 2026-09-22T15:13:39Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:claude-code/groom-ticket-store
   name: ""
 extensions: {}
 ---
@@ -74,3 +74,18 @@ meets `fail-severity`. That is the configured gate, not a run failure.
 **agent:opencode/review-system-design** at 2026-09-22T06:05:57Z
 
 Both PRs merged to main: #1 as 655e467, #2 as 48226a0. The workflow now lives on the default branch, so the /terva comment commands are live and future PRs get the Quality gate. Both feature branches deleted. Still in draft; promote and close to track it.
+
+## Summary
+
+The Terva PR review process is installed on `main`. PR #1 merged as `655e467`
+(`.terva/review.yml`, `.terva/checklist.md`, `.terva/conventions.md`,
+`docs/pr-reviews.md`, AGENTS.md updates); PR #2 merged as `48226a0`
+(`.forgejo/workflows/terva-review.yml`, pinned action, checksum-pinned Terva,
+digest-pinned runner image). Both feature branches are deleted.
+
+Because the workflow now sits on the default branch, the `/terva` comment
+commands are live and future PRs pick up the Quality gate — the two limitations
+this ticket recorded while the work was in flight no longer apply.
+
+Closed during a grooming pass on 2026-09-22: the work had shipped and the ticket
+was still sitting in `draft`, as its own last note asked.
