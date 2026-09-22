@@ -253,21 +253,30 @@ def _restricted_path_without_sqlite_cli(
             bin_dir / "mktemp", 'echo "mktemp: simulated failure" >&2\nexit 1\n'
         )
     elif mktemp_sequence:
-        state = root / "mktemp.count"
+        count = root / "mktemp.count"
+        log = root / "mktemp.args"
         cases = "".join(
-            f'{index}) echo "{path}" ;;\n'
+            f'{index}) path="{path}" ;;\n'
             for index, path in enumerate(mktemp_sequence, start=1)
         )
         _write_stub(
             bin_dir / "mktemp",
-            f'state="{state}"\n'
+            f'count="{count}"\n'
+            f'log="{log}"\n'
             "i=0\n"
-            '[ -f "$state" ] && read -r i < "$state"\n'
+            '[ -f "$count" ] && read -r i < "$count"\n'
             "i=$((i + 1))\n"
-            'echo "$i" > "$state"\n'
+            'echo "$i" > "$count"\n'
+            'echo "$*" >> "$log"\n'
             'case "$i" in\n'
             f"{cases}"
-            "esac\n",
+            '*) echo "mktemp: unexpected call $i" >&2; exit 1 ;;\n'
+            "esac\n"
+            'case " $* " in\n'
+            '*" -d "*) mkdir -p "$path" ;;\n'
+            '*) : > "$path" ;;\n'
+            "esac\n"
+            'echo "$path"\n',
         )
     else:
         real_mktemp = shutil.which("mktemp")
@@ -512,10 +521,12 @@ def test_backup_publishes_no_archive_when_the_mirror_copy_fails(tmp_path):
 
 
 def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path):
-    """The archive name must not be the work directory's suffix.
+    """The archive name must be reserved by mktemp, not built from the work dir.
 
-    That suffix is free for reuse once the work directory is removed, so a
-    later run in the same second could take it and overwrite the archive.
+    The work directory's suffix is free for reuse once the directory is
+    removed, so a later run in the same second could take it and overwrite the
+    archive. The stub creates the path it returns and records its arguments, so
+    the test fails if the script stops asking mktemp for the archive name.
     """
 
     source = _live_data(tmp_path)
@@ -530,6 +541,16 @@ def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path
     assert [path.name for path in destination.glob("arkham-backup-*.tar.gz")] == [
         archive.name
     ]
+    assert (tmp_path / "mktemp.args").read_text().splitlines() == [
+        f"-d {destination}/.backup-work-20260101-000000-XXXXXX",
+        f"--suffix=.tar.gz {destination}/arkham-backup-20260101-000000-XXXXXX",
+    ]
+    # The stub left an empty file at the reserved name; publication must have
+    # replaced it with the finished tarball.
+    with tarfile.open(archive) as tarball:
+        names = tarball.getnames()
+    assert "arkham.db" in names
+    assert any(name.startswith("photos/") for name in names)
 
 
 def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):
