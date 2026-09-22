@@ -48,9 +48,44 @@ async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
     await response(scope, receive, send)
 
 
+async def _read_capped(receive: Receive, max_bytes: int) -> tuple[list[Message], bool]:
+    """Read the whole body up to ``max_bytes`` and return the messages plus
+    whether the cap was crossed. Stops at the end of the body (or a
+    disconnect), so the buffer is bounded by the cap."""
+    buffered: list[Message] = []
+    total = 0
+    while True:
+        message = await receive()
+        buffered.append(message)
+        if message["type"] == "http.disconnect":
+            return buffered, False
+        total += len(message.get("body", b""))
+        if total > max_bytes:
+            return buffered, True
+        if not message.get("more_body", False):
+            return buffered, False
+
+
+def _replaying(messages: list[Message], original: Receive) -> Receive:
+    """A ``receive`` that yields the buffered messages then delegates. Only
+    reached if the app asks for more body after the end, which the real
+    server answers with a disconnect."""
+    pending = list(messages)
+
+    async def replay() -> Message:
+        if pending:
+            return pending.pop(0)
+        return await original()
+
+    return replay
+
+
 class BodyLimitMiddleware:
-    """Pure-ASGI so it never touches the body itself; it only watches how
-    many bytes the app reads and refuses the ones past the cap."""
+    """Pure-ASGI so it never touches the body itself when the length is
+    declared; it only watches how many bytes the app reads and refuses the
+    ones past the cap. Without a declared length it has to read the body to
+    know its size — a route that ignores the body would otherwise never
+    trip the cap, so it buffers up to the cap and replays it."""
 
     def __init__(self, app: ASGIApp, max_bytes: int = MAX_REQUEST_BYTES) -> None:
         self.app = app
@@ -64,10 +99,22 @@ class BodyLimitMiddleware:
         # A declared length is the common case (every browser sends one)
         # and is cheapest to reject: no body bytes are read at all.
         declared = _content_length(scope)
-        if declared is not None and declared > self.max_bytes:
-            await _reject(scope, receive, send)
+        if declared is not None:
+            if declared > self.max_bytes:
+                await _reject(scope, receive, send)
+                return
+            await self._watching(scope, receive, send)
             return
 
+        # No declared length (chunked). Read it here so the cap holds even
+        # when the route never touches the body, then replay what we read.
+        buffered, too_large = await _read_capped(receive, self.max_bytes)
+        if too_large:
+            await _reject(scope, receive, send)
+            return
+        await self.app(scope, _replaying(buffered, receive), send)
+
+    async def _watching(self, scope: Scope, receive: Receive, send: Send) -> None:
         received = 0
         responded = False
 

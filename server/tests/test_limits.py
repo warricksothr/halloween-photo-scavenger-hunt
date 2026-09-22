@@ -30,6 +30,18 @@ class _Stub:
         await send({"type": "http.response.body", "body": b""})
 
 
+class _LazyStub:
+    """Answers without ever reading the body."""
+
+    def __init__(self):
+        self.called = False
+
+    async def __call__(self, scope, receive, send):
+        self.called = True
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+
 def _run(headers=None, chunks=None, max_bytes=None):
     app = _Stub()
     middleware = (
@@ -77,7 +89,29 @@ def test_declared_length_at_the_cap_reaches_the_app():
 def test_chunked_body_over_the_cap_is_rejected():
     app, sent = _run(chunks=[b"x" * 6, b"y" * 6], max_bytes=10)
 
-    assert app.called is True
+    assert app.called is False, "an oversized chunked body reached the route"
+    assert sent[0]["status"] == 413
+
+
+def test_chunked_body_over_the_cap_is_rejected_without_the_route_reading_it():
+    # The review's case: no Content-Length and a route that ignores the
+    # body. The middleware has to read it to cap it.
+    app = _LazyStub()
+    middleware = limits.BodyLimitMiddleware(app, 10)
+    scope = {"type": "http", "method": "POST", "path": "/x", "headers": []}
+    pending = [b"x" * 6, b"y" * 6]
+    sent = []
+
+    async def receive():
+        body = pending.pop(0)
+        return {"type": "http.request", "body": body, "more_body": bool(pending)}
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(middleware(scope, receive, send))
+
+    assert app.called is False
     assert sent[0]["status"] == 413
 
 
@@ -93,7 +127,7 @@ def test_a_malformed_content_length_falls_back_to_counting():
         headers=[(b"content-length", b"not-a-number")], chunks=[b"x" * 11], max_bytes=10
     )
 
-    assert app.called is True
+    assert app.called is False
     assert sent[0]["status"] == 413
 
 
