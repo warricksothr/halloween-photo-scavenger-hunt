@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWH1331KDVPG4N3X2831
 title: Close the strike-derivation race on INAPPROPRIATE
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/review-system-design
-  branch: t3code/strike-derivation-race
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-e28f1e35
-  commit: b558f44aa5c3977c89f594d2d55f32da876fd504
-  session: null
-  claimed_at: 2026-09-22T14:23:06Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T14:36:01Z
+updated_at: 2026-09-22T14:42:13Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -83,3 +76,13 @@ Two Terva rounds, both on the same request family:
 The fix wraps the app lock in `_ObservedLock` to count threads parked on it; the barrier-timeout path now waits for the peer to park on the request lock and fails if it never does, so a rendezvous that never happened cannot pass as serialization. Re-verified against `origin/main`'s `mod.py`: fails `assert [1, 1] == [1, 2]` in 0.18s. `bash scripts/check-server.sh` passes, 142 tests, 94.52% coverage.
 
 Awaiting merge authorization.
+
+## Summary
+
+Closed by PR #5, merged as `c05319464f5287a1f2706fc14a2abbaaa37d4cc0` (branch deleted).
+
+`/api/mod/queue/{submission_id}/inappropriate` now carries `dependencies=[Depends(hold_request_lock)]`, matching `/verdict`, and derives the strike level and cooldown inside `locked_transaction` so the ladder read and strike insert are one critical section. Before this, two moderators flagging two of the same player's photos both read the same strike count and both inserted the same rung: the conditional `UPDATE` is per-submission and cannot catch a ladder collision, so the ladder skipped a level.
+
+Both acceptance criteria met. The regression test joins two moderators, has one player submit two riddles, and flags both submissions concurrently behind a barrier; it asserts levels `[1, 2]`. It fails on `origin/main`'s handler with `assert [1, 1] == [1, 2]` in 0.18s, so it reproduces the skipped rung rather than merely passing. The test wraps the app lock to count parked threads and fails if the peer never reaches the rendezvous, so a barrier timeout cannot be mistaken for the lock serializing the requests.
+
+`bash scripts/check-server.sh` passes: 142 tests, 94.52% coverage, Ruff lint and format clean. Terva reviewed twice: review 133 raised one `low` on the test's barrier timeout (fixed in `e20875b`), and the re-review of `e20875b` was clean with that finding resolved.
