@@ -1,0 +1,75 @@
+# Targeted PR reviews. See docs/pr-reviews.md.
+# Installed from terva-action-code-review examples/forgejo-review.yml at
+# 44457ab729041ff1945afdc45c55086b360a006b.
+name: terva-review
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Open same-repository PR number
+        required: true
+      request-id:
+        description: Stable request ID; reuse for delivery retries
+        required: true
+        default: ready-review
+concurrency:
+  # Keep the maintainer list here and in the job condition below identical.
+  # Unlisted commenters never enter an authorized PR's serialized queue.
+  group: terva-review-${{ github.repository }}-${{ inputs.pr || (contains(fromJSON('["warricksothr"]'), github.actor) && github.event.issue.number) || format('ignored-{0}', github.run_id) }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  review:
+    # Parsing and authorization are repeated inside the action.
+    if: ${{ github.event_name != 'issue_comment' || (contains(fromJSON('["warricksothr"]'), github.actor) && github.event.issue.pull_request && startsWith(github.event.comment.body, '/terva ')) }}
+    runs-on: docker
+    container:
+      image: container.local.sothr.com/library/golang:1.27-alpine
+    steps:
+      - name: Install runtime dependencies
+        run: |
+          apk add --no-cache git nodejs npm curl tar
+          node -e 'if (Number(process.versions.node.split(".")[0]) < 24) process.exit(1)'
+      - name: Checkout pinned reviewer only
+        uses: Actions-Mirrors/forgejo-actions-checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: terva-sh/terva-action-code-review
+          ref: 44457ab729041ff1945afdc45c55086b360a006b
+          token: ${{ secrets.BOT_TOKEN }}
+          path: .terva-review-action
+          persist-credentials: false
+      - name: Install checksum-pinned Terva
+        run: |
+          set -eu
+          curl --fail --silent --show-error --location --output /tmp/terva.tar.gz https://git.local.sothr.com/terva-sh/terva/releases/download/v0.137.0/terva_0.137.0_linux_amd64.tar.gz
+          echo 'e87725339de45953006441a619a22b7b0db21cc53677828744557fb3d92110b0  /tmp/terva.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/terva.tar.gz -C /usr/local/bin terva
+      - name: Review PR
+        uses: ./.terva-review-action
+        with:
+          repository: ${{ github.repository }}
+          pr-number: ${{ inputs.pr || github.event.issue.number }}
+          # Manual requests only; command identity comes from comment ID/body.
+          request-id: ${{ inputs.request-id || 'automatic' }}
+          forgejo-token: ${{ secrets.BOT_TOKEN }}
+          provider-api-key: ${{ secrets.CPA_API_KEY }}
+          provider: openai-compatible
+          base-url: https://cpa-api.local.sothr.com/v1
+          model: gpt-5.6-sol
+          thinking: low
+          profile: code
+          # This repository's checklist and conventions, read at the PR base commit.
+          config-file: .terva/review.yml
+          # Generated files left out of the review: CI validates the lockfiles
+          # with uv --locked and npm ci, and the README screenshots are binaries.
+          exclude-paths: |
+            server/uv.lock
+            web/package-lock.json
+            docs/screenshots/**
+          publication-policy: summary
+          fail-severity: medium
+          scope: diff
+          disposition-policy: streamlined
