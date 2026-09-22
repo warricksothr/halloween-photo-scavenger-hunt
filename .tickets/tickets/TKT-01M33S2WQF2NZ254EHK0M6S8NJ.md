@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:16:59Z
+updated_at: 2026-09-22T23:21:04Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -128,3 +128,27 @@ over `not a dsn` and `https://[`, so both `create_app` paths are exercised.
 
 Evidence: head 1f0b50d, `bash scripts/check-server.sh` green — 325 tests,
 coverage 95.17%, Ruff clean (47 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:21:04Z
+
+Supersedes the note at head 29fa7fd.
+
+### medium resolved, new high (review 189, run #274, request parser-failure-fix)
+Terva confirms the malformed-DSN medium is resolved: `except ValueError` covers
+both the SDK's `BadDsn` and the `urlsplit` parser failure, and both are tested
+through direct init and `create_app`. `finding-1` is resolved.
+
+The same review opened a high: `_scrub_breadcrumb` dropped `headers` from a
+breadcrumb and its `data` but never `cookies`, so an HTTP breadcrumb carrying a
+session cookie was sent unchanged. The ticket's acceptance criterion says
+`before_breadcrumb` strips cookies.
+
+Accepted. Both pops now run over `_DROPPED_BREADCRUMB_KEYS = ("headers",
+"cookies")` in both locations, matching the request scrub's cookie removal.
+`test_breadcrumb_url_and_headers_are_scrubbed` became
+`test_breadcrumb_url_headers_and_cookies_are_scrubbed` and now carries cookies
+in the crumb and in `data` with a session value that is in no scrub set, so only
+the drop removes it.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 325
+tests, coverage 95.19%, Ruff clean (47 files formatted). Re-review requested.
