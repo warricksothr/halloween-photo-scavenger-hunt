@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:09:53Z
+updated_at: 2026-09-22T23:16:59Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -108,3 +108,23 @@ Accepted. `init_error_reporting` passed every non-empty value straight to `sentr
 Tests: `test_init_is_inert_with_a_malformed_dsn` (unit; asserts the warning and that the DSN text never appears) and `test_malformed_dsn_does_not_stop_the_app` (sets `ARKHAM_ERROR_DSN=not a dsn`, builds the app, and serves `/api/health`).
 
 Evidence: head c1d38cb, `bash scripts/check-server.sh` green — 323 tests, coverage 95.18%, Ruff clean. Re-review requested after the push.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:16:59Z
+
+Supersedes the note at head 439cadf.
+
+### medium (review 187, run #270, request medium-finding-fix): the guard was too narrow
+Terva confirmed the `BadDsn` case but kept the finding open: `Scrubber.for_dsn`
+runs inside the same block and parses the DSN with `urlsplit`, which raises a
+plain `ValueError` on an unmatched IPv6 bracket (`https://[`). Verified in the
+pinned 2.70.0: `BadDsn.__mro__` is `(BadDsn, ValueError, ...)`, and
+`urlsplit("https://[")` raises `ValueError: Invalid IPv6 URL`. The catch is now
+`except ValueError`, and the comment says both failure modes are the same
+"malformed configuration" case. The warning still names no DSN value.
+
+Tests: the parametrized malformed-DSN test gained `https://[` (the case the SDK
+never sees), and `test_malformed_dsn_does_not_stop_the_app` is now parametrized
+over `not a dsn` and `https://[`, so both `create_app` paths are exercised.
+
+Evidence: head 1f0b50d, `bash scripts/check-server.sh` green — 325 tests,
+coverage 95.17%, Ruff clean (47 files formatted). Re-review requested.
