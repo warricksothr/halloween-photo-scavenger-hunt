@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:07:56Z
+updated_at: 2026-09-22T23:15:31Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -96,3 +96,37 @@ Accepted. `exc_info=exc` rendered the exception's message verbatim, and the test
 Boundary, recorded in ADR 0016: the body is still never read, so a value that lived only in the body and then in a `raise` message would not be scrubbed. That is a constraint on app code, not a channel this handler created — it reads nothing the module did not already handle. Values shorter than `_MIN_SECRET` (6) are left alone, because replacing a short string verbatim would mangle ordinary words.
 
 Evidence: head 4ac8e01, `bash scripts/check-server.sh` green — 323 tests, coverage 95.36%, Ruff clean. Re-review requested after the push.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:15:31Z
+
+Supersedes the note at head 57a0f06; the residual it documented was not accepted.
+
+### high (review 186, run #268, request high-finding-fix): body-derived secrets
+Terva accepted the path/query/header scrubbing from `4ac8e01` but kept the
+finding open: a value parsed from the request body and then quoted in a
+`raise` message is still logged, and the test's `hunter2` assertion was
+vacuous because the route never raised with it. The reviewer offered a safe
+representation that drops messages, or body-aware sanitization.
+
+Chosen with the user: body-aware sanitization, so the traceback keeps its
+message. Also note review 185 and 186 are marked "source was not executed",
+so the SDK behavior claims are the reviewer's reading, not a run.
+
+Implementation: `RequestLogMiddleware` buffers a JSON or form body up to
+`_BUFFERED_BODY_BYTES`, and only for the media types `_body_secrets` reads; a
+photo upload is never buffered. `_body_secrets` walks the decoded body for
+string leaves (length >= `_MIN_SECRET`) and the middleware extends the same
+scrub list the exception handler already reads — the handler runs after the
+middleware's `finally`, so a list mutated before the re-raise is what it sees.
+A request that succeeds pays nothing but the copy, and the bytes are dropped
+when the request ends. The test route now raises with `payload['password']`,
+and the assertions cover both that value and a body value the route never
+quotes, so they can no longer pass on an unused request field.
+
+Residual, recorded in ADR 0016: multipart parts are not parsed. The API's one
+multipart route uploads a photo; binary is not mined for strings.
+
+Evidence: head 7330985, `bash scripts/check-server.sh` green — 325 tests,
+coverage 95.17%, Ruff clean (45 files formatted). New unit tests
+`test_body_secrets_reads_json_and_form_values` and
+`test_body_secrets_skips_binary_and_malformed_bodies`. Re-review requested.
