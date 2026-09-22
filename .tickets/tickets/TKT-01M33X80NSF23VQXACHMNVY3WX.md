@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:12:37Z
+updated_at: 2026-09-22T17:13:02Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -105,7 +105,7 @@ direction 3 fails AC1.
    names `state.db`/`state.read_db` directly.
 6. `bash scripts/check-quality.sh`; commit, push, PR, Terva review.
 
-### Notes
+### Invariants
 
 The reader must never be written through; the guard test is the structural check.
 Reads inside a write transaction stay on that transaction's connection.
