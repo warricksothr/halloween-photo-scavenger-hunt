@@ -39,6 +39,22 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Every request now logs one redacted structured line.**
+  TKT-01M33S2WJ. `app/logging.py` adds a pure-ASGI `RequestLogMiddleware`
+  (registered outermost) that emits one JSON line per request with
+  `request_id`, `method`, `path`, `status`, and `duration_ms`; a request
+  that raises logs status 500 and is re-raised. The request id lives in a
+  contextvar, so it reaches code that never sees the `Request`; an inbound
+  `X-Request-ID` is honoured only when it matches `[A-Za-z0-9._-]{1,64}`,
+  and the id is echoed on the response. `redact_path` replaces the bearer
+  segment of the code-carrying routes (`/api/join/<code>`,
+  `/api/mod/join/<code>`, `/api/team/invites/<token>[/revoke|/redeem]`,
+  `/j/<code>`, `/m/<code>`) with `<redacted>`; a query string is dropped
+  and reported as `"<redacted>"`. uvicorn's access log — which wrote the
+  raw path — is dropped by a filter, so a join, mod, or invite code no
+  longer reaches journald. ADR 0016. 246 server tests pass; coverage
+  94.31%.
+
 - **2026-09-22 — Public surface hardened: CSRF, body cap, rate limits.**
   TKT-01M33RFWJ. `app/csrf.py` adds a signed double-submit CSRF token
   (`arkham_csrf` cookie echoed in `X-CSRF-Token`; 403 `csrf_failed`); a
