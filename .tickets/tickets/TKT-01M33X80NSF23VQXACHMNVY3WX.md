@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:39:44Z
+updated_at: 2026-09-22T17:44:31Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -74,11 +74,11 @@ isolation alone.
 
 ## Acceptance criteria
 
-- [ ] A read request cannot observe another request's uncommitted rows.
-- [ ] A regression test interleaves an unlocked read with an uncommitted write
+- [x] A read request cannot observe another request's uncommitted rows.
+- [x] A regression test interleaves an unlocked read with an uncommitted write
       on the shared connection and asserts the read does not see it.
-- [ ] An ADR records the chosen connection/read-isolation model.
-- [ ] The server suite and the 90% coverage gate still pass.
+- [x] An ADR records the chosen connection/read-isolation model.
+- [x] The server suite and the 90% coverage gate still pass.
 
 ## Implementation plan
 
@@ -266,3 +266,21 @@ Accepted. The test is replaced at `bec9c85` with a writer-lock interleaving: two
 - `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
 
 Fix head: `bec9c85`.
+
+**agent:opencode/read-isolation** at 2026-09-22T17:44:31Z
+
+### Terva review round 7 — clean on `9032752`
+
+Request `ready-review-7`; run `743ac1f0-d3dc-4dbf-a88f-e59f988fa38b`; Actions run #143 (id 8703); model `gpt-5.6-sol` (thinking low). The review was clean, so it is recorded as the latest clean full review on the PR (comment [9673](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/9#issuecomment-9673)) rather than as a review object.
+
+The round-6 finding is resolved: the replacement test parks the first rename inside its writer transaction, verifies the second request waits, and asserts only one new `team.renamed` audit row.
+
+No findings. The review notes that `docs/design.md` was not supplied, so conformance to the specification could not be independently judged — expected, since the review scope is the diff.
+
+### Evidence
+
+- `server/.venv/bin/python -m pytest server -q` → 172 passed.
+- `bash scripts/check-quality.sh` → exit 0.
+- `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
+
+Reviewed head: `9032752`.
