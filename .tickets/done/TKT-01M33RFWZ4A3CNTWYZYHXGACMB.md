@@ -20,12 +20,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T15:47:11Z
+updated_at: 2026-09-22T16:19:19Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/harden-runtime-security
+  id: agent:opencode/arkham-deploy
   name: ""
 extensions: {}
 ---
@@ -98,6 +98,23 @@ PR #8, head `e33b1f0`, base `8a0d600` (`main`). Requested a Terva review with
 error but created
 [Actions run #8588](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/8588)
 (id 21891), running at the time of writing. Outcome recorded in a later note.
+
+**agent:opencode/arkham-deploy** at 2026-09-22T16:19:19Z
+
+### Review rounds 2 and 3 (PR #8)
+
+Round 2: Terva review 139 (run `40dba04a-8322-4c23-8c83-008b005a2f1c`,
+Actions run #119, id 8593) on head `0033c13` found `finding-1` (medium):
+the lock drift test discarded the hashes it claimed to verify, and
+`finding-2` (low): the security-header test checked names only, not values
+or `always`. Both accepted and fixed in `626f0f0`
+(`_pinned_requirements` keeps every `--hash` and the fully-pinned test
+requires one; `_tls_server_block` brace-matches the 443 block and the test
+asserts each full directive). Disposition posted as a PR #8 comment.
+
+Round 3: Terva review (run `a64e729e-32d2-4903-ad26-4f5f24014852`,
+Actions run #122, id 8597, request `ready-review-3`) on head `626f0f0` is
+clean: both prior findings resolved, no new findings. Base `8a0d600`.
 
 ## Summary
 
