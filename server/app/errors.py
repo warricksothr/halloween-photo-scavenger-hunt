@@ -26,7 +26,6 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import sentry_sdk
-from sentry_sdk.utils import BadDsn
 
 from app.logging import (
     LOGGER_NAME,
@@ -174,10 +173,9 @@ def init_error_reporting(
 
     Returns whether the SDK was initialized. No DSN is the normal local
     and test case: the app runs, nothing is sent, and no global SDK state
-    is touched. A DSN that is present but malformed is the same — the SDK
-    rejects it with ``BadDsn``, which must not reach ``create_app`` and
-    stop the server; the value is reported as ignored and no warning names
-    it, because a DSN carries a key.
+    is touched. A DSN that is present but malformed is the same: it must
+    not reach ``create_app`` and stop the server, and the value is never
+    named in the warning, because a DSN carries a key.
     """
     if not dsn:
         return False
@@ -196,7 +194,11 @@ def init_error_reporting(
             before_send=scrubber.scrub_event,
             before_breadcrumb=scrubber.scrub_breadcrumb,
         )
-    except BadDsn:
+    except ValueError:
+        # A bad DSN is a ValueError both ways: ``BadDsn`` subclasses it,
+        # and an unmatched IPv6 bracket raises it inside ``_dsn_secrets``
+        # through ``urlsplit``. The scrubber touches nothing but the DSN
+        # string, so a ValueError here is malformed configuration.
         logging.getLogger(LOGGER_NAME).warning(
             "error_reporting_disabled",
             extra={"event": "error_reporting_disabled", "reason": "malformed DSN"},

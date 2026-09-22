@@ -24,9 +24,13 @@ def test_init_is_inert_without_a_dsn(dsn):
     assert init_error_reporting(dsn) is False
 
 
-@pytest.mark.parametrize("dsn", ["not a dsn", "ftp://key@host/1"])
+@pytest.mark.parametrize("dsn", ["not a dsn", "ftp://key@host/1", "https://["])
 def test_init_is_inert_with_a_malformed_dsn(dsn, caplog):
-    """A typo in the DSN is a misconfiguration, not a crash."""
+    """A typo in the DSN is a misconfiguration, not a crash.
+
+    The last case is the one the SDK never sees: an unmatched IPv6
+    bracket makes ``urlsplit`` raise before ``sentry_sdk.init`` runs.
+    """
     caplog.set_level(logging.WARNING)
     caplog.clear()
 
@@ -38,10 +42,11 @@ def test_init_is_inert_with_a_malformed_dsn(dsn, caplog):
     assert dsn not in text
 
 
-def test_malformed_dsn_does_not_stop_the_app(tmp_path, monkeypatch):
+@pytest.mark.parametrize("dsn", ["not a dsn", "https://["])
+def test_malformed_dsn_does_not_stop_the_app(tmp_path, monkeypatch, dsn):
     """The finding: an unguarded ``sentry_sdk.init`` would raise ``BadDsn``
     through ``create_app`` and the server would never start."""
-    monkeypatch.setenv("ARKHAM_ERROR_DSN", "not a dsn")
+    monkeypatch.setenv("ARKHAM_ERROR_DSN", dsn)
 
     app = create_app(
         tmp_path / "bad-dsn.db",
