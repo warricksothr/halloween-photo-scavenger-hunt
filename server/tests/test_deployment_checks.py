@@ -30,21 +30,36 @@ def _canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def _pinned_requirements(text: str) -> dict[str, tuple[str, str]]:
-    """Parse a `--require-hashes` requirements file into name → (version, marker)."""
+def _pinned_requirements(text: str) -> dict[str, tuple[str, str, tuple[str, ...]]]:
+    """Parse a `--require-hashes` requirements file into name → (version, marker, hashes).
+
+    The hashes are kept, not dropped, so a drift check can compare the artifact
+    digests rather than just the versions.
+    """
 
     pinned: dict[str, tuple[str, str]] = {}
+    hashes: dict[str, list[str]] = {}
+    current: str | None = None
     for raw in text.splitlines():
         # Only requirement lines start at column zero; hashes and `# via`
         # comments are indented continuations.
-        if not raw or raw[0].isspace() or raw.startswith("#"):
+        if raw and raw[0].isspace():
+            if current is not None:
+                hashes[current].extend(re.findall(r"--hash=sha256:([0-9a-f]{64})", raw))
+            continue
+        if not raw or raw.startswith("#"):
             continue
         line = raw.rstrip("\\").strip()
         match = re.fullmatch(r"([A-Za-z0-9._-]+)==([^\s;]+)\s*(?:;\s*(.*))?", line)
         assert match, f"not a fully pinned requirement: {raw!r}"
         name, version, marker = match.groups()
-        pinned[_canonical(name)] = (version, (marker or "").strip())
-    return pinned
+        current = _canonical(name)
+        pinned[current] = (version, (marker or "").strip())
+        hashes.setdefault(current, [])
+    return {
+        name: (version, marker, tuple(hashes[name]))
+        for name, (version, marker) in pinned.items()
+    }
 
 
 def _uv_lock_versions(text: str) -> dict[str, str]:
@@ -58,13 +73,16 @@ def test_requirements_lock_is_fully_pinned():
     pinned = _pinned_requirements(REQUIREMENTS_LOCK.read_text())
     assert pinned, "requirements.lock is empty"
     assert len(pinned) > 10, "requirements.lock looks truncated"
+    for name, (version, _, hashes) in pinned.items():
+        assert version, f"{name} is not pinned to a version"
+        assert hashes, f"{name} has no --hash entries"
 
 
 def test_requirements_lock_versions_match_uv_lock():
     pinned = _pinned_requirements(REQUIREMENTS_LOCK.read_text())
     locked = _uv_lock_versions(UV_LOCK.read_text())
     assert set(pinned) <= set(locked), set(pinned) - set(locked)
-    for name, (version, _) in pinned.items():
+    for name, (version, _, _) in pinned.items():
         assert version == locked[name], f"{name}: {version} != uv.lock {locked[name]}"
 
 
@@ -115,15 +133,41 @@ def test_nginx_upload_limit_sits_above_the_app_cap():
     assert f"client_max_body_size {match.group(1)}m" in RUNBOOK.read_text()
 
 
+def _tls_server_block(text: str) -> str:
+    """Return the body of the `server { … }` block that listens on 443."""
+
+    for match in re.finditer(r"server\s*\{", text):
+        depth = 1
+        cursor = match.end()
+        while cursor < len(text) and depth:
+            if text[cursor] == "{":
+                depth += 1
+            elif text[cursor] == "}":
+                depth -= 1
+            cursor += 1
+        block = text[match.end() : cursor - 1]
+        if re.search(r"^\s*listen\s+443\b", block, re.MULTILINE):
+            return block
+    raise AssertionError("nginx.conf has no server block listening on 443")
+
+
 def test_nginx_https_block_sends_security_headers():
-    block = NGINX_CONF.read_text().split("listen 443", 1)[1]
-    for header in (
-        "Strict-Transport-Security",
-        "X-Content-Type-Options",
-        "X-Frame-Options",
-        "Content-Security-Policy",
+    block = _tls_server_block(NGINX_CONF.read_text())
+    csp = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline';"
+        " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+        " font-src 'self' https://fonts.gstatic.com; img-src 'self';"
+        " connect-src 'self'; worker-src 'self'; manifest-src 'self';"
+        " object-src 'none'; base-uri 'self'; form-action 'self';"
+        " frame-ancestors 'none'"
+    )
+    for directive in (
+        'add_header Strict-Transport-Security "max-age=31536000" always;',
+        'add_header X-Content-Type-Options "nosniff" always;',
+        'add_header X-Frame-Options "DENY" always;',
+        f'add_header Content-Security-Policy "{csp}" always;',
     ):
-        assert header in block, f"missing {header}"
+        assert directive in block, f"missing or weakened directive: {directive}"
 
 
 def test_systemd_unit_hardens_the_data_dir():
