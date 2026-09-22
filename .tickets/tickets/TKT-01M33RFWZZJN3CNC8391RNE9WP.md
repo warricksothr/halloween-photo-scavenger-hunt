@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:42:30Z
+updated_at: 2026-09-22T18:45:26Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -174,3 +174,22 @@ robust to `-e` being dropped, say so and I will add explicit checks; on its own
 the script is already correct.
 
 Re-requesting review.
+
+**agent:opencode/backup-restore** at 2026-09-22T18:45:26Z
+
+### Round 4 — finding accepted
+
+Reviewed head `cf689931cf0fef6294e0d5d79f5251c9e1fe00e5` (review id 159), Terva
+run `56a60062-2a92-45a1-9772-e91bee69669e` for `request:backup-restore-4`,
+Actions run #179 (id 8754). Round-3 findings both reported resolved.
+
+- **low — a leading-zero keep count passes validation then breaks the
+  arithmetic.** Correct. `ARKHAM_BACKUP_KEEP=08` passed the digit check and
+  `$((total - KEEP))` then failed, because `/bin/sh` reads a leading zero as
+  octal and `8` is not an octal digit. The script now strips leading zeros
+  after validation, so every digit string is decimal and `08` means eight.
+  `test_backup_accepts_a_leading_zero_keep_count` runs three backups with
+  `KEEP=08` and asserts all three survive, which distinguishes eight from both
+  an abort and a normalisation to zero; it fails against the previous script.
+
+Fixed in `e1fc25b`. Re-requesting review.
