@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWT0BQ7YTCGGH2WEMN2Y
 title: Fix the TeamJoin dead-end
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/teamjoin-dead-end
-  branch: t3code/teamjoin-dead-end
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: 209fbe187ac8f1af8cfacabd80960a1be7015ccf
-  session: teamjoin-dead-end
-  claimed_at: 2026-09-22T17:51:16Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:01:17Z
+updated_at: 2026-09-22T18:02:39Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -96,3 +89,18 @@ The reachable trigger is narrower than the finding states, which is worth record
 - Reviewed head `f0f7f3a7e16ecc0da193637fb9cf6ca3dd8041de`, base `209fbe187ac8f1af8cfacabd80960a1be7015ccf`.
 - Model `gpt-5.6-sol`, thinking `low`, 14s; 5529 input / 387 output tokens. Clean full review (PR comment 9690, `<!-- terva-clean:v1 -->`), no findings; `finding-1` from review 152 recorded resolved.
 - Both acceptance criteria ticked. Gates: `bash scripts/check-quality.sh` exit 0. Awaiting the user's merge decision.
+
+## Summary
+
+### Outcome
+
+The TeamJoin Stay control no longer strands the player. It clears the invite path and refreshes, so `main.jsx`'s snapshot routing returns the player to their current team; `busy` resets in a `finally` so a failing refresh cannot leave the warning controls stuck.
+
+Landed as PR #10, merged into `main` at `eb697fd7b4bbc40c0ab4133c4ab7ae552ed63da9` (2026-09-22T18:02:17Z).
+
+### Evidence
+
+- Commits: `f269f1a` (fix + Stay/switch tests), `5dff79d` (busy reset on a failed refresh + rejection test), `f0f7f3a`/`62bbf16` (review dispositions, criteria).
+- Tests: `web/src/screens/screens.test.jsx` — `leaves the invite when the player stays on their team`, `re-enables the warning controls when the refresh fails`, `switches team only after the warning is confirmed`. The Stay and rejection cases fail on the pre-fix heads.
+- Gates: `bash scripts/check-quality.sh` exit 0 — backend 172 passed, Ruff clean, frontend 26 passed, production build.
+- Reviews: round 1 (`f269f1a`) one medium finding, accepted and fixed in `5dff79d`; round 2 (`f0f7f3a`) clean, finding resolved.
