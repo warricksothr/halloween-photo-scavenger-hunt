@@ -29,14 +29,18 @@ Three checks wrap the routes, so they are not repeated per endpoint:
 - **CSRF.** Every unsafe method (POST/PATCH/PUT/DELETE) must echo the
   `arkham_csrf` cookie in `X-CSRF-Token`; a missing or stale token is
   `403 {"error":"csrf_failed"}`. Safe responses plant the cookie when it
-  is absent. The SPA replays once after a `csrf_failed`.
+  is absent or fails its signature check. The SPA replays once after a
+  `csrf_failed`.
 - **Body cap.** A request whose body exceeds 16 MiB
   (`images.MAX_BYTES` + 1 MiB, matching nginx's `client_max_body_size`)
-  is `413 {"error":"request_too_large"}` before any route runs.
+  is `413 {"error":"request_too_large"}` before any route runs. A body
+  with no declared length is read up to the cap and replayed, so the cap
+  holds even when the route ignores the body.
 - **Rate limits.** The unauthenticated guess-taking routes answer
   `429 {"error":"rate_limited"}` with `Retry-After` after too many
-  *failed* attempts (successes are not counted). Sources are keyed on the
-  client IP, targets on the guessed secret.
+  *failed* attempts (successes are not counted). Attempts are reserved
+  against a per-source cap (client IP) and an endpoint-wide global cap;
+  the global is what bounds a guess spread across many addresses.
 
 ## Roles
 

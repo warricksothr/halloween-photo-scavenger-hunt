@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T19:16:08Z
+updated_at: 2026-09-22T19:53:24Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,9 +43,9 @@ State-changing routes rely on SameSite cookies alone; the design calls for a coo
 
 ## Acceptance criteria
 
-- [ ] Mutating requests require a token that is not sent automatically by the browser.
-- [ ] Join, invite redeem, and admin login are rate-limited per source.
-- [ ] Request bodies are capped at the app before multipart parsing.
+- [x] Mutating requests require a token that is not sent automatically by the browser.
+- [x] Join, invite redeem, and admin login are rate-limited per source.
+- [x] Request bodies are capped at the app before multipart parsing.
 
 ## Implementation plan
 
@@ -191,3 +191,54 @@ Reconciles with TKT-01M33RFX0, which owns the nginx cap.
   for the session-creating routes, not credential secrecy.
 - Frontend visual affordance for 429 -- the store already surfaces
   `message`; a retry hint is the follow-up ticket if wanted.
+
+## Notes
+
+**agent:opencode/csrf** at 2026-09-22T19:53:24Z
+
+Terva review `csrf-ratelimit-v1` (review id 162, state COMMENT, hash
+`4d9e28b1ebb98f2c524ff006b3ea09f09f99d5183ab0dbcbf045233adc16644d`) on PR #13
+at head `7621a0e9b596b6530b0e2acbef162f6dc867c888`, base `main`
+`22198c9ee26422c83cca7b13a670e503c8274a6c`. Actions run #193 (id 8796),
+`739025cc-b9d6-44a6-aa8f-ec8a58ad0d25`. Four findings, all accepted and fixed
+on the branch (one commit per finding, then this docs/ticket commit):
+
+1. high — stale CSRF cookie never replaced. `csrf.py:_planting` returned the
+   sender whenever the cookie name existed, without validating it, so after a
+   restart rotated `app.state.csrf_secret` the recovery safe GET re-planted the
+   stale cookie and the SPA's retry 403'd again. Fixed: re-plant when the
+   present cookie fails `valid_token`. Test
+   `test_a_stale_cookie_is_replaced_after_a_secret_rotation` rotates the
+   secret, asserts a fresh valid cookie, and that the retried mutation reaches
+   the route. Fails against the old code (`set-cookie` absent).
+2. high — per-target buckets did not bound distributed enumeration, because the
+   target key was the attacker-supplied guess: every distinct guess was a fresh
+   bucket. Fixed: dropped per-target; every guess-taking route now reserves a
+   per-source cap and an endpoint-wide global cap (join/invite/mod 300/600,
+   login 60/900), the global set several times the per-source cap so one source
+   cannot exhaust it alone. Codes carry the entropy (`ids.new_code` is 10 chars
+   of 31), so the limiter bounds the attempt rate, not the search space; the
+   ADR says so. Tests: `test_a_global_cap_bounds_a_spread_guess_across_sources`
+   (unit) and `test_each_entry_point_has_a_global_cap` (route wiring for join,
+   mod join, invite redeem). The route test fails if a handler drops its global
+   pair (`404 != 429`).
+3. medium — check and record were not atomic, so a concurrent burst could
+   overshoot the cap. Fixed: `RateLimiter.admit` reserves every bucket under the
+   lock and rolls back the ones it already took when a later bucket is full;
+   `release` on a correct guess. `test_admit_is_atomic_under_concurrent_attempts`
+   runs 32 threads at a cap of 10 and asserts exactly 10 admitted;
+   `test_admit_rolls_back_when_a_later_bucket_is_full` fails if the rollback is
+   removed.
+4. medium — a chunked body was capped only if the route read it. Fixed:
+   `BodyLimitMiddleware` now reads a body with no declared `Content-Length` up
+   to the cap and replays it to the app.
+   `test_chunked_body_over_the_cap_is_rejected_without_the_route_reading_it`
+   uses a stub that never calls `receive` and asserts 413; the existing chunked
+   tests now assert the route did not run. Fails against the pre-fix
+   middleware.
+
+The review also noted `docs/design.md` was not in the diff, so it could not
+judge spec conformance; the design reference for invite limits is
+`docs/design.md:517`. ADR 0015, `docs/impl/api.md`, and `docs/progress.md` are
+updated to match the global-cap and replay behavior. Gate: 227 server tests,
+94.25% coverage, Ruff clean, 40 web tests, deploy checks 19.
