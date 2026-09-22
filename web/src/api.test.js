@@ -28,6 +28,7 @@ describe('api client', () => {
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify({ display_name: 'Robin', device_label: 'phone' }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -64,5 +65,25 @@ describe('api client', () => {
       message: 'Could not reach the server. Check your connection.',
       network: true,
     });
+  });
+
+  it('aborts a fetch that never settles', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch.mockImplementation(
+      (_url, opts) =>
+        new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+
+    const pending = api.snapshot();
+    await vi.advanceTimersByTimeAsync(8000);
+
+    await expect(pending).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+    vi.useRealTimers();
   });
 });

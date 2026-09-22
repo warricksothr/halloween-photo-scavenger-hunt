@@ -5,23 +5,38 @@
 // and then hand the fresh snapshot back to the store. Errors follow
 // docs/impl/api.md: {"error": code, "message": human string}.
 
+// A fetch can stay pending indefinitely on a dead connection, which no
+// amount of retry logic can reach. Bound every request so a hung connection
+// turns into the same error shape a rejection does. Uploads carry a photo
+// over a phone network, so they get a much longer budget than a small read.
+const REQUEST_TIMEOUT_MS = 8000;
+const UPLOAD_TIMEOUT_MS = 60000;
+
 async function request(path, options = {}) {
   // FormData bodies (photo upload) must NOT set Content-Type — the
   // browser sets it with the multipart boundary.
   const isForm = options.body instanceof FormData;
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+  );
   let resp;
   try {
     resp = await fetch(path, {
       headers: options.body && !isForm ? { 'Content-Type': 'application/json' } : {},
       ...options,
       body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
+      signal: controller.signal,
     });
   } catch {
-    // A dropped connection or an offline phone rejects the promise rather
-    // than resolving, so fold it into the same error shape the rest of the
-    // client branches on. Callers never see a rejection, and a screen that
-    // is waiting on a mutation cannot stay busy forever.
+    // A dropped connection or an offline phone rejects the promise, and a
+    // dead one never settles until the timeout aborts it. Fold both into
+    // the same error shape the rest of the client branches on, so callers
+    // never see a rejection and a waiting screen cannot stay busy forever.
     return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true };
+  } finally {
+    clearTimeout(timer);
   }
   if (resp.status === 401) {
     // Not joined (or session revoked) — the store routes to the join
