@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWZZJN3CNC8391RNE9WP
 title: Fix the backup restore path and make backups survivable
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/backup-restore
-  branch: t3code/backup-restore
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: a44be870116d672380c5deac6a28f69a380065e5
-  session: null
-  claimed_at: 2026-09-22T18:23:09Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:55:51Z
+updated_at: 2026-09-22T18:58:35Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""

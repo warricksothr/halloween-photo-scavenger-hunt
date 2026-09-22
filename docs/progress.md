@@ -39,6 +39,21 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Backup path fixed and made survivable.**
+  `deploy/backup.sh` restores into `<repo-root>/data`, matching RUNBOOK §1 and
+  the directory the app actually reads. Backups copy to an optional
+  `ARKHAM_BACKUP_MIRROR` directory before either prune, and
+  `ARKHAM_BACKUP_KEEP` (default 14) bounds retention in both the local
+  destination and the mirror. The tarball is built in a `mktemp -d` work
+  directory and the final archive name is reserved with
+  `mktemp --suffix=.tar.gz`, so two runs in the same second cannot collide; the
+  mirror copy is published with a temp name plus `mv`, so an interrupted copy
+  never leaves a truncated archive under a final name. A mirror that is not a
+  directory fails rather than `mkdir` a mount point and shadow an unmounted
+  drive, and an unset or same-device mirror warns. ADR 0014 records the mirror
+  directory over `scp`/`rsync`. The deployment tests cover the failure paths,
+  and the quality gate passes 182 tests at the coverage floor.
+
 - **2026-09-22 — Container runtime pinned, nginx and systemd hardened.**
   The `Containerfile` now installs `server/requirements.lock`, the hash-pinned
   export of `uv.lock`, with `pip install --require-hashes`, and puts `app` on
