@@ -58,6 +58,29 @@ def test_existing_cookie_is_not_replanted(client):
     assert "set-cookie" not in second.headers
 
 
+def test_a_stale_cookie_is_replaced_after_a_secret_rotation(client):
+    # A restart rotates the signing secret. The client still holds the old
+    # cookie, so its next mutation fails; the recovery safe GET must hand
+    # it a token signed with the new secret or the SPA retries forever.
+    other = _planted(client)
+    stale = other.cookies[CSRF_COOKIE_NAME]
+    client.app.state.csrf_secret = b"rotated-secret-" + b"z" * 32
+
+    resp = other.get("/api/health")
+
+    assert "set-cookie" in resp.headers, "the stale cookie was kept"
+    fresh = resp.cookies[CSRF_COOKIE_NAME]
+    assert fresh != stale
+    assert csrf.valid_token(client.app.state.csrf_secret, fresh)
+
+    other.headers[CSRF_HEADER_NAME] = fresh
+    retried = other.post(
+        "/api/admin/login", json={"username": "nobody", "password": "wrong"}
+    )
+    # 401 is the route's answer: the rotated pair got past the gate.
+    assert retried.status_code == 401
+
+
 def test_mutating_request_without_a_token_is_rejected(client):
     resp = _fresh(client).post(
         "/api/admin/login", json={"username": "x", "password": "y"}

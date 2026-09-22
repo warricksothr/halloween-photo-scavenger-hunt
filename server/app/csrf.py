@@ -112,8 +112,11 @@ class CsrfMiddleware:
 
     def _planting(self, send: Send, request: Request) -> Send:
         """Wrap ``send`` to attach a fresh token cookie unless the request
-        already carried one."""
-        if CSRF_COOKIE_NAME in request.cookies:
+        already carried a valid one. A cookie that fails the signature
+        check is replaced, so a safe GET after a secret rotation re-arms
+        the client — the SPA's recovery path depends on this."""
+        cookie = request.cookies.get(CSRF_COOKIE_NAME)
+        if cookie and valid_token(request.app.state.csrf_secret, cookie):
             return send
 
         header = _cookie_header(
