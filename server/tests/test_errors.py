@@ -151,6 +151,19 @@ def test_secrets_in_mapping_keys_never_serialize():
     assert scrubbed["contexts"][REDACTED]["value"] == f"prefix {REDACTED}"
 
 
+def test_replacing_a_secret_does_not_rescan_the_marker():
+    """A secret inside ``<redacted>`` must not survive the next pass.
+
+    ``redact`` is a substring of the marker, so a second sequential
+    replace would rewrite the marker and keep the key in the output.
+    """
+    scrubbed = Scrubber(["hunter2", "redact"]).scrub_event(
+        {"extra": {"value": "hunter2 redact"}}
+    )
+
+    assert scrubbed["extra"]["value"] == f"{REDACTED} {REDACTED}"
+
+
 def test_request_id_becomes_a_tag():
     token = app_logging._request_id.set("req-abc123")
     try:

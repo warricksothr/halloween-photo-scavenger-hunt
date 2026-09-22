@@ -21,6 +21,7 @@ server log line and the error event for one request name the same id.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -91,6 +92,17 @@ class Scrubber:
 
     def __init__(self, secrets: Iterable[str] = ()) -> None:
         self._secrets = [secret for secret in secrets if secret]
+        # Longest first so a secret containing another matches whole, and
+        # one compiled alternation so a single pass replaces them: a later
+        # secret must not match the ``<redacted>`` text an earlier
+        # replacement inserted, or a key that is a substring of the marker
+        # would survive verbatim (``<<redacted>>``).
+        ordered = sorted(self._secrets, key=len, reverse=True)
+        self._pattern = (
+            re.compile("|".join(re.escape(secret) for secret in ordered))
+            if ordered
+            else None
+        )
 
     @classmethod
     def for_dsn(cls, dsn: str) -> Scrubber:
@@ -161,9 +173,9 @@ class Scrubber:
 
     def _scrub_strings(self, value: Any) -> Any:
         if isinstance(value, str):
-            for secret in self._secrets:
-                value = value.replace(secret, REDACTED)
-            return value
+            if self._pattern is None:
+                return value
+            return self._pattern.sub(REDACTED, value)
         if isinstance(value, dict):
             # A mapping's keys serialize too, and app-provided ``extra``
             # can hold a secret as one. Scrub both; two keys that collapse
