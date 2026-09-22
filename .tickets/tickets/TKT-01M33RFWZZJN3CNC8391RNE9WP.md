@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T18:39:23Z
+updated_at: 2026-09-22T18:42:30Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -144,3 +144,33 @@ Actions run #173 (id 8745). Round-1 findings both reported resolved.
   on exactly that archive assertion, so it proves the fix.
 
 Fixed in `f4e3ec6`. Re-requesting review.
+
+**agent:opencode/backup-restore** at 2026-09-22T18:42:30Z
+
+### Round 3 — both findings disputed, with tests
+
+Reviewed head `24d1801e84e7c798fd6c66e6689b34fbb114f886` (review id 158), Terva
+run `e4e3838a-cf5d-4907-9e89-97a110785362` for `request:backup-restore-3`,
+Actions run #176 (id 8750). Round-2 finding reported resolved.
+
+Both findings rest on "the script does not use `set -e`". That premise is
+incorrect: `deploy/backup.sh:32` is `set -eu`, and has been since this branch's
+first commit. Under `set -e`:
+
+- **high — unchecked `mktemp -d`/`mkdir -p`.** A failing `mktemp -d` fails the
+  assignment, so `set -e` aborts before `WORK` is used; `WORK` cannot become
+  empty. `mkdir -p "$DEST_DIR"` is fatal the same way.
+- **medium — retention `rm` failures.** A failing `rm -f` inside `prune`
+  propagates out of the `if` body, and the bare `prune "$DEST_DIR"` call is not
+  in a tested context, so `set -e` aborts the script.
+
+I added the two tests the review asked for —
+`test_backup_aborts_when_the_work_directory_cannot_be_created` (stubbed
+`mktemp`) and `test_backup_fails_when_retention_cannot_delete_an_archive`
+(stubbed `rm`) — in `659338c`. Both pass on the current script, and both fail
+when `set -eu` is reduced to `set -u` (verified), which is what makes them
+evidence: the abort comes from `set -e`, not from luck. If the intent is to be
+robust to `-e` being dropped, say so and I will add explicit checks; on its own
+the script is already correct.
+
+Re-requesting review.
