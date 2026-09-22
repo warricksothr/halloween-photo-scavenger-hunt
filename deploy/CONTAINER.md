@@ -146,6 +146,11 @@ podman run --rm -v arkham-data:/data:ro -v "$PWD:/out" alpine \
 Restore: stop the container, replace the volume contents, start. Prove
 the restore once before the night — a backup never restored is a rumor.
 
+Copy each archive to a second disk and keep only a bounded number of them
+(the host deploy's `deploy/backup.sh` does both via `ARKHAM_BACKUP_MIRROR`
+and `ARKHAM_BACKUP_KEEP`); an archive left beside the volume is on the same
+disk as the data it protects.
+
 ## 5. Update to a new build
 
 ```sh

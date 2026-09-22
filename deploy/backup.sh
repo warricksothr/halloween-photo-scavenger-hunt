@@ -1,15 +1,28 @@
 #!/bin/sh
 # backup.sh — one-command backup of the night's state (design.md:
 # "the worst realistic incident is losing the SQLite file or photos
-# mid-party"). Produces one timestamped tarball beside the repo by
-# default; pass a destination directory to override.
+# mid-party"). Produces one timestamped tarball in backups/ by default;
+# pass a destination directory to override.
 #
 #   ./deploy/backup.sh [dest-dir]
 #
-# Restore (see deploy/RUNBOOK.md for the full drill):
+# Set ARKHAM_BACKUP_MIRROR to a directory on another disk (a USB drive,
+# an NFS mount, a synced folder) to keep a copy off the host, and
+# ARKHAM_BACKUP_KEEP to bound how many archives each directory retains
+# (default 14). Without a mirror the script warns: a backup on the same
+# disk is not a backup.
+#
+# Restore (see deploy/RUNBOOK.md §1 for the full drill). Select one
+# archive — a wildcard would hand tar several files and it would treat
+# all but the first as members:
 #   systemctl --user stop arkham-hunt
-#   tar -xzf arkham-backup-*.tar.gz -C <repo-root>
+#   ARCHIVE=$(ls -1t backups/arkham-backup-*.tar.gz | head -n 1)
+#   tar -xzf "$ARCHIVE" -C <repo-root>/data
 #   systemctl --user start arkham-hunt
+#
+# The archive holds arkham.db and photos/ at its root, and the app reads
+# <repo-root>/data — extract into data/, not the repo root, or the
+# database is silently empty.
 #
 # The DB snapshot uses Python's sqlite3 backup API (online, WAL-safe)
 # — the server venv always has it, so the script does not depend on the
@@ -23,19 +36,42 @@ REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 # runtime data. Production uses the default repo-relative directory.
 DATA_DIR="${ARKHAM_DATA_DIR:-$REPO_ROOT/data}"
 DEST_DIR="${1:-$REPO_ROOT/backups}"
+MIRROR="${ARKHAM_BACKUP_MIRROR:-}"
+KEEP="${ARKHAM_BACKUP_KEEP:-14}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-WORK="$DEST_DIR/.backup-work-$STAMP"
-OUT="$DEST_DIR/arkham-backup-$STAMP.tar.gz"
 
-cleanup() {
-    rm -rf "$WORK"
-}
-trap cleanup EXIT
+case "$KEEP" in
+'' | *[!0-9]*)
+    echo "ARKHAM_BACKUP_KEEP must be a non-negative integer: $KEEP" >&2
+    exit 1
+    ;;
+esac
+# Shell arithmetic reads a leading zero as octal, so "08" would abort the
+# retention sum. Strip the zeros to make every digit string decimal.
+while [ "${KEEP#0}" != "$KEEP" ]; do KEEP="${KEEP#0}"; done
+[ -n "$KEEP" ] || KEEP=0
 
 if [ ! -f "$DATA_DIR/arkham.db" ]; then
     echo "no database at $DATA_DIR/arkham.db — nothing to back up" >&2
     exit 1
 fi
+
+mkdir -p "$DEST_DIR"
+# mktemp -d is atomic, so two backups in the same second get distinct
+# work directories.
+WORK="$(mktemp -d "$DEST_DIR/.backup-work-$STAMP-XXXXXX")"
+STAGED="$WORK/arkham-backup.tar.gz"
+# PENDING is an archive name mktemp has reserved but tar has not filled
+# yet; the trap removes it if the script dies in between.
+PENDING=""
+MIRROR_TMP=""
+
+cleanup() {
+    rm -rf "$WORK"
+    [ -z "$PENDING" ] || rm -f "$PENDING"
+    [ -z "$MIRROR_TMP" ] || rm -f "$MIRROR_TMP"
+}
+trap cleanup EXIT
 
 mkdir -p "$WORK/photos"
 PY="$REPO_ROOT/server/.venv/bin/python"
@@ -59,6 +95,66 @@ else
 fi
 [ -d "$DATA_DIR/photos" ] && cp -r "$DATA_DIR/photos/." "$WORK/photos/"
 
-tar -czf "$OUT" -C "$WORK" arkham.db photos
+tar -czf "$STAGED" -C "$WORK" arkham.db photos
+
+# Reserve the archive name with mktemp and move the tarball in. Naming it
+# after the work directory would let a later run in the same second reuse
+# that suffix once the directory is gone, and overwrite the archive.
+OUT="$(mktemp --suffix=.tar.gz "$DEST_DIR/arkham-backup-$STAMP-XXXXXX")"
+PENDING="$OUT"
+mv "$STAGED" "$OUT"
+PENDING=""
 rm -rf "$WORK"
 echo "backup written: $OUT"
+
+# Keep the newest $KEEP archives in a directory. Names sort
+# chronologically because they start with the timestamp, so the first
+# (total - keep) of them are the ones to drop.
+prune() {
+    dir="$1"
+    total=0
+    for archive in "$dir"/arkham-backup-*.tar.gz; do
+        [ -e "$archive" ] || continue
+        total=$((total + 1))
+    done
+    remove=$((total - KEEP))
+    [ "$remove" -gt 0 ] || return 0
+    seen=0
+    for archive in "$dir"/arkham-backup-*.tar.gz; do
+        [ -e "$archive" ] || continue
+        seen=$((seen + 1))
+        if [ "$seen" -le "$remove" ]; then
+            rm -f "$archive"
+        fi
+    done
+}
+
+if [ -z "$MIRROR" ]; then
+    echo "warning: ARKHAM_BACKUP_MIRROR is unset — this copy shares a disk with the data" >&2
+else
+    if [ ! -d "$MIRROR" ]; then
+        echo "ARKHAM_BACKUP_MIRROR is not a directory: $MIRROR" >&2
+        echo "(is the off-host mount actually mounted?)" >&2
+        exit 1
+    fi
+    if command -v stat >/dev/null 2>&1 &&
+        [ "$(stat -c %d -- "$MIRROR")" = "$(stat -c %d -- "$DATA_DIR")" ]; then
+        echo "warning: ARKHAM_BACKUP_MIRROR is on the same device as the data" >&2
+    fi
+    # Mirror before pruning: a prune can drop this run's archive, and the
+    # off-host copy must not depend on it surviving locally. Copy to a
+    # temp name and rename, so a copy cut short by a full disk or a
+    # dropped mount never appears under the final name, where retention
+    # would keep it and the restore recipe might pick it.
+    MIRROR_TMP="$(mktemp "$MIRROR/.arkham-backup-copy-XXXXXX")"
+    if cp "$OUT" "$MIRROR_TMP" && mv "$MIRROR_TMP" "$MIRROR/${OUT##*/}"; then
+        MIRROR_TMP=""
+        echo "backup mirrored: $MIRROR/${OUT##*/}"
+    else
+        echo "failed to mirror $OUT to $MIRROR" >&2
+        exit 1
+    fi
+fi
+
+prune "$DEST_DIR"
+[ -z "$MIRROR" ] || prune "$MIRROR"

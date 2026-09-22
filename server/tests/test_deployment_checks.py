@@ -177,16 +177,162 @@ def test_systemd_unit_hardens_the_data_dir():
     assert "ReadWritePaths=%h/arkham/data" in unit
 
 
-def _restricted_path_without_sqlite_cli(root: Path) -> str:
-    """Expose only the utilities backup.sh needs, never sqlite3."""
+def _write_stub(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}")
+    path.chmod(0o755)
+
+
+def _fail_on_marker_stub(real: str, marker: str) -> str:
+    return (
+        'for arg in "$@"; do\n'
+        f'  case "$arg" in *"{marker}"*)'
+        ' echo "simulated failure" >&2; exit 1;; esac\n'
+        "done\n"
+        f'exec "{real}" "$@"\n'
+    )
+
+
+def _restricted_path_without_sqlite_cli(
+    root: Path,
+    *,
+    stamp: str = "20260101-000000",
+    failing_cp_marker: str = "",
+    failing_rm_marker: str = "",
+    failing_mktemp: bool = False,
+    mktemp_sequence: tuple[str, ...] = (),
+) -> str:
+    """Expose only the utilities backup.sh needs, never sqlite3.
+
+    `date` is pinned to `stamp`, so a test can put two runs in the same second
+    on purpose rather than relying on the wall clock. `failing_cp_marker`
+    leaves a short file where `cp` would have written and then fails, to stand
+    in for a mirror copy cut short. `failing_rm_marker` and `failing_mktemp`
+    fail those utilities so a test can drive an error path. `mktemp_sequence`
+    makes `mktemp` hand out those paths in order, so a test can pin the work
+    directory and archive names.
+    """
 
     bin_dir = root / "bin"
     bin_dir.mkdir()
-    for name in ("cp", "date", "dirname", "gzip", "mkdir", "rm", "tar"):
+    for name in ("dirname", "gzip", "mkdir", "mv", "stat", "tar"):
         source = shutil.which(name)
         assert source is not None, f"test host lacks {name}"
         (bin_dir / name).symlink_to(source)
+    _write_stub(bin_dir / "date", f"echo {stamp}\n")
+
+    real_cp = shutil.which("cp")
+    assert real_cp is not None, "test host lacks cp"
+    if failing_cp_marker:
+        body = (
+            'for arg in "$@"; do\n'
+            f'  case "$arg" in *"{failing_cp_marker}"*)\n'
+            '    src="$1"; last="";\n'
+            '    for a in "$@"; do last="$a"; done\n'
+            '    [ -d "$last" ] && last="$last/${src##*/}"\n'
+            '    printf "partial-copy" > "$last" 2>/dev/null || true\n'
+            '    echo "cp: simulated failure" >&2\n'
+            "    exit 1\n"
+            "    ;;\n"
+            "  esac\n"
+            "done\n"
+            f'exec "{real_cp}" "$@"\n'
+        )
+    else:
+        body = f'exec "{real_cp}" "$@"\n'
+    _write_stub(bin_dir / "cp", body)
+
+    real_rm = shutil.which("rm")
+    assert real_rm is not None, "test host lacks rm"
+    if failing_rm_marker:
+        _write_stub(bin_dir / "rm", _fail_on_marker_stub(real_rm, failing_rm_marker))
+    else:
+        (bin_dir / "rm").symlink_to(real_rm)
+
+    if failing_mktemp:
+        _write_stub(
+            bin_dir / "mktemp", 'echo "mktemp: simulated failure" >&2\nexit 1\n'
+        )
+    elif mktemp_sequence:
+        count = root / "mktemp.count"
+        log = root / "mktemp.args"
+        cases = "".join(
+            f'{index}) path="{path}" ;;\n'
+            for index, path in enumerate(mktemp_sequence, start=1)
+        )
+        _write_stub(
+            bin_dir / "mktemp",
+            f'count="{count}"\n'
+            f'log="{log}"\n'
+            "i=0\n"
+            '[ -f "$count" ] && read -r i < "$count"\n'
+            "i=$((i + 1))\n"
+            'echo "$i" > "$count"\n'
+            'echo "$*" >> "$log"\n'
+            'case "$i" in\n'
+            f"{cases}"
+            '*) echo "mktemp: unexpected call $i" >&2; exit 1 ;;\n'
+            "esac\n"
+            'case " $* " in\n'
+            '*" -d "*) mkdir -p "$path" ;;\n'
+            '*) : > "$path" ;;\n'
+            "esac\n"
+            'echo "$path"\n',
+        )
+    else:
+        real_mktemp = shutil.which("mktemp")
+        assert real_mktemp is not None, "test host lacks mktemp"
+        (bin_dir / "mktemp").symlink_to(real_mktemp)
     return str(bin_dir)
+
+
+def _live_data(root: Path) -> Path:
+    """A data directory with a migrated database and one photo."""
+
+    source = root / "live-data"
+    source.mkdir()
+    (source / "photos" / "originals").mkdir(parents=True)
+    (source / "photos" / "originals" / "evidence.jpg").write_bytes(b"photo-bytes")
+    conn = db_module.connect(source / "arkham.db")
+    db_module.apply_migrations(conn)
+    conn.close()
+    return source
+
+
+def _backup_env(
+    source: Path,
+    root: Path,
+    *,
+    failing_cp_marker: str = "",
+    failing_rm_marker: str = "",
+    failing_mktemp: bool = False,
+    mktemp_sequence: tuple[str, ...] = (),
+    **extra: str,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "ARKHAM_DATA_DIR": str(source),
+            "PATH": _restricted_path_without_sqlite_cli(
+                root,
+                failing_cp_marker=failing_cp_marker,
+                failing_rm_marker=failing_rm_marker,
+                failing_mktemp=failing_mktemp,
+                mktemp_sequence=mktemp_sequence,
+            ),
+        }
+    )
+    env.update(extra)
+    return env
+
+
+def _run_backup(destination: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["/bin/sh", str(BACKUP_SCRIPT), str(destination)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_backup_archive_restores_live_database_and_photos(tmp_path):
@@ -267,3 +413,185 @@ def test_backup_archive_restores_live_database_and_photos(tmp_path):
     assert (
         restored / "photos" / "originals" / "evidence.jpg"
     ).read_bytes() == photo_bytes
+
+
+def test_backup_restore_recipe_extracts_one_archive_into_data():
+    """The header recipe must match RUNBOOK §1, or the restore is empty.
+
+    Retention leaves several archives, so a wildcard passed to tar would make
+    every file but the first a member name and the restore would fail.
+    """
+
+    header = BACKUP_SCRIPT.read_text()
+    runbook = RUNBOOK.read_text()
+    assert "tar -xzf" in header
+    assert 'tar -xzf "$ARCHIVE" -C <repo-root>/data' in header
+    assert 'tar -xzf "$ARCHIVE" -C ~/arkham/data' in runbook
+    for text in (header, runbook):
+        # No recipe that extracts into the repo root itself, and none that
+        # lets the shell expand the archive argument.
+        assert not re.search(r"-C <repo-root>(?!\S)", text)
+        assert not re.search(r"tar -xzf [^\n]*\*", text)
+        assert re.search(r"ARCHIVE=\$\(ls -1t [^\n]*arkham-backup-\*\.tar\.gz", text)
+
+
+def test_backups_in_the_same_second_do_not_collide(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    # The stubbed date pins both runs to the same second, so only the archive
+    # suffix can keep them apart.
+    env = _backup_env(source, tmp_path)
+
+    for _ in range(2):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    archives = sorted(destination.glob("arkham-backup-*.tar.gz"))
+    assert len(archives) == 2, [archive.name for archive in archives]
+    assert all("20260101-000000" in archive.name for archive in archives)
+    assert not list(destination.glob(".backup-work-*"))
+
+
+def test_backup_mirrors_off_host_and_prunes_both_directories(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    env = _backup_env(
+        source,
+        tmp_path,
+        ARKHAM_BACKUP_MIRROR=str(mirror),
+        ARKHAM_BACKUP_KEEP="2",
+    )
+
+    for _ in range(3):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    local = sorted(destination.glob("arkham-backup-*.tar.gz"))
+    mirrored = sorted(mirror.glob("arkham-backup-*.tar.gz"))
+    assert len(local) == 2, [archive.name for archive in local]
+    assert len(mirrored) == 2, [archive.name for archive in mirrored]
+    assert {archive.name for archive in local} == {archive.name for archive in mirrored}
+
+
+def test_backup_warns_when_no_mirror_is_configured(tmp_path):
+    source = _live_data(tmp_path)
+    env = _backup_env(source, tmp_path)
+    env.pop("ARKHAM_BACKUP_MIRROR", None)
+
+    result = _run_backup(tmp_path / "backups", env)
+
+    assert result.returncode == 0, result.stderr
+    assert "ARKHAM_BACKUP_MIRROR is unset" in result.stderr
+
+
+def test_backup_refuses_an_unmounted_mirror(tmp_path):
+    source = _live_data(tmp_path)
+    env = _backup_env(
+        source, tmp_path, ARKHAM_BACKUP_MIRROR=str(tmp_path / "not-mounted")
+    )
+
+    result = _run_backup(tmp_path / "backups", env)
+
+    assert result.returncode != 0
+    assert "not a directory" in result.stderr
+
+
+def test_backup_publishes_no_archive_when_the_mirror_copy_fails(tmp_path):
+    """A copy cut short must not land under the final name."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    mirror = tmp_path / "off-host"
+    mirror.mkdir()
+    env = _backup_env(
+        source,
+        tmp_path,
+        failing_cp_marker="off-host",
+        ARKHAM_BACKUP_MIRROR=str(mirror),
+    )
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode != 0
+    assert not list(mirror.glob("arkham-backup-*.tar.gz"))
+    assert not list(mirror.glob(".arkham-backup-copy-*"))
+    assert "failed to mirror" in result.stderr
+
+
+def test_backup_reserves_the_archive_name_apart_from_the_work_directory(tmp_path):
+    """The archive name must be reserved by mktemp, not built from the work dir.
+
+    The work directory's suffix is free for reuse once the directory is
+    removed, so a later run in the same second could take it and overwrite the
+    archive. The stub creates the path it returns and records its arguments, so
+    the test fails if the script stops asking mktemp for the archive name.
+    """
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    work = destination / ".backup-work-20260101-000000-WORKSU"
+    archive = destination / "arkham-backup-20260101-000000-ARCHSU.tar.gz"
+    env = _backup_env(source, tmp_path, mktemp_sequence=(str(work), str(archive)))
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode == 0, result.stderr
+    assert [path.name for path in destination.glob("arkham-backup-*.tar.gz")] == [
+        archive.name
+    ]
+    assert (tmp_path / "mktemp.args").read_text().splitlines() == [
+        f"-d {destination}/.backup-work-20260101-000000-XXXXXX",
+        f"--suffix=.tar.gz {destination}/arkham-backup-20260101-000000-XXXXXX",
+    ]
+    # The stub left an empty file at the reserved name; publication must have
+    # replaced it with the finished tarball.
+    with tarfile.open(archive) as tarball:
+        names = tarball.getnames()
+    assert "arkham.db" in names
+    assert any(name.startswith("photos/") for name in names)
+
+
+def test_backup_aborts_when_the_work_directory_cannot_be_created(tmp_path):
+    """An empty WORK would resolve $WORK/arkham.db at the filesystem root."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(source, tmp_path, failing_mktemp=True)
+
+    result = _run_backup(destination, env)
+
+    assert result.returncode != 0
+    assert "backup written:" not in result.stdout
+    assert not list(destination.glob("arkham-backup-*.tar.gz"))
+
+
+def test_backup_accepts_a_leading_zero_keep_count(tmp_path):
+    """`08` is decimal eight, not an octal arithmetic error."""
+
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(source, tmp_path, ARKHAM_BACKUP_KEEP="08")
+
+    for _ in range(3):
+        result = _run_backup(destination, env)
+        assert result.returncode == 0, result.stderr
+
+    assert len(list(destination.glob("arkham-backup-*.tar.gz"))) == 3
+
+
+def test_backup_fails_when_retention_cannot_delete_an_archive(tmp_path):
+    source = _live_data(tmp_path)
+    destination = tmp_path / "backups"
+    env = _backup_env(
+        source,
+        tmp_path,
+        failing_rm_marker="arkham-backup-",
+        ARKHAM_BACKUP_KEEP="1",
+    )
+
+    for _ in range(2):
+        result = _run_backup(destination, env)
+    assert result.returncode != 0
+    assert "simulated failure" in result.stderr
