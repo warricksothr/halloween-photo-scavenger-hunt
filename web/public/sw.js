@@ -51,21 +51,32 @@ self.addEventListener('fetch', (event) => {
 // the network is down. A navigation that misses falls back to the shell,
 // so a deep link (/j/<code>, /t/<token>) still opens offline.
 async function networkFirst(request) {
+  let resp;
   try {
-    const resp = await fetch(request);
-    if (resp.ok) {
-      const cache = await caches.open(SHELL_CACHE);
-      // Awaited: once this promise settles the browser may stop the
-      // worker, and a cache write left in flight would be lost.
-      await cache.put(request, resp.clone());
-    }
-    return resp;
+    resp = await fetch(request);
   } catch (err) {
-    let hit = await caches.match(request);
-    if (!hit && request.mode === 'navigate') {
-      hit = await caches.match('/index.html');
-    }
-    if (hit) return hit;
+    const cached = await cachedFallback(request);
+    if (cached) return cached;
     throw err;
   }
+
+  if (resp.ok) {
+    // Awaited so the write outlives the worker, but kept out of the
+    // fetch's error path: a failed write (quota, unacceptable response)
+    // must not cost the client the fresh copy it already has.
+    try {
+      const cache = await caches.open(SHELL_CACHE);
+      await cache.put(request, resp.clone());
+    } catch {
+      // Serve the network response anyway.
+    }
+  }
+  return resp;
+}
+
+async function cachedFallback(request) {
+  const hit = await caches.match(request);
+  if (hit) return hit;
+  if (request.mode === 'navigate') return caches.match('/index.html');
+  return undefined;
 }

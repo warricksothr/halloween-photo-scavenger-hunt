@@ -148,6 +148,17 @@ describe('service worker shell policy', () => {
     expect((await pending).body).toBe('new shell');
   });
 
+  it('keeps the fresh response when the cache write fails', async () => {
+    const worker = loadWorker();
+    worker.entries.set(`${ORIGIN}/index.html`, response('old shell'));
+    worker.fetch.mockResolvedValue(response('new shell'));
+    worker.cache.put.mockRejectedValue(new Error('quota exceeded'));
+
+    const resp = await worker.request('/index.html', 'navigate');
+
+    expect(resp.body).toBe('new shell');
+  });
+
   it('takes a fresh asset from the network even when one is cached', async () => {
     const worker = loadWorker();
     const asset = `${ORIGIN}/assets/config.js`;
