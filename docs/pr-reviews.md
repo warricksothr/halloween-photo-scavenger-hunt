@@ -21,8 +21,13 @@ An empty-JSON dispatch error may still mean the run was created; check the
 Actions UI before retrying. Reuse the request ID for recovery; change it for an
 intentional fresh review of the same revision.
 
-After the workflow lands on the default branch, the pilot comment allowlist
-initially admits `warricksothr` (the repository owner). Approved maintainers can
+Manual dispatch works from any branch, so a PR that adds this workflow can be
+reviewed from its own branch with `--ref <branch>`. The comment commands below
+only fire once the workflow is on the default branch, because the host registers
+`issue_comment` workflows from there; until then, dispatch manually.
+
+The pilot comment allowlist initially admits `warricksothr` (the repository
+owner). Approved maintainers can
 be added through a PR changing both allowlists in the workflow. Unlisted
 commenters are skipped before job setup and use unique per-run ignored groups;
 other authorized maintainers can use manual dispatch. The action still checks
@@ -74,8 +79,9 @@ The workflow fetches only reviewer commit
 code of this repository is executed with review credentials. Terva 0.137.0 Linux
 amd64 is checked against its pinned SHA-256. The checkout helper is pinned to
 mirror commit `d23441a48e516b6c34aea4fa41551a30e30af803` (v6.1.0). The runner
-requires Node >=24 and verifies it. System packages and image tags remain runner
-provisioning dependencies.
+requires Node >=24 and verifies it. The runner image is pinned by digest; its
+Alpine system packages remain runner provisioning dependencies, matching the
+upstream action example.
 
 `BOT_TOKEN` supplies private reviewer checkout and publication permissions;
 `CPA_API_KEY` supplies inference authentication. Only secret references belong
