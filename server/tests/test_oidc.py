@@ -6,6 +6,8 @@ a generated RSA key — so the suite exercises the real authlib and joserfc
 code paths without an Authentik instance (that end-to-end suite is S9CV).
 """
 
+import base64
+import json
 import logging
 import time
 from types import SimpleNamespace
@@ -175,6 +177,16 @@ def callback(client: TestClient, query: dict[str, list[str]], code: str = "auth-
         f"/api/auth/oidc/callback?code={code}&state={query['state'][0]}",
         follow_redirects=False,
     )
+
+
+def _txn(secret: bytes, data: dict[str, object]) -> str:
+    """A transaction cookie with an arbitrary payload, signed like the real one."""
+    payload = (
+        base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode())
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+    return f"{payload}.{oidc._sign(secret, payload)}"
 
 
 def signed_in(client: TestClient, stub: StubIdp, groups: list[str]):
@@ -724,7 +736,32 @@ def test_transaction_decoder_rejects_malformed_values():
     assert oidc._decode_txn(secret, "payload.badsignature") is None
     bad = "!!!!"
     assert oidc._decode_txn(secret, f"{bad}.{oidc._sign(secret, bad)}") is None
-    assert oidc._decode_txn(secret, oidc._encode_txn(secret, {"a": 1})) == {"a": 1}
+    # A signed payload that is not an object is not usable either.
+    assert oidc._decode_txn(secret, _txn(secret, [1, 2])) is None
+    # A signed payload without an issued-at is not usable either.
+    assert oidc._decode_txn(secret, _txn(secret, {"a": 1})) is None
+    decoded = oidc._decode_txn(secret, oidc._encode_txn(secret, {"a": 1}))
+    assert decoded is not None and decoded["a"] == 1
+    assert isinstance(decoded["iat"], int)
+
+
+def test_expired_transaction_cookie_is_rejected(oidc_client, stub):
+    secret = oidc_client.app.state.csrf_secret
+    stale = _txn(
+        secret,
+        {
+            "state": "s",
+            "nonce": "n",
+            "verifier": "v",
+            "iat": int(time.time()) - oidc.TXN_MAX_AGE_SECONDS - 1,
+        },
+    )
+    oidc_client.cookies.set(oidc.TXN_COOKIE_NAME, stale)
+    response = oidc_client.get(
+        "/api/auth/oidc/callback?code=c&state=s", follow_redirects=False
+    )
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_state"
 
 
 def test_transaction_cookie_is_secure_when_configured():

@@ -463,7 +463,7 @@ def _sign(secret: bytes, payload: str) -> str:
 
 def _encode_txn(secret: bytes, data: dict[str, Any]) -> str:
     payload = base64.urlsafe_b64encode(
-        json.dumps(data, separators=(",", ":")).encode()
+        json.dumps({**data, "iat": int(time.time())}, separators=(",", ":")).encode()
     ).rstrip(b"=")
     text = payload.decode("ascii")
     return f"{text}.{_sign(secret, text)}"
@@ -481,7 +481,14 @@ def _decode_txn(secret: bytes, value: str | None) -> dict[str, Any] | None:
         data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
     except (ValueError, UnicodeDecodeError):
         return None
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    # Max-Age is the browser's promise, not ours: a copied cookie must not
+    # stay usable, so the age is signed into the payload and checked here.
+    issued_at = data.get("iat")
+    if not isinstance(issued_at, int) or time.time() - issued_at > TXN_MAX_AGE_SECONDS:
+        return None
+    return data
 
 
 def _txn_cookie_header(request: Request, value: str) -> str:
