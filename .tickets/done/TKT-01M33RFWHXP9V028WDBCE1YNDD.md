@@ -18,7 +18,7 @@ origin: null
 dependencies: []
 blocks_on: none
 references:
-  - ref: TKT-01M33S2WP0F879M8AKQXVS7HRZ
+  - ref: ticket:TKT-01M33S2WP0F879M8AKQXVS7HRZ
     path: .tickets/draft/TKT-01M33S2WP0F879M8AKQXVS7HRZ.md
 claim: null
 archive: null
@@ -99,7 +99,7 @@ Published on PR #6, run `cd11cbba-aaf2-4f3e-bdeb-a6f7aefbbf9b`, Actions run #99 
   Accepted. This note, the plan, the reference, and the claim land on the branch
   in the same PR.
 
-### Acceptance criteria
+**Criteria status**
 
 - AC1 satisfied: garbage-after-magic and truncated bytes now answer 415
   `not_an_image`; bomb headers answer 413 `too_large`. Status codes follow

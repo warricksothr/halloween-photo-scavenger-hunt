@@ -42,7 +42,7 @@ The inappropriate-verdict handler (mod.py) is the only verdict route without hol
 
 ## Implementation plan
 
-### Implementation plan
+**Plan**
 
 The race: `inappropriate` reads `derive_restriction(conn, player_id)` before
 `locked_transaction` and, unlike the game-verdict route, carries no
