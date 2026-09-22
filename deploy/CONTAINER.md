@@ -96,6 +96,12 @@ The three environment variables, and why:
 on phones on the same network), publish on all interfaces and give the
 room the host's LAN address: `-p 8080:8000`.
 
+There is no reverse proxy on this path, so uvicorn sees each player's
+real address directly and the rate limiter (`app/ratelimit.py`, ADR
+0015) keys on it with no extra flags. The nginx path is the one that
+needs `X-Forwarded-For` plus `--proxy-headers` (`deploy/nginx.conf`,
+`deploy/arkham-hunt.service`).
+
 ## 3. Prove it works (30 seconds)
 
 ```sh

@@ -39,6 +39,20 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — Public surface hardened: CSRF, body cap, rate limits.**
+  TKT-01M33RFWJ. `app/csrf.py` adds a signed double-submit CSRF token
+  (`arkham_csrf` cookie echoed in `X-CSRF-Token`; 403 `csrf_failed`), and
+  the SPA (`web/src/api.js`) attaches it and replays once after a
+  `csrf_failed`. `app/limits.py` is an outermost pure-ASGI body cap
+  (16 MiB = `images.MAX_BYTES` + 1 MiB, matching nginx's
+  `client_max_body_size`) that answers 413 before any route runs.
+  `app/ratelimit.py` is an in-memory sliding window on the four
+  guess-taking routes (player join, invite redeem, mod join, admin
+  login): per-source + per-target caps, failures counted only, 429 with
+  `Retry-After`. nginx now sends `X-Forwarded-For` and uvicorn runs with
+  `--proxy-headers --forwarded-allow-ips=127.0.0.1` so the limiter sees
+  the real client; the container path needs neither (no proxy). ADR 0015.
+  217 server tests + 40 web tests pass; coverage 94%+.
 - **2026-09-22 — Backup path fixed and made survivable.**
   `deploy/backup.sh` restores into `<repo-root>/data`, matching RUNBOOK §1 and
   the directory the app actually reads. Backups copy to an optional
