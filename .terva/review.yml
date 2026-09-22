@@ -1,0 +1,14 @@
+# Review configuration for the Terva code review action. The action reads this
+# file, and every file it names, at the base commit of the PR under review,
+# never at the PR head, so a PR that edits it is reviewed under the old one
+# until it merges. See docs/pr-reviews.md and the action's running-reviews doc.
+#
+# Each key is one of the action's override inputs. Leave a key out to keep the
+# action's shipped default; a workflow input that is set wins over the entry
+# here.
+
+# The things every review of this repository checks, one question per line.
+checklist: .terva/checklist.md
+
+# What a review of this repository must not flag, and why.
+conventions: .terva/conventions.md
