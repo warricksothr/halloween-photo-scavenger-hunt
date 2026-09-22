@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T22:57:08Z
+updated_at: 2026-09-22T23:07:56Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -52,30 +52,47 @@ An unhandled exception surfaces only as a bare 500; nothing ties it to a request
 
 ### Approach
 
-Keep the handler where it already is: `create_app` registers
-`_internal_error` for `Exception`, and `ServerErrorMiddleware` calls it
-outside the request-log middleware. Change it to build a JSON body and log
-one correlated traceback.
+Keep the handler where it already is: `create_app` registers `_internal_error`
+for `Exception`, and `ServerErrorMiddleware` calls it outside the request-log
+middleware. Change it to build a JSON body and log one correlated traceback.
 
-- `server/app/logging.py` gains `log_unhandled_exception(exc)`: one ERROR
-  line on the `arkham` logger with `event="unhandled_exception"`,
-  `request_id` and `path` read from the existing contextvars, and
-  `exc_info=exc` so the JSON formatter emits `exc_info`. It reads no
-  headers, cookies, or body and never touches the query string.
-- `server/app/main.py`: `_internal_error` calls the helper, then returns
-  `JSONResponse` with `{"error": "internal_error", "message": "Something
-  went wrong."}` plus `request_id` when known, keeping the `X-Request-ID`
-  header. Drop `PlainTextResponse` if it becomes unused.
-- Tests in `server/tests/test_logging.py`: the body is JSON and carries the
-  same id as the header; exactly one `unhandled_exception` record exists per
-  failure with `request_id`, `method`, and the redacted `path`; a
-  `Cookie`/`Authorization` header and a body secret sent with the failing
-  request never appear in the rendered record, while the exception's own
-  message does.
-- `docs/progress.md`: add the increment note.
+- `server/app/logging.py` gains `log_unhandled_exception(exc, ...,
+  request_secrets=())`: it formats the traceback with
+  `traceback.format_exception` and scrubs each request secret with
+  `<redacted>`, longest first, then logs one ERROR line with
+  `event="unhandled_exception"`, `exception_type`, the scrubbed `traceback`,
+  `request_id`, `method`, and the redacted `path`. It does not pass `exc_info`,
+  so no unscrubbed message can be emitted. `bearer_secrets(path)` and
+  `_request_secrets(scope)` collect the path credential, the query values, and
+  the `Authorization` and `Cookie` values; the body is never read.
+- `RequestLogMiddleware` puts the id, the redacted path, and the request's
+  secrets on the scope for the handler, which runs after the middleware's
+  contextvars are reset.
+- `server/app/main.py`: `_internal_error` passes those through, then returns
+  `JSONResponse` with `{"error": "internal_error", "message": "Something went
+  wrong."}` plus `request_id` when known, keeping the `X-Request-ID` header.
+- Tests in `server/tests/test_logging.py`: the failing route raises with the
+  path token and the `Authorization` value in its message; the body is JSON and
+  carries the same id as the header; exactly one `unhandled_exception` record
+  exists with the scrubbed fields; the token, the `Authorization` value, and the
+  body secret are absent while the exception type and message are present. Unit
+  tests cover `bearer_secrets`, `_request_secrets`, and the longest-first scrub.
+- ADR 0016 records the traceback scrub and its body caveat. `docs/progress.md`
+  carries the increment note.
 
 ## Notes
 
 **agent:opencode/t3code-0691bbb1** at 2026-09-22T22:57:08Z
 
 Opened PR #19 (branch t3code/unhandled-exception-handler, head c828e786af8978f749954b30a2cee297582d56e0, base 794e300ea673ca01c905ba02abde408613aa4eb1) and requested a Terva review: request-id ready-review, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/263. bash scripts/check-server.sh green: 313 tests, coverage 95.34%, Ruff clean.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:07:56Z
+
+Terva review of head 45cebe45 (run #266, request ready-review) published one finding.
+
+### high: exception messages can carry secrets
+Accepted. `exc_info=exc` rendered the exception's message verbatim, and the test raised a constant `kaboom`, so a credential the app was handed could reach the log through a `raise`. Fixed by rendering the traceback in `log_unhandled_exception` and replacing the request's own secrets — the bearer path segment, the query values, the `Authorization` value, and each cookie value — with `<redacted>`, longest first. `exc_info` is no longer passed, so no unscrubbed message can be emitted. The test route now raises with the path token and the `Authorization` value in its message and asserts both are gone from the rendered record.
+
+Boundary, recorded in ADR 0016: the body is still never read, so a value that lived only in the body and then in a `raise` message would not be scrubbed. That is a constraint on app code, not a channel this handler created — it reads nothing the module did not already handle. Values shorter than `_MIN_SECRET` (6) are left alone, because replacing a short string verbatim would mangle ordinary words.
+
+Evidence: head 4ac8e01, `bash scripts/check-server.sh` green — 323 tests, coverage 95.36%, Ruff clean. Re-review requested after the push.
