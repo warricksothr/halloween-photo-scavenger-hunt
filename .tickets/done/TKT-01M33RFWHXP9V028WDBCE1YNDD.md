@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWHXP9V028WDBCE1YNDD
 title: Reject malformed and oversized images with 400, not 500
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -20,17 +20,10 @@ blocks_on: none
 references:
   - ref: TKT-01M33S2WP0F879M8AKQXVS7HRZ
     path: .tickets/draft/TKT-01M33S2WP0F879M8AKQXVS7HRZ.md
-claim:
-  actor: agent:opencode/review-system-design
-  branch: t3code/image-validation-errors
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-e28f1e35
-  commit: 8047061eae36a3f2ceb95022b2654905bda4db4f
-  session: null
-  claimed_at: 2026-09-22T14:42:25Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T14:56:22Z
+updated_at: 2026-09-22T15:01:50Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -141,3 +134,27 @@ comments 9514 and 9518 plus hand-written records 9515 and 9519, because
 
 Gate on head `620fada`: `bash scripts/check-server.sh` — 150 passed, 94.80%
 coverage, Ruff clean. PR #6 open, awaiting merge authorization.
+
+## Summary
+
+Landed on main as PR #6, merge commit `12b30bbd13581cc440fdff3afd7193b9411997c0` (branch deleted).
+
+`server/app/images.py` now translates Pillow's decode failures into the module's
+two errors around the decode only: `UnidentifiedImageError` and a truncated
+file's `OSError` become `NotAnImageError` (415 `not_an_image`);
+`DecompressionBombError`, and the `DecompressionBombWarning` that
+warnings-as-errors promotes, become `TooManyPixelsError` (413 `too_large`).
+Anything after decode — EXIF, hashing, resize, encode — propagates unchanged as
+a server fault. Six tests in `server/tests/test_evidence.py`, all failing on
+pre-fix `images.py`.
+
+Three Terva rounds: 136 (1 medium, 2 low — all accepted and fixed), 137 (1 low —
+fixed; 136's three confirmed resolved), clean on `620fada` (run `da12dc83`,
+Actions #107, clean-status comment 9520). Gate: 150 passed, 94.80% coverage,
+Ruff clean.
+
+Acceptance criteria: AC1 ticked. AC2 ticked for the test half only; the counting
+half is deferred to TKT-01M33S2WP0F879M8AKQXVS7HRZ (observability epic, draft),
+which this ticket references — no metrics or log seam exists to count into yet.
+Status codes follow `docs/impl/api.md` (413/415), not the title's literal "400",
+as agreed before merge.
