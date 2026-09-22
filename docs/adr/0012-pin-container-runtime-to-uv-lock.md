@@ -22,7 +22,10 @@ uv export --project server --locked --no-dev --no-emit-project
 
 The image installs it with `pip install --no-cache-dir --require-hashes -r
 ./server/requirements.lock`, which pins every artifact by sha256, and does not
-install the project as a distribution. Instead `ENV PYTHONPATH=/srv/arkham/server`
+install the project as a distribution. Both base images (`node:20-alpine` for
+the web build, `python:3.12-slim` for the runtime) are pinned by their
+multi-arch index digest for the same reason: a republished tag must not change
+the toolchain or OS packages under a fixed source revision. Instead `ENV PYTHONPATH=/srv/arkham/server`
 puts `app` on the import path from the source tree, which preserves the
 `__file__`-relative data/static paths (see the layout note in the Containerfile).
 A test regenerates the export and fails CI when the committed file drifts.

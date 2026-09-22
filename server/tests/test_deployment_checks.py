@@ -98,6 +98,15 @@ def test_containerfile_installs_the_hash_pinned_lock():
     assert "pip install --no-cache-dir -e" not in containerfile
 
 
+def test_containerfile_base_images_are_digest_pinned():
+    images = re.findall(
+        r"^FROM\s+(\S+)(?:\s+AS\s+\S+)?", CONTAINERFILE.read_text(), re.MULTILINE
+    )
+    assert images, "Containerfile has no FROM lines"
+    for image in images:
+        assert "@sha256:" in image, f"base image is a mutable tag: {image}"
+
+
 def test_nginx_upload_limit_sits_above_the_app_cap():
     match = re.search(r"client_max_body_size\s+(\d+)m;", NGINX_CONF.read_text())
     assert match, "nginx.conf has no client_max_body_size"

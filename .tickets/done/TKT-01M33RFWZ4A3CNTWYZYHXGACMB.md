@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T15:44:35Z
+updated_at: 2026-09-22T15:47:11Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -88,6 +88,16 @@ Ticket TKT-01M33RFWJ (CSRF) is not touched.
   `/api/health`.
 - `bash scripts/check-quality.sh` passes (157 server tests, 94.80% coverage,
   ruff clean).
+
+**agent:opencode/harden-runtime-security** at 2026-09-22T15:47:11Z
+
+### Review round 1
+
+PR #8, head `e33b1f0`, base `8a0d600` (`main`). Requested a Terva review with
+`request-id=ready-review`; the dispatch returned the documented empty-JSON
+error but created
+[Actions run #8588](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/8588)
+(id 21891), running at the time of writing. Outcome recorded in a later note.
 
 ## Summary
 

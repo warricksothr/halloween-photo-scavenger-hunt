@@ -13,7 +13,11 @@
 # cover to persist the night's state (DB + photos).
 
 # ── Stage 1: frontend build ──
-FROM node:20-alpine AS web
+# Base images are pinned by digest (the multi-arch index), so a tag
+# republish cannot swap the Node toolchain or the Python runtime under
+# the same source revision. Bump the digest deliberately when upgrading;
+# `podman images --digests` after a pull prints the index digest.
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS web
 WORKDIR /build/web
 # Lockfile first so dependency layers cache across source-only changes.
 COPY web/package.json web/package-lock.json ./
@@ -22,7 +26,7 @@ COPY web/ ./
 RUN npm run build
 
 # ── Stage 2: runtime ──
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9 AS runtime
 WORKDIR /srv/arkham
 COPY server/ ./server/
 # Runtime deps come from the hash-pinned export of uv.lock, so the image
