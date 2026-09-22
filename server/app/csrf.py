@@ -55,7 +55,13 @@ def valid_token(secret: bytes, token: str | None) -> bool:
     nonce, sep, signature = token.partition(".")
     if not sep or not nonce:
         return False
-    return hmac.compare_digest(signature, _signature(secret, nonce))
+    try:
+        expected = _signature(secret, nonce)
+    except UnicodeEncodeError:
+        # The cookie value is attacker-controlled; a non-ASCII nonce is
+        # malformed, not a server error (403, not 500).
+        return False
+    return hmac.compare_digest(signature, expected)
 
 
 def verify(request: Request) -> bool:
@@ -63,7 +69,11 @@ def verify(request: Request) -> bool:
     signed. Either half alone proves nothing."""
     cookie = request.cookies.get(CSRF_COOKIE_NAME)
     header = request.headers.get(CSRF_HEADER_NAME)
-    if not cookie or not header or not hmac.compare_digest(cookie, header):
+    if not cookie or not header:
+        return False
+    # Compare as bytes: compare_digest rejects non-ASCII str, and the
+    # cookie is attacker-controlled, so it can hold anything.
+    if not hmac.compare_digest(cookie.encode("utf-8"), header.encode("utf-8")):
         return False
     return valid_token(request.app.state.csrf_secret, cookie)
 

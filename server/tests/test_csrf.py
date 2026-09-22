@@ -36,6 +36,8 @@ def test_valid_token_rejects_malformed_and_accepts_issued():
     assert not csrf.valid_token(secret, "no-dot")
     assert not csrf.valid_token(secret, ".only-signature")
     assert not csrf.valid_token(secret, "nonce.")
+    # A non-ASCII nonce is attacker-controlled and must not raise.
+    assert not csrf.valid_token(secret, "caf\u00e9.signature")
     assert csrf.valid_token(secret, csrf.issue_token(secret))
 
 
@@ -185,4 +187,28 @@ def test_safe_methods_reach_the_route(client):
 def test_unsafe_method_without_a_token_short_circuits(client):
     reached, sent = _run_middleware(client, "POST")
     assert reached == [], "the route ran despite a missing token"
+    assert sent[0]["status"] == 403
+
+
+def test_a_non_ascii_cookie_is_replaced_on_a_safe_get(client):
+    # A malformed non-ASCII nonce must not raise out of signature
+    # validation: the safe GET still succeeds and re-plants a good cookie.
+    reached, sent = _run_middleware(
+        client, "GET", headers=[(b"cookie", b"arkham_csrf=caf\xe9.sig")]
+    )
+
+    assert reached == ["GET"]
+    assert sent[0]["status"] == 200
+    assert any(name == b"set-cookie" for name, _ in sent[0]["headers"])
+
+
+def test_a_non_ascii_cookie_pair_is_a_403_not_a_500(client):
+    malformed = b"arkham_csrf=caf\xe9.sig"
+    reached, sent = _run_middleware(
+        client,
+        "POST",
+        headers=[(b"cookie", malformed), (b"x-csrf-token", b"caf\xe9.sig")],
+    )
+
+    assert reached == []
     assert sent[0]["status"] == 403
