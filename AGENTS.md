@@ -2,8 +2,14 @@
 
 ## Project state
 
-Design phase complete; **no code exists yet**. The full specification lives
-in `docs/` — read it before writing any code:
+The game is built and runnable. `docs/progress.md` records phases 1–3
+complete: the MVP (events and admin, player join and sessions, evidence
+pipeline, submissions, moderation queue and verdicts, conduct system,
+leaderboard and round end, deployment and ops) plus the stretch goal (team
+invites, roster, multi-member drawers, moderator team management).
+`server/` is the FastAPI + SQLite backend and `web/` the Preact + Vite PWA;
+build and run commands are under [Gotchas](#gotchas). `docs/` stays the
+specification of record — read it before changing behavior:
 
 - `docs/design.md` — the specification of record: game loop, verdict
   states, moderation, conduct/strike system, trust & abuse, data model
