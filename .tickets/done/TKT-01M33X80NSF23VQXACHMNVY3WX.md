@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33X80NSF23VQXACHMNVY3WX
 title: Isolate reads from another request's uncommitted transaction
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/read-isolation
-  branch: t3code/read-isolation
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
-  commit: 74250922b185ddf33c9371dacd69770ef1d7cf0c
-  session: null
-  claimed_at: 2026-09-22T16:26:14Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:44:31Z
+updated_at: 2026-09-22T17:45:22Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -284,3 +277,13 @@ No findings. The review notes that `docs/design.md` was not supplied, so conform
 - `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
 
 Reviewed head: `9032752`.
+
+## Summary
+
+X80 landed as PR #9 (merge commit `67fc38e`), closing the dirty-read defect.
+
+The fix gives reads their own SQLite connection (`app.state.read_db`) so WAL snapshot isolation applies, and moves every read-then-write decision onto the writer transaction. ADR 0013 records the model and the two rejected directions. The review found seven rounds of findings — all the same class (a reader read gating a writer) — and each was fixed with an interleaving regression test that fails on the old code: session revocation, riddle creation vs purge, upload vs a committed strike, join vs purge, revoke vs redemption, the rename no-op, and a test-quality finding on the last one.
+
+- Clean review: Terva round 7 on head `9032752` (request `ready-review-7`, Actions run #143), no findings.
+- Gate: `bash scripts/check-quality.sh` exit 0; `pytest server -q` → 172 passed; `check-server.sh` → 93.87% coverage, ruff clean.
+- All four acceptance criteria met.
