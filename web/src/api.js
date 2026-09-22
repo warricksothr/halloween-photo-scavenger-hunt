@@ -35,18 +35,25 @@ async function request(path, options = {}) {
       return { unauthenticated: true };
     }
     // The fetch promise settles on the headers, so the body read has to stay
-    // inside this block to remain under the timeout. A body that is not JSON
-    // is a failed request, not a network error — unless the timeout aborted
-    // the read, which belongs in the catch below.
+    // inside this block to remain under the timeout. A body read can fail
+    // three ways, and they are not the same: the timeout aborted it, the
+    // connection dropped mid-stream, or the body was not JSON. Only the last
+    // is a request failure; the first two are network errors, and a body that
+    // failed to parse must not be handed back as a successful empty object.
     let body = {};
+    let bodyMalformed = false;
     try {
       body = await resp.json();
     } catch (err) {
       if (controller.signal.aborted) throw err;
-      body = {};
+      if (resp.ok && !(err instanceof SyntaxError)) throw err;
+      bodyMalformed = true;
     }
     if (!resp.ok) {
       return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status };
+    }
+    if (bodyMalformed) {
+      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status };
     }
     return body;
   } catch {

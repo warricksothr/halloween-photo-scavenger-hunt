@@ -110,4 +110,18 @@ describe('api client', () => {
     });
     vi.useRealTimers();
   });
+
+  it('classifies a dropped response body as a network error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: () => Promise.reject(new TypeError('terminated')),
+    });
+
+    await expect(api.snapshot()).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+  });
 });
