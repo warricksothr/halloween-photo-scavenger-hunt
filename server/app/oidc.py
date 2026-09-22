@@ -207,7 +207,16 @@ class OidcProvider:
         async with self._http() as client:
             response = await client.get(url)
         response.raise_for_status()
-        document = response.json()
+        try:
+            document = response.json()
+        except (ValueError, TypeError) as exc:
+            raise OidcFlowError(
+                "oidc_bad_metadata", "The identity provider published invalid metadata."
+            ) from exc
+        if not isinstance(document, dict):
+            raise OidcFlowError(
+                "oidc_bad_metadata", "The identity provider published invalid metadata."
+            )
         discovered = document.get("issuer")
         # The document names the issuer that signed the tokens; trusting the
         # configured string instead would reject every login when the two
@@ -589,12 +598,12 @@ async def callback(
                 "oidc_bad_token", "The identity provider returned no identity token."
             )
         claims = await provider.claims_from(id_token, nonce=nonce)
-    except OAuthError as exc:
-        # A 4xx from the token endpoint (invalid_grant, a reused code) is a
-        # rejected sign-in, not a provider outage.
+    except OAuthError:
+        # The error field is provider-controlled and may carry a code or
+        # token; log a fixed reason rather than echoing it.
         logger.warning(
             "oidc token exchange rejected",
-            extra={"event": "oidc.token_rejected", "reason": exc.error},
+            extra={"event": "oidc.token_rejected", "reason": "oauth_error"},
         )
         return _failure(401, "oidc_bad_token", "The sign-in could not be completed.")
     except OidcFlowError as exc:

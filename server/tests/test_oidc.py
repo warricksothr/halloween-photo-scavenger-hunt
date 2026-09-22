@@ -60,6 +60,7 @@ class StubIdp:
         # Failure knobs: None means the healthy default.
         self.discovery_status = 200
         self.discovery_payload: dict[str, object] | None = None
+        self.discovery_raw: str | None = None
         self.jwks_payload: dict[str, object] | None = None
         self.token_status = 200
         self.token_error = "server_error"
@@ -103,6 +104,12 @@ class StubIdp:
         if path.endswith("/.well-known/openid-configuration"):
             if self.discovery_status != 200:
                 return httpx2.Response(self.discovery_status, json={})
+            if self.discovery_raw is not None:
+                return httpx2.Response(
+                    200,
+                    content=self.discovery_raw,
+                    headers={"content-type": "application/json"},
+                )
             return httpx2.Response(200, json=self.discovery())
         if path == urlparse(JWKS_URI).path:
             body = (
@@ -350,6 +357,14 @@ def test_discovery_issuer_mismatch_is_rejected(oidc_client, stub):
     assert response.status_code == 502
 
 
+@pytest.mark.parametrize("body", ["{not json", "[1, 2]"])
+def test_malformed_discovery_metadata_is_502(oidc_client, stub, body):
+    stub.discovery_raw = body
+    response = oidc_client.get("/api/auth/oidc/login", follow_redirects=False)
+    assert response.status_code == 502
+    assert response.json()["error"] == "oidc_unavailable"
+
+
 def test_provider_outage_starting_login_is_502(oidc_client, stub):
     stub.discovery_status = 500
     response = oidc_client.get("/api/auth/oidc/login", follow_redirects=False)
@@ -537,6 +552,22 @@ def test_tokens_codes_and_secret_never_reach_logs_or_audit(oidc_client, stub, ca
     assert response.headers["location"] == "/admin"
     conn = oidc_client.app.state.db
     assert conn.execute("SELECT COUNT(*) FROM audit_event").fetchone()[0] == 0
+
+
+def test_provider_oauth_error_text_never_reaches_logs(oidc_client, stub, caplog):
+    with caplog.at_level(logging.INFO, logger="arkham"):
+        _, query = start_login(oidc_client)
+        stub.nonce = query["nonce"][0]
+        stub.token_status = 400
+        stub.token_error = "SECRET-AUTH-CODE"
+        response = callback(oidc_client, query, code="SECRET-AUTH-CODE")
+    assert response.status_code == 401
+    logged = " ".join(
+        f"{record.getMessage()} {record.__dict__}" for record in caplog.records
+    )
+    # The provider controls the error field, so it must not be echoed.
+    assert "SECRET-AUTH-CODE" not in logged
+    assert "oauth_error" in logged
 
 
 def test_app_starts_and_password_login_works_with_oidc_unset(monkeypatch, tmp_path):
