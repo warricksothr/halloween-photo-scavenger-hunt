@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx2
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
@@ -30,6 +31,7 @@ from app import (
     leaderboard,
     limits,
     mod,
+    oidc,
     players,
     ratelimit,
     sse,
@@ -54,6 +56,8 @@ def create_app(
     cookie_secure: bool = True,
     photos_dir: Path | None = None,
     static_dir: Path | str | None = DEFAULT_STATIC_DIR,
+    oidc_config: oidc.OidcConfig | None = None,
+    oidc_transport: httpx2.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     """Build the app around one database and one admin credential pair.
 
@@ -62,6 +66,11 @@ def create_app(
     if neither the argument nor the env vars provide it, the app refuses
     to start — silently running with no admin path is how a party app
     ends up unopenable on the night.
+
+    ``oidc_config`` is the SSO issuer/client; unlike the admin credential
+    it is optional. Unset (and unset in the env) means the SSO routes
+    answer 503 and the password login is the only way in — the app must
+    start either way.
     """
     if admin_config is None:
         username = os.environ.get("ARKHAM_ADMIN_USERNAME")
@@ -93,6 +102,11 @@ def create_app(
     if photos_dir is None:
         photos_dir = Path(db_path).parent / "photos"
 
+    # SSO is optional, so an unset config is the normal local case rather
+    # than the startup error a missing admin credential is.
+    if oidc_config is None:
+        oidc_config = oidc.OidcConfig.from_env()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Iterator[None]:
         conn = db_module.connect(db_path)
@@ -110,6 +124,14 @@ def create_app(
         app.state.admin_config = admin_config
         app.state.admin_sessions = set()  # in-memory; auth.py explains why
         app.state.cookie_secure = cookie_secure
+        # SSO: the provider caches discovery and JWKS; identities are the
+        # in-memory counterpart of admin_sessions (app/oidc.py).
+        app.state.oidc = (
+            oidc.OidcProvider(oidc_config, transport=oidc_transport)
+            if oidc_config is not None
+            else None
+        )
+        app.state.oidc_identities = {}
         # CSRF signing key. Minted per process; a restart invalidates
         # outstanding tokens, which the SPA re-earns on its next safe
         # request. ARKHAM_CSRF_SECRET pins it for a multi-worker run
@@ -164,6 +186,7 @@ def create_app(
     app.add_middleware(limits.BodyLimitMiddleware)
     app.add_middleware(RequestLogMiddleware)
     app.include_router(events.router)
+    app.include_router(oidc.router)
     app.include_router(players.router)
     app.include_router(state.router)
     app.include_router(evidence.router)
