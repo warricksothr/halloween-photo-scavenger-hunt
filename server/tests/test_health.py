@@ -1,6 +1,7 @@
 """Health endpoint: the smoke test that the app booted, migrated, and
 can answer a query — the first thing the pre-party runbook checks."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -19,32 +20,17 @@ def test_health(tmp_path):
     assert body["schema_version"] == 1
 
 
-def test_memory_database_is_shared_with_the_reader(tmp_path):
-    """A plain ``:memory:`` is private per connection, so the reader must
-    reach the migrated in-memory database rather than a fresh empty one
-    (ADR 0013). Both connections share a named shared-cache URI; without
-    it every reader-backed endpoint fails with ``no such table``."""
+def test_memory_database_is_rejected(tmp_path):
+    """In-memory SQLite cannot enter WAL, so a second connection would
+    fall back to shared-cache table locks and a reader could fail with
+    ``SQLITE_LOCKED`` instead of reading a snapshot. The app refuses it
+    loudly rather than running without the isolation it promises
+    (ADR 0013)."""
     app = create_app(
         ":memory:",
         admin_config=("admin", hash_password("pw")),
-        cookie_secure=False,
         photos_dir=tmp_path / "photos",
         static_dir=None,
     )
-    with TestClient(app) as client:
-        health = client.get("/api/health")
-        assert health.status_code == 200, health.text
-        assert health.json()["schema_version"] == 1
-
-        # Past health, exercise a reader-backed endpoint: login and the
-        # event create write on the writer, then the list reads on the
-        # reader and must see the row.
-        login = client.post(
-            "/api/admin/login", json={"username": "admin", "password": "pw"}
-        )
-        assert login.status_code == 200, login.text
-        created = client.post("/api/admin/events", json={"name": "Memory Party"})
-        assert created.status_code == 201, created.text
-        listed = client.get("/api/admin/events")
-        assert listed.status_code == 200, listed.text
-        assert [event["name"] for event in listed.json()] == ["Memory Party"]
+    with pytest.raises(ValueError, match="In-memory SQLite"), TestClient(app):
+        pass
