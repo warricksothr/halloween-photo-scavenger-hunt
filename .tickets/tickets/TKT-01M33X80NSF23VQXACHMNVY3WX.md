@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33X80NSF23VQXACHMNVY3WX
 title: Isolate reads from another request's uncommitted transaction
 type: bug
-status: ready
+status: in-progress
 status_reason: null
 priority: high
 due_on: null
@@ -17,15 +17,22 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:opencode/read-isolation
+  branch: t3code/read-isolation
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-9799aac5
+  commit: 74250922b185ddf33c9371dacd69770ef1d7cf0c
+  session: null
+  claimed_at: 2026-09-22T16:26:14Z
+  expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T15:14:02Z
+updated_at: 2026-09-22T16:36:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:claude-code/groom-ticket-store
+  id: agent:opencode/read-isolation
   name: ""
 extensions: {}
 ---
@@ -72,6 +79,36 @@ isolation alone.
       on the shared connection and asserts the read does not see it.
 - [ ] An ADR records the chosen connection/read-isolation model.
 - [ ] The server suite and the 90% coverage gate still pass.
+
+## Implementation plan
+
+Choose direction 1: a dedicated reader connection (ADR 0013). Direction 2
+builds on `hold_request_lock`, whose sync-generator enter/exit FastAPI runs on
+different threadpool threads — a latent RLock-release landmine (50/50 measured);
+direction 3 fails AC1.
+
+### Steps
+
+1. ADR `docs/adr/0013-read-isolation-via-a-reader-connection.md`.
+2. `db.py`: add `reader(request)` returning `app.state.read_db`; `locked_transaction`
+   keeps yielding the writer (`app.state.db`).
+3. `main.py`: open `app.state.read_db` in the lifespan after migrations, close it on
+   shutdown; health reads through `db.reader`.
+4. Route every SELECT that runs outside a locked write transaction through
+   `db.reader(request)`, and bind every write block as
+   `with locked_transaction(request) as conn:`. Files: `state.py`, `leaderboard.py`,
+   `events.py`, `mod.py`, `evidence.py`, `teams.py`, `players.py`, `submissions.py`,
+   `auth.py` (the throttled `last_seen_at` writes move to the transaction's writer).
+5. Tests: an AC2 regression test that parks a submission INSERT between its write and
+   its audit row, then runs an unlocked read on a fresh session and asserts it does
+   not see the row; plus a guard test that no `app/` module except `db.py`/`main.py`
+   names `state.db`/`state.read_db` directly.
+6. `bash scripts/check-quality.sh`; commit, push, PR, Terva review.
+
+### Notes
+
+The reader must never be written through; the guard test is the structural check.
+Reads inside a write transaction stay on that transaction's connection.
 
 ## Notes
 

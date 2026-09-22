@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import shutil
 import sqlite3
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -308,6 +310,99 @@ def test_auth_read_cannot_commit_another_requests_mutation(
         ).fetchone()[0]
         == 1
     )
+
+
+def test_unlocked_read_does_not_see_another_requests_uncommitted_write(
+    admin, client, monkeypatch
+):
+    """An unlocked read runs on its own connection, so it cannot observe a
+    peer's open transaction (ADR 0013).
+
+    The mutation parks between its INSERT and its log_action. A queue read
+    on a fresh moderator session — whose last_seen_at is too recent for the
+    throttled write, so the read stays genuinely unlocked — must complete
+    while the write is still open and must not contain the parked
+    submission. On the shared connection it would both complete and see the
+    uncommitted row (the dirty read this ticket reproduced)."""
+    party = mod_party(admin, client)
+    moderator = _mod(client, party["mod_code"])
+
+    mutation_written = threading.Event()
+    release = threading.Event()
+    real_log_action = submissions.log_action
+
+    def blocking_log_action(*args, **kwargs):
+        mutation_written.set()
+        assert release.wait(timeout=5), "mutation was never released"
+        return real_log_action(*args, **kwargs)
+
+    monkeypatch.setattr(submissions, "log_action", blocking_log_action)
+
+    async def interleave():
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(client.cookies),
+            ) as mutator_api,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(moderator.cookies),
+            ) as reader_api,
+        ):
+            mutation = asyncio.create_task(
+                mutator_api.post(
+                    "/api/submissions",
+                    json={
+                        "riddle_id": party["riddle_ids"][0],
+                        "evidence_item_id": party["evidence_id"],
+                    },
+                )
+            )
+            assert await asyncio.to_thread(mutation_written.wait, 5)
+
+            # Unlocked read: /api/mod/queue is not behind
+            # hold_request_lock, so it must not park on the writer.
+            queue_response = await asyncio.wait_for(
+                reader_api.get("/api/mod/queue"), timeout=5
+            )
+            mid_flight = queue_response.json()
+
+            release.set()
+            mutation_response = await mutation
+            after = (await reader_api.get("/api/mod/queue")).json()
+            return mutation_response, mid_flight, after
+
+    try:
+        mutation_response, mid_flight, after = asyncio.run(interleave())
+    finally:
+        moderator.close()
+
+    assert mutation_response.status_code == 201, mutation_response.text
+    assert mid_flight == [], "the read saw the peer's uncommitted submission"
+    assert [item["id"] for item in after] == [mutation_response.json()["id"]]
+
+
+def test_only_db_and_main_touch_the_connections_directly():
+    """Handlers read through ``db.reader`` and write through
+    ``db.locked_transaction``; naming ``app.state.db`` or
+    ``app.state.read_db`` in a handler bypasses that rule (ADR 0013)."""
+    app_dir = Path(db_module.__file__).parent
+    direct = re.compile(r"state\.(?:read_db|db)\b(?!_)")
+    offenders = {
+        path.name: [
+            line_number
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            )
+            if direct.search(line)
+        ]
+        for path in sorted(app_dir.glob("*.py"))
+        if path.name not in {"db.py", "main.py"}
+    }
+    assert {name: hits for name, hits in offenders.items() if hits} == {}
 
 
 def test_event_close_and_verdict_leave_one_terminal_submission(admin, client):
