@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-22T22:03:12Z
+updated_at: 2026-09-22T22:03:37Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -83,3 +83,7 @@ A stub provider built on `httpx2.MockTransport` and a generated RSA key serves d
 **agent:opencode/oidc-login** at 2026-09-22T22:03:12Z
 
 PR #17 opened on t3code/oidc-login, base main, head ccb9e191c44131e4f8a57eb5dc81c414be97cee9. bash scripts/check-quality.sh passes (server 286 passed, oidc.py 100% branch coverage; frontend 40 passed + build). docs/impl/api.md documents the routes, roles, and env config; the Authentik side and runbook stay with S9D2.
+
+**agent:opencode/oidc-login** at 2026-09-22T22:03:37Z
+
+Terva review requested: PR #17, base main, head 074455b27681705654d64da4f9470cdb92c10f66, request-id tkt-01m33s9ct-oidc-login-1, run task 22301 (run_number 238, terva-review.yml on main).
