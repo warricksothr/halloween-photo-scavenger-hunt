@@ -319,7 +319,10 @@ class InappropriateBody(BaseModel):
     cooldown_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 
-@router.post("/queue/{submission_id}/inappropriate")
+@router.post(
+    "/queue/{submission_id}/inappropriate",
+    dependencies=[Depends(hold_request_lock)],
+)
 def inappropriate(
     submission_id: str,
     body: InappropriateBody,
@@ -333,7 +336,13 @@ def inappropriate(
 
     The strike level is derived the same way as everything else in the
     conduct system (ADR 0001): count the player's non-reversed strikes
-    and add one, capped at 3. No stored state to keep in sync."""
+    and add one, capped at 3. No stored state to keep in sync.
+
+    The derivation runs inside the transaction, under the request lock
+    the whole handler holds. Two moderators flagging two of the same
+    player's photos would otherwise both read the same level and write
+    the same rung — the conditional UPDATE is per-submission, so it
+    cannot catch that, and the ladder would skip."""
     conn: sqlite3.Connection = request.app.state.db
     sub = conn.execute(
         "SELECT s.id, s.status, s.team_id, s.riddle_id, s.submitted_by,"
@@ -346,15 +355,15 @@ def inappropriate(
         return _err(404, "not_found", "No such submission.")
 
     player_id = sub["submitted_by"]
-    level = min(derive_restriction(conn, player_id).level + 1, 3)
-    cooldown_until = None
-    if level == 2:
-        minutes = body.cooldown_minutes or DEFAULT_COOLDOWN_MINUTES
-        cooldown_until = int(time.time()) + minutes * 60
-
     strike_id = ids.new_id()
     now = int(time.time())
     with locked_transaction(request):
+        level = min(derive_restriction(conn, player_id).level + 1, 3)
+        cooldown_until = None
+        if level == 2:
+            minutes = body.cooldown_minutes or DEFAULT_COOLDOWN_MINUTES
+            cooldown_until = now + minutes * 60
+
         cur = conn.execute(
             "UPDATE submission SET status = 'inappropriate'"
             " WHERE id = ? AND status = 'pending'",

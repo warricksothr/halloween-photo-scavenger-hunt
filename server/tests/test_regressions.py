@@ -6,6 +6,7 @@ import asyncio
 import shutil
 import sqlite3
 import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +17,7 @@ from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
 from app import db as db_module
-from app import submissions
+from app import mod, submissions
 from app.main import create_app
 from app.sse import SseBroker, _stream
 
@@ -75,6 +76,136 @@ def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
         ).fetchone()[0]
         == 1
     )
+
+
+class _ObservedLock:
+    """The app's reentrant lock, reporting how many threads are parked on
+    it. A test can then tell "the lock serialized my peer" from "my peer
+    never showed up" — the difference between a real race and a
+    rendezvous that quietly timed out."""
+
+    def __init__(self, lock):
+        self._lock = lock
+        self._local = threading.local()
+        self._guard = threading.Lock()
+        self.waiting = 0
+
+    def __enter__(self):
+        depth = getattr(self._local, "depth", 0)
+        if depth == 0:
+            with self._guard:
+                self.waiting += 1
+        try:
+            self._lock.acquire()
+        finally:
+            if depth == 0:
+                with self._guard:
+                    self.waiting -= 1
+        self._local.depth = depth + 1
+        return self
+
+    def __exit__(self, *exc):
+        self._local.depth -= 1
+        return self._lock.release()
+
+
+def test_concurrent_inappropriate_verdicts_advance_one_rung_each(
+    admin, client, monkeypatch
+):
+    """Two moderators flagging two of one player's photos take the next
+    rung each, not the same one.
+
+    The handler derives the strike level before its transaction, and the
+    conditional UPDATE is per-submission — so without the request lock
+    both moderators read the same strike count and both insert the same
+    level, skipping a rung of the ladder. The barrier makes both
+    derivations land before either write, which is the interleaving the
+    lock rules out.
+
+    The lock serializes the two requests, so the peer can never reach the
+    barrier. That is the expected outcome, but a peer that simply never
+    arrived would look the same, so the timeout path confirms the peer is
+    parked on the request lock before proceeding: a rendezvous that never
+    happened fails the test instead of passing it.
+    """
+    party = mod_party(admin, client, riddles=("R1", "R2"))
+    second_evidence = client.post(
+        "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+    ).json()["id"]
+    first = _submit(client, party["riddle_ids"][0], party["evidence_id"])
+    second = _submit(client, party["riddle_ids"][1], second_evidence)
+
+    mod_a = _mod(client, party["mod_code"])
+    mod_b = _mod(client, party["mod_code"])
+
+    observed_lock = _ObservedLock(client.app.state.db_lock)
+    monkeypatch.setattr(client.app.state, "db_lock", observed_lock)
+
+    real_derive = mod.derive_restriction
+    arrived = threading.Barrier(2, timeout=1)
+    serialized = threading.Event()
+
+    def blocking_derive(conn, player_id):
+        if not serialized.is_set():
+            try:
+                arrived.wait()
+            except threading.BrokenBarrierError:
+                deadline = time.monotonic() + 5
+                while observed_lock.waiting == 0 and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                assert observed_lock.waiting >= 1, (
+                    "the peer neither reached the barrier nor parked on the"
+                    " request lock: the race was not exercised"
+                )
+                serialized.set()
+        return real_derive(conn, player_id)
+
+    monkeypatch.setattr(mod, "derive_restriction", blocking_derive)
+
+    async def race():
+        start_barrier = asyncio.Barrier(2)
+        transport = ASGITransport(app=client.app)
+        async with (
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(mod_a.cookies),
+            ) as mod_a_api,
+            AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                cookies=dict(mod_b.cookies),
+            ) as mod_b_api,
+        ):
+
+            async def flag(api, submission_id):
+                await start_barrier.wait()
+                return await api.post(
+                    f"/api/mod/queue/{submission_id}/inappropriate",
+                    json={"note": ""},
+                )
+
+            return await asyncio.gather(
+                flag(mod_a_api, first["id"]), flag(mod_b_api, second["id"])
+            )
+
+    try:
+        responses = asyncio.run(race())
+    finally:
+        mod_a.close()
+        mod_b.close()
+
+    assert [response.status_code for response in responses] == [200, 200]
+
+    conn = client.app.state.db
+    levels = [
+        row["level"]
+        for row in conn.execute(
+            "SELECT level FROM strike WHERE player_id = ? ORDER BY level",
+            (party["player_id"],),
+        ).fetchall()
+    ]
+    assert levels == [1, 2], "the ladder skipped a rung under concurrency"
 
 
 def test_auth_read_cannot_commit_another_requests_mutation(
