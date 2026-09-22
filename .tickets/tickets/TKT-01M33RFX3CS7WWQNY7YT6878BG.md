@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:51Z
-updated_at: 2026-09-22T20:30:17Z
+updated_at: 2026-09-22T20:34:47Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -171,3 +171,49 @@ The prior finding is resolved. One new high finding, accepted and fixed here.
 
 Both SHAs come from the local Forgejo mirror's tag API
 (`/api/v1/repos/Actions-Mirrors/<action>/tags`), not from a third party.
+
+## Summary
+
+### Where it landed
+
+Branch `t3code/agents-md-state`, PR #14
+(https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/14),
+base `d73ff1f30132775b0e380875006378fad3694b48`, head
+`163eef988cc6dc8621a25468d1d9c87433b6648f`. Not merged; awaiting authorization.
+
+- `fc6c14d` rewrote the "Project state" section of `AGENTS.md` to describe the
+  built app instead of "no code exists yet".
+- `0fffd4f` added "Install git ticket" and "Check the ticket store"
+  (`git ticket check --fix --dry-run --strict`) to
+  `.forgejo/workflows/quality.yml`, and renamed two colliding
+  `### Acceptance criteria` sub-headings in done tickets so the strict check
+  passes.
+- `315495c` installed the main package from `cmd/git-ticket`, not the module
+  root, which has nothing to build.
+- `908b254` pinned that install to the commit the Go module proxy resolved for
+  v0.23.0, `fd32d73b1301f562215f66d567bfbe5670e1bf12`.
+- `163eef9` pinned both workflow actions to full commit SHAs.
+
+All three acceptance criteria are ticked: the project state is accurate, the
+store check runs in CI, and the store passes it (verified locally and inside
+the `golang:1.25-alpine` container: "No problems found.", exit 0).
+
+### Reviews
+
+| Round | Request id | Run | Head | Outcome |
+| --- | --- | --- | --- | --- |
+| 1 | `agents-md-state-v1` | 8826 (#204), review 165 | `315495c` | high: pin the git-ticket download |
+| 2 | `agents-md-state-v2` | 8832 (#206), review 168 | `908b254` | finding-1 resolved; high: pin the checkout action |
+| 3 | `agents-md-state-v3` | 8834 (#208), clean comment 9859 | `163eef9` | clean |
+
+Both findings were accepted and fixed; the clean review records head
+`163eef988cc6dc8621a25468d1d9c87433b6648f` at base `d73ff1f3`.
+
+### Known red CI, filed separately
+
+The Quality workflow on this PR (and on `main`) is red for a reason that
+predates the branch: `deploy/backup.sh:103` calls `mktemp --suffix`, which
+BusyBox rejects, failing 8 deploy tests. Filed as
+TKT-01M35C6QJ1AF1QW1FE30Q63TT4 (Fix GNU-only mktemp --suffix in
+deploy/backup.sh breaking CI) with the reproduction. The new ticket-store
+steps themselves pass; they run before the failing command.
