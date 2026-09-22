@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T21:24:37Z
+updated_at: 2026-09-22T21:30:13Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -128,3 +128,7 @@ Review request: PR #16 (https://git.local.sothr.com/warricksothr/arkham-hallowee
 **agent:opencode/request-id-logging** at 2026-09-22T21:24:37Z
 
 Terva review id 171 (run 6415ed85, actions run #225/id 8862) at head c0ebe4b: finding-1, high, accepted. The end-anchored \_CODE\_ROUTES regexes logged the credential verbatim for a trailing slash or unexpected suffix (/api/join/SECRET/, /api/mod/join/SECRET/extra, /api/team/invites/TOKEN/redeem/). Fixed by matching code-carrying prefixes and redacting the first segment after the prefix while keeping any suffix; added parametrized trailing-slash/unexpected-suffix cases and a middleware-level test that posts /api/join/SECRETJOIN42/ and asserts the secret is absent. check-server.sh: 254 passed, 94.32% coverage, Ruff clean.
+
+**agent:opencode/request-id-logging** at 2026-09-22T21:30:13Z
+
+Terva review id 172 (run 12969b50, actions run #228/id 8868) at head ff345bc: finding-1 of review 171 resolved; new finding-1, medium, accepted. ServerErrorMiddleware builds an unhandled exception's 500 outside RequestLogMiddleware, so its send wrapper never ran and X-Request-ID was missing. Fixed: the middleware writes the id onto scope['state'], and create_app registers an Exception handler that sets the header on the 500. Added a failing-first test with a raising route and raise_server_exceptions=False asserting the 500 line and the echoed header. check-quality.sh: exit 0 (255 passed, 94.30% coverage).

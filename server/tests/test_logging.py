@@ -7,8 +7,11 @@ import logging
 import re
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app import logging as app_logging
+from app.main import create_app
+from app.security import hash_password
 
 
 def _rendered(caplog) -> str:
@@ -105,6 +108,33 @@ def test_trailing_slash_join_code_never_reaches_the_logs(client, caplog):
     text = _rendered(caplog)
     assert "SECRETJOIN42" not in text
     assert f"/api/join/{app_logging.REDACTED}" in text
+
+
+def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
+    """ServerErrorMiddleware builds the 500 outside this middleware, so the
+    id has to reach the response through the app's exception handler."""
+    app = create_app(
+        tmp_path / "boom.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/boom")
+    def boom():
+        raise RuntimeError("kaboom")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        caplog.clear()
+        resp = c.get("/api/boom")
+
+    assert resp.status_code == 500
+    assert resp.headers.get(app_logging.REQUEST_ID_HEADER)
+    line = _request_lines(caplog)[-1]
+    assert line.status == 500
+    assert line.request_id == resp.headers[app_logging.REQUEST_ID_HEADER]
 
 
 def test_query_string_is_redacted(client, caplog):

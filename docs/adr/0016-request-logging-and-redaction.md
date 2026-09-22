@@ -26,13 +26,22 @@ added last, outermost, so it also sees the requests the body cap and the CSRF
 gate reject and its duration covers the whole request. It emits exactly one
 JSON line in `finally` with `request_id`, `method`, `path`, `status` and
 `duration_ms`. A request that raises logs status 500 and the exception is
-re-raised; a later increment adds the exception handler on top.
+re-raised; the id still reaches the 500 (see the exception-handler decision
+below).
 
 **The request id is a contextvar, not `request.state`.** Middleware wraps the
 app, and the exception handler runs in the same task, so a contextvar reaches
 code that never sees the `Request`. An inbound `X-Request-ID` is honoured only
 when it matches `[A-Za-z0-9._-]{1,64}`; anything else is replaced with a fresh
 `secrets.token_hex(8)`. The id is echoed on the response as `X-Request-ID`.
+
+**An unhandled 500 gets the id through the app's exception handler.**
+`ServerErrorMiddleware` wraps this app's middleware stack, so the 500 it builds
+for an unhandled exception never passes the log middleware's `send` wrapper.
+The middleware also writes the id onto the scope, and `create_app` registers an
+`Exception` handler that reads it and sets the header on that 500. The id is
+therefore on every response, handled or not, and the request line is still
+logged with status 500 by the middleware's `finally`.
 
 **Bearer segments are redacted by route, not by a generic rule.** A rule that
 redacted every path segment would destroy the operator's ability to read the

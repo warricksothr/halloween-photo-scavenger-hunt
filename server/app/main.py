@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from app import (
     csrf,
@@ -38,7 +38,7 @@ from app import (
     teams,
 )
 from app import db as db_module
-from app.logging import RequestLogMiddleware, configure_logging
+from app.logging import REQUEST_ID_HEADER, RequestLogMiddleware, configure_logging
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -141,6 +141,20 @@ def create_app(
     configure_logging()
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
+
+    # An unhandled exception is turned into a 500 by ServerErrorMiddleware,
+    # which wraps this app's middleware stack — so that response never
+    # passes the request log's ``send`` wrapper and would lose the request
+    # id. The log middleware puts the id on the scope for this handler.
+    def _internal_error(request: Request, exc: Exception) -> PlainTextResponse:
+        response = PlainTextResponse("Internal Server Error", status_code=500)
+        request_id = getattr(request.state, "request_id", None)
+        if request_id:
+            response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+
+    app.add_exception_handler(Exception, _internal_error)
+
     # Middleware is added inner-to-outer: the last one added wraps the
     # rest. The body cap goes on first so an oversized request is refused
     # before CSRF or any route touches it; CSRF sits just inside it. The

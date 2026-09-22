@@ -220,6 +220,11 @@ class RequestLogMiddleware:
         started = time.perf_counter()
         status = 500
 
+        # ServerErrorMiddleware builds an unhandled exception's 500 outside
+        # this middleware, so that response misses the ``sending`` wrapper
+        # below. The id rides the scope for the app's exception handler.
+        scope.setdefault("state", {})["request_id"] = request_id
+
         id_token = _request_id.set(request_id)
         path_token = _redacted_path.set(path)
 
