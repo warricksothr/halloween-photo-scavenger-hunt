@@ -86,4 +86,28 @@ describe('api client', () => {
     });
     vi.useRealTimers();
   });
+
+  it('aborts a response body that never settles', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch.mockImplementation((_url, opts) =>
+      Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      }),
+    );
+
+    const pending = api.snapshot();
+    await vi.advanceTimersByTimeAsync(8000);
+
+    await expect(pending).resolves.toEqual({
+      error: 'network_error',
+      message: 'Could not reach the server. Check your connection.',
+      network: true,
+    });
+    vi.useRealTimers();
+  });
 });
