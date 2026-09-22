@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T06:35:55Z
-updated_at: 2026-09-22T17:27:15Z
+updated_at: 2026-09-22T17:33:19Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -218,3 +218,29 @@ Already safe and left as they are: `events.reverse_strike` (conditional UPDATE w
 - `bash scripts/check-server.sh` → 93.76% coverage, ruff clean.
 
 Fix head: `4a91d37`.
+
+**agent:opencode/read-isolation** at 2026-09-22T17:33:19Z
+
+### Terva review round 5 — review 149 on `15947a27`
+
+Request `ready-review-5`; run `42dbe286-24c5-4309-8aad-3a46332417ea`; Actions run #137 (id 8682); model `gpt-5.6-sol` (thinking low); review hash `3a7ef5a19609202415ceb4e051765dc19bc9a7c797629047f0ba25417fe39824`.
+
+All three round-4 findings are resolved:
+
+- `finding-1` (upload vs a committed strike) — the restriction is re-derived and the riddle and rate-limit checks repeated on the writer before the INSERT; interleaving regression test.
+- `finding-2` (join vs a purge) — both joins re-read and validate the event inside the writer transaction; purge-vs-join tests for both.
+- `finding-3` (revoke vs a redemption) — the revocation is a conditional writer UPDATE checked by `rowcount`; concurrent-redemption test.
+
+One new finding, the same class again:
+
+- medium `server/app/teams.py:128` — `rename_team` still compared the requested name against the reader snapshot and returned before acquiring the writer lock. A concurrent rename committing a different name made the endpoint answer 200 without applying anything, leaving the other name persisted.
+
+Accepted and fixed at `e0af3a9`: the reader fast path is gone, and the current name is read inside the writer transaction, where it decides both the no-op and the audit's `old_name`. The new interleaving test (the reader names the requested value while another rename commits a different one; the request must still apply its name) fails on the old code.
+
+### Evidence
+
+- `server/.venv/bin/python -m pytest server -q` → 172 passed.
+- `bash scripts/check-quality.sh` → exit 0.
+- `bash scripts/check-server.sh` → 93.87% coverage, ruff clean.
+
+Fix head: `e0af3a9`.
