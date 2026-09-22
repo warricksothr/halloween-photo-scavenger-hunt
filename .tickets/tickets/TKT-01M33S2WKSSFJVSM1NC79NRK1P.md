@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:39:55Z
+updated_at: 2026-09-22T23:46:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -253,3 +253,39 @@ the raw body, both asserting the encoded and decoded forms are absent.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 331
 tests, coverage 95.50%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-22T23:46:08Z
+
+Supersedes the note at head 6c3a34e5.
+
+### high (review 198, run #291, request raw-encoded-fix)
+Terva resolved the percent-encoding finding (`finding-1` resolved: the raw query
+and form text ride beside the decoded values and integration tests cover both).
+The same review opened a high.
+
+**high: non-string JSON values were not in the scrub set.** `_strings_in`
+collects strings, string keys, lists, and tuples only, so a body such as
+`{"recovery_code": 12345678}` yielded no candidate. A route formatting the value
+with an f-string logs the number, while the body parses and `safe_traceback`
+stays false.
+
+Accepted, as the fail-closed option the review offered. A number, boolean, or
+null formats to text the string set cannot hold, and deciding per-value how much
+redaction is too much is exactly the kind of cleverness that leaks later; the
+message drops instead. `_unrepresentable` walks the decoded JSON and reports
+whether any scalar is not a string; `_body_secrets` returns `None` for such a
+body, so the middleware drops the message the same way it does for a body that
+does not parse. The message still survives for a body of strings and containers
+thereof, which is the normal API shape.
+
+The JSON-key test's body changed from `{"topsecretkey": None}` to a string
+value, because the null is now an unrepresentable body; it still proves the key
+is scrubbed and the message kept.
+
+Tests: `test_body_secrets_skips_binary_and_malformed_bodies` asserts `None` for
+a top-level number and for a nested boolean;
+`test_a_numeric_json_value_drops_the_exception_message` raises with the number
+and asserts `message_included is False` with the digits absent.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 332
+tests, coverage 95.49%, Ruff clean (45 files formatted). Re-review requested.
