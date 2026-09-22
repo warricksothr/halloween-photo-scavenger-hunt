@@ -21,7 +21,7 @@ jobs:
         run: apk add --no-cache bash ca-certificates git nodejs npm python3 uv
 
       - name: Check out repository
-        uses: Actions-Mirrors/forgejo-actions-checkout@v6
+        uses: Actions-Mirrors/forgejo-actions-checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       # AGENTS.md says CI verifies the ticket store. The main package lives
       # under cmd/, so the module path alone has nothing to build. Pin the
@@ -42,7 +42,7 @@ jobs:
       # docs/impl/testing.md for their commands and artifact locations.
       - name: Upload failure diagnostics
         if: ${{ failure() }}
-        uses: Actions-Mirrors/forgejo-upload-artifact@v4
+        uses: Actions-Mirrors/forgejo-upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
         with:
           name: quality-diagnostics
           if-no-files-found: ignore

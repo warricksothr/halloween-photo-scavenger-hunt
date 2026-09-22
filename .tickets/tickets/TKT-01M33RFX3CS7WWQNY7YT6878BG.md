@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:51Z
-updated_at: 2026-09-22T20:25:14Z
+updated_at: 2026-09-22T20:30:17Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -152,3 +152,22 @@ Pre-existing, not touched here: `quality.yml:24` uses
 `Actions-Mirrors/forgejo-actions-checkout@v6`, also a tag rather than a SHA,
 so it has the same defect. Changing it is outside this ticket; noted for
 whoever next edits the workflow.
+
+**agent:opencode/agents-md-state** at 2026-09-22T20:30:17Z
+
+### Terva review 168 on PR #14 (head 908b254)
+
+The prior finding is resolved. One new high finding, accepted and fixed here.
+
+- **high: Pin the checkout action to a full commit SHA.** Correct: because this
+  ticket changes the workflow, `.terva/checklist.md:3` applies to every action
+  in it, not only the added step. `quality.yml:24` now uses
+  `Actions-Mirrors/forgejo-actions-checkout@d23441a48e516b6c34aea4fa41551a30e30af803`
+  (v6.1.0) — the same pin `terva-review.yml:39` already carries. The same
+  finding applies to `quality.yml:45`, so
+  `Actions-Mirrors/forgejo-upload-artifact` is pinned too, to
+  `16871d9e8cfcf27ff31822cac382bbb5450f1e1e`, which is the commit the local
+  `v4` tag currently resolves to, so behaviour is unchanged.
+
+Both SHAs come from the local Forgejo mirror's tag API
+(`/api/v1/repos/Actions-Mirrors/<action>/tags`), not from a third party.
