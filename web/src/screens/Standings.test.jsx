@@ -76,3 +76,25 @@ describe('closed standings', () => {
     expect(await screen.findByText('EMPTY_BOARD')).toBeTruthy();
   });
 });
+
+describe('live standings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('exposes the board as a list of rows', () => {
+    const snapshot = {
+      event: { status: 'open' },
+      leaderboard: [
+        { team_id: 't1', team: 'Batman', rank: 1, score: 2, you: true },
+        { team_id: 't2', team: 'Robin', rank: 2, score: 1, you: false },
+      ],
+    };
+
+    render(<StandingsScreen snapshot={snapshot} copy={copy} />);
+
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Batman');
+  });
+});

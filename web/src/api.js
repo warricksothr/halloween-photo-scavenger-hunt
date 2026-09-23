@@ -50,7 +50,7 @@ async function send(path, options = {}) {
   // The id of THIS response, carried on the result so a caller reports
   // under its own request. There is no shared global to overwrite, so
   // concurrent requests cannot cross-tag.
-  let responseId = null;
+  let responseId;
   try {
     const resp = await fetch(path, {
       headers,

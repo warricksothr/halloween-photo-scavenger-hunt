@@ -59,7 +59,7 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     ).toBeVisible();
     await expect(player.getByText('Batman', { exact: true }).first()).toBeVisible();
 
-    await player.locator('.tile[title="Find the thing"]').click();
+    await player.getByRole('button', { name: 'Open riddle: Find the thing' }).click();
     await expect(
       player.getByRole('heading', { name: 'Find the thing' }),
     ).toBeVisible();
@@ -71,19 +71,21 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     await expect(
       player.getByRole('heading', { name: 'Evidence Drawer' }),
     ).toBeVisible();
-    await player.locator('input[type="file"]').setInputFiles({
+    await player.getByLabel('Add a photo').setInputFiles({
       name: 'synthetic-evidence.png',
       mimeType: 'image/png',
       buffer: PHOTO,
     });
-    await expect(player.locator('main img')).toHaveCount(1);
+    await expect(
+      player.getByRole('img', { name: 'Your evidence photo' }),
+    ).toHaveCount(1);
 
     await player.getByRole('link', { name: 'Riddles' }).click();
-    await player.locator('.tile[title="Find the thing"]').click();
+    await player.getByRole('button', { name: 'Open riddle: Find the thing' }).click();
     await expect(
       player.getByRole('button', { name: 'Submit to the Batcomputer' }),
     ).toBeVisible();
-    await player.locator('main .tile-grid .tile').first().click();
+    await player.getByRole('button', { name: /^Evidence photo/ }).first().click();
     await player.getByRole('button', { name: 'Submit to the Batcomputer' }).click();
     await expect(player.getByText('SCANNING…')).toBeVisible();
 
@@ -112,7 +114,7 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     await expect(
       player.getByRole('heading', { name: 'Standings' }),
     ).toBeVisible();
-    const standingsRow = player.locator('.panel .list-row').first();
+    const standingsRow = player.getByRole('listitem').first();
     await expect(standingsRow).toContainText('Batman');
     await expect(standingsRow).toContainText('1');
   } finally {

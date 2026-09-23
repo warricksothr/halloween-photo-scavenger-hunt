@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../api', () => ({ api: mocks.api }));
 vi.mock('../store', () => ({ refresh: mocks.refresh }));
 
+import { DrawerScreen } from './Drawer';
 import { RiddleDetailScreen } from './RiddleDetail';
 import { RiddleListScreen } from './RiddleList';
 import { StrikeNoticeScreen } from './StrikeNotice';
@@ -26,6 +27,15 @@ const copy = {
     pending: { headline: 'SCANNING', subtext: 'Checking the evidence.' },
   },
   screens: {
+    drawer: {
+      headline: 'Evidence Drawer',
+      capture: 'Take a Photo',
+      addLabel: 'Add a photo',
+      photoAlt: 'Your evidence photo',
+      uploading: 'Uploading',
+      loading: 'Loading drawer',
+      empty: 'Drawer empty',
+    },
     detail: {
       alreadyScanning: 'Already scanning.',
       back: 'Back',
@@ -238,6 +248,17 @@ describe('keyboard and screen-reader access', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Riddle solved: Find the signal' })).toBeTruthy();
+  });
+
+  it("names the drawer's file input and thumbnails for assistive tech", async () => {
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
+    ]);
+    render(<DrawerScreen snapshot={snapshot()} copy={copy} />);
+
+    expect(screen.getByLabelText('Add a photo')).toBeTruthy();
+    const photo = await screen.findByRole('img', { name: 'Your evidence photo' });
+    expect(photo.getAttribute('src')).toBe('/api/evidence/ev-1/photo');
   });
 
   it('marks the selected evidence and enables submission', async () => {
