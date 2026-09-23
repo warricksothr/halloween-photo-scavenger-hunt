@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:59:25Z
+updated_at: 2026-09-23T00:05:09Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -285,3 +285,26 @@ Tests: `test_secrets_in_a_set_never_serialize` puts `{DSN, "public-key"}` under
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 328
 tests, coverage 95.23%, Ruff clean (47 files formatted); `bash
 scripts/check-quality.sh` also green. Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T00:05:09Z
+
+Supersedes the note at head 60f728c5.
+
+### medium (review 203, run #301, request set-scrub-fix)
+Terva resolved the set finding (`finding-1` resolved: sets and frozensets
+normalize to scrubbed lists, with a test). The same review opened a medium.
+
+**medium: a malformed URL made the scrubber raise.** `_scrub_url` called
+`urlsplit` unguarded. `urlsplit("https://[")` raises `ValueError: Invalid IPv6
+URL`, and this runs inside `before_send` and `before_breadcrumb`, where a raise
+loses the whole event. The DSN path already guards the same parser; the event
+path did not.
+
+Accepted. `_scrub_url` catches `ValueError` and returns `REDACTED` for the whole
+value: an unparsable URL cannot be shown to hold no credential, so keeping the
+route is not worth the risk. `test_a_malformed_url_is_replaced_not_raised_on`
+drives `https://[` through `scrub_event` (a request URL and an embedded
+breadcrumb's `data`) and `scrub_breadcrumb`.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 329
+tests, coverage 95.23%, Ruff clean. Re-review requested.
