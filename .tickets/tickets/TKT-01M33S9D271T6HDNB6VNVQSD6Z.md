@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T19:55:57Z
+updated_at: 2026-09-23T19:58:33Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -73,3 +73,9 @@ halves wait for the host; the doc/plumbing halves land now and are left with a n
 what remains. Do not tick AC1 until the host evidence exists.
 
 Follow the deploy-doc convention: RUNBOOK carries only commands actually run and verified.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T19:58:33Z
+
+PR #41 opened at head 8581b41a772dc3e9030605a533c180d2848a4ce3; dispatching a Terva review. Docs/plumbing half done in-tree: RUNBOOK §6, ARKHAM_OIDC_* in the service unit and CONTAINER.md, docs/impl/api.md pointer. AC1 and the host half of AC2 wait for the real Authentik instance (same visit as TKT-01M24GAP8F).
