@@ -77,17 +77,41 @@ export function StandingsScreen({ snapshot, copy }) {
   const c = copy.screens.standings;
   const closed = snapshot.event.status === 'closed';
   const [recap, setRecap] = useState(null); // null = loading (closed only)
+  const [error, setError] = useState(null);
+  const [attempt, setAttempt] = useState(0);
 
+  // Closed only: fetch the final report. A failed fetch has to land in an
+  // error state the player can retry — swallowing it left the loading line
+  // up forever (TKT-01M33RFWXA9R29N0YQXBYM43Y1). The cleanup flag drops a
+  // late result from a superseded attempt.
   useEffect(() => {
-    if (closed) {
-      api.recap().then((result) => {
-        if (!result.error) setRecap(result);
-      });
-    }
-  }, [closed]);
+    if (!closed) return undefined;
+    let stale = false;
+    setRecap(null);
+    setError(null);
+    api.recap().then((result) => {
+      if (stale) return;
+      if (result?.error || result?.unauthenticated) {
+        setError(result.message ?? c.error);
+        return;
+      }
+      setRecap(result);
+    });
+    return () => { stale = true; };
+  }, [closed, attempt]);
 
   // Closed: final standings + the night's timeline from /api/recap.
   if (closed) {
+    if (error) {
+      return (
+        <main style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p class="dim">{error}</p>
+          <button class="btn secondary" onClick={() => setAttempt((n) => n + 1)}>
+            {c.retry}
+          </button>
+        </main>
+      );
+    }
     if (recap === null) {
       return (
         <main style={{ flex: 1, padding: 16 }}>
@@ -95,7 +119,9 @@ export function StandingsScreen({ snapshot, copy }) {
         </main>
       );
     }
-    const winner = recap.standings[0];
+    const standings = recap.standings ?? [];
+    const timeline = recap.timeline ?? [];
+    const winner = standings[0];
     return (
       <main style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div class="verdict-banner sev-green">
@@ -110,13 +136,17 @@ export function StandingsScreen({ snapshot, copy }) {
           </div>
         </div>
 
-        <StandingsList standings={recap.standings} you={c.you} />
+        {standings.length > 0 ? (
+          <StandingsList standings={standings} you={c.you} />
+        ) : (
+          <p class="dim">{c.empty}</p>
+        )}
 
         <h2 class="headline headline-rule" style={{ fontSize: '0.85rem' }}>
           {c.recapHeadline}
         </h2>
         <div class="panel" style={{ padding: '4px 16px' }}>
-          {recap.timeline.map((entry, i) => (
+          {timeline.map((entry, i) => (
             <div key={i} class="list-row" style={{ fontSize: '0.85rem' }}>
               <span class="dim" style={{ fontFamily: 'var(--font-num)', width: 44 }}>
                 {hhmm(entry.at)}

@@ -104,6 +104,14 @@ strike interstitial, and the drawer restricted variant.
   render before an event theme exists (the boot screen) read the default
   pack's copy through `defaultCopy()` rather than a string baked into the
   shell; every other game-facing string lives in the pack's `copy.js`.
+- **Standings fail visibly** — the closed recap fetch renders a themed
+  error line with a Retry button instead of leaving the loading line up
+  forever, and a final board with no rows shows the empty state
+  (`web/src/screens/Standings.jsx`).
+- **Conduct inputs live in the console** — the moderator sets the strike
+  note and the strike-2 cooldown window (default 15 min) in the conduct
+  section before arming the action; an out-of-range cooldown is rejected
+  client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
 - **The lobby screen exists** — joining before the round opens needs a

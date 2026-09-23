@@ -46,6 +46,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — Standings stop spinning and the console sets conduct inputs.**
+  TKT-01M33RFWXA9R29N0YQXBYM43Y1. The closed-standings recap fetch swallowed
+  failures, so a dropped connection left "Compiling the night's intel…" up
+  forever; it now renders a themed error line with a Retry button, treats a
+  final board with no rows as the empty state, and guards a missing timeline.
+  In the moderator console the INAPPROPRIATE action hardcoded an empty note
+  and the default cooldown; the conduct section now takes a note (280 chars)
+  and a strike-2 cooldown window (1–1440 min, default 15), rejects an
+  out-of-range value before firing, and resets both when the open item
+  changes. New `web/src/screens/Standings.test.jsx` and
+  `web/src/screens/ModConsole.test.jsx`; web suite 133 tests.
 - **2026-09-23 — The theme pack is swappable again.** TKT-01M33RFWWFJJJ7JP9JE7ZRE54K.
   Two leaks kept the Arkham pack from being a skin over a neutral core.
   First, `web/src/theme.js` relied on Vite's CSS-import side effect, so a
