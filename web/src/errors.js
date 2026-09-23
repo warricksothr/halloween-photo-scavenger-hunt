@@ -189,7 +189,17 @@ export function scrubEvent(event) {
     };
   }
   const tags = { ...(cleaned.tags || {}) };
-  if (lastRequestId) tags.request_id = tags.request_id || lastRequestId;
+  // An explicit null request id means the caller knows this failure is not
+  // correlated (a network error with no response), so the shared global
+  // must not be attached; reportError marks that case with a context the
+  // event carries to here.
+  const contexts = { ...(cleaned.contexts || {}) };
+  const uncorrelated = Boolean(contexts.arkham_uncorrelated);
+  delete contexts.arkham_uncorrelated;
+  cleaned.contexts = contexts;
+  if (lastRequestId && !uncorrelated) {
+    tags.request_id = tags.request_id || lastRequestId;
+  }
   cleaned.tags = tags;
   return cleaned;
 }
@@ -249,7 +259,14 @@ export function reportError(error, context = {}, requestId = undefined) {
   if (!sentry) return;
   const id = requestId === undefined ? lastRequestId : requestId;
   sentry.withScope((scope) => {
-    if (id) scope.setTag('request_id', id);
+    if (id) {
+      scope.setTag('request_id', id);
+    } else if (requestId === null) {
+      // An explicit null says "do not correlate this error", which is
+      // different from "use the shared global"; mark it so beforeSend does
+      // not reintroduce another request's id.
+      scope.setContext('arkham_uncorrelated', { value: true });
+    }
     // setContext takes a named object, so the scalar fields go in as one
     // "app" context rather than as a context per field — primitives do not
     // match the context schema and can be dropped on ingest.

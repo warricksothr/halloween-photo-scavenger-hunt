@@ -98,6 +98,31 @@ describe('error reporting', () => {
     expect(event.tags.request_id).toBe('req-123');
   });
 
+  it('does not attach the global id to an explicitly uncorrelated error', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    await errors.initErrorReporting();
+    errors.recordRequestId('req-old');
+
+    // reportError with an explicit null marks the scope; a concurrent
+    // request then moves the shared global before beforeSend runs.
+    const contexts = {};
+    const scope = {
+      setTag: vi.fn(),
+      setContext: vi.fn((key, value) => {
+        contexts[key] = value;
+      }),
+    };
+    sentryMock.withScope.mockImplementation((fn) => fn(scope));
+
+    errors.reportError(new Error('network'), { op: 'state' }, null);
+    errors.recordRequestId('req-new');
+
+    expect(scope.setTag).not.toHaveBeenCalled();
+    const event = errors.scrubEvent({ contexts });
+    expect(event.tags.request_id).toBeUndefined();
+    expect(event.contexts.arkham_uncorrelated).toBeUndefined();
+  });
+
   it('scrubs a credential path out of a request URL', async () => {
     const errors = await loadErrors();
 
