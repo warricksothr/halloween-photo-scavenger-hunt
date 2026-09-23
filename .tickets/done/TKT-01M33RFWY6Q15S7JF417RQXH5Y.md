@@ -21,7 +21,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T17:36:23Z
+updated_at: 2026-09-23T17:38:14Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -100,6 +100,12 @@ join 401s — `POST /api/mod/join/{code}` needs an OIDC moderator and
 `web/e2e/test-server.py` configures no OIDC. The selector changes were
 exercised up to the moderator step in a temporary CSRF-armed run; the drawer
 label/alt and the standings list roles are covered by the new unit tests.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T17:38:14Z
+
+Correction to the review note and summary above: the e2e blocker ticket is
+TKT-01M37F8TCTVKWB9XDSSTB8ZM96, not the transposed id written there. That note
+now also records the moderator OIDC gap found during this work.
 
 ## Summary
 
