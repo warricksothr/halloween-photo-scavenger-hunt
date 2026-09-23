@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:30:10Z
+updated_at: 2026-09-23T01:35:11Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -177,3 +177,10 @@ Quality gate re-run: exit 0 — 332 server tests @ 95.00%, 20 deploy checks, 64 
 Fifth Terva review (218, head d9072d3, run 40306654-c7c3-49c1-88e4-d455311d3b87, Actions run #336/id 9076, request review-fixes-4): the top-level message finding resolved; one new high finding, accepted and fixed:
 - high free-text redaction missed quoted/prefixed/multiline paths: scrub_text (server) and scrubText (browser) no longer split on whitespace and test each token's start. Both scan arbitrary text for a URL/path run (new _URL_IN_TEXT / URL_IN_TEXT regex), redact it in place, and peel back trailing sentence punctuation before restoring it. So 'request to `/api/join/SECRET` failed', url=/api/join/SECRET, and GET\n/api/join/SECRET\nfailed all redact the bearer and keep their surrounding text intact. Tests added on both surfaces for quoted, key-prefixed, and newline-separated paths.
 Quality gate re-run: exit 0 — 333 server tests @ 95.00%, 20 deploy checks, 65 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:35:11Z
+
+Sixth Terva review (219, head c1647f8, run 2dcf0a66-f14f-4769-ad2c-9f701c07268c, Actions run #338/id 9079, request review-fixes-5): the free-text redaction finding resolved; two new findings, both accepted and fixed:
+- high frame locals: init now sets include_local_variables=False, and scrub_event defensively drops exception.values[*].stacktrace.frames[*].vars through a new _drop_frame_vars helper. Tests: a transport-level test holds a credential in a runtime-built local and asserts it is absent from the serialized envelope; a unit test feeds a frame carrying vars and asserts they are dropped. (Note: with this SDK, frame vars do not appear in the envelope either way, so the unit test is the deterministic guard and the option is the documented one.)
+- medium setContext shape: reportError now passes the scalar fields as one named object via scope.setContext('app', fields) instead of a primitive per key; the errors test asserts the 'app' object shape.
+Quality gate re-run: exit 0 — 335 server tests @ 95.03%, 20 deploy checks, 65 frontend tests, build.
