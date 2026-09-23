@@ -3,7 +3,7 @@ ready to serve, not merely alive (``/api/health``). Covered here are the
 shape an operator reads, the admin gate, and a writer that has gone
 read-only — the failure the probe exists to catch."""
 
-from app import diagnostics
+from app import db, diagnostics
 
 
 def test_readyz_reports_the_shape(admin):
@@ -12,7 +12,12 @@ def test_readyz_reports_the_shape(admin):
     body = resp.json()
     assert body["status"] == "ok"
     assert body["db_writable"] is True
-    assert body["schema_version"] == 1
+    # Guard the field against the migrations on disk rather than pinning a
+    # number, so a new migration updates the expectation by itself and a
+    # stale or bogus version still fails.
+    assert body["schema_version"] == max(
+        int(p.name.split("_", 1)[0]) for p in db.MIGRATIONS_DIR.iterdir()
+    )
     assert body["disk"]["free_bytes"] > 0
     assert body["disk"]["total_bytes"] > 0
     assert body["photo_count"] == 0
