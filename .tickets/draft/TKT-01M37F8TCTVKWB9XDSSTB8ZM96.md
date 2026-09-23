@@ -1,6 +1,6 @@
 ---
 schema: 3
-id: TKT-01M37EYF3P32XRSYZN8SV9YB5W
+id: TKT-01M37F8TCTVKWB9XDSSTB8ZM96
 title: Arm the e2e specs with a CSRF token so they run again
 type: bug
 status: draft
@@ -19,8 +19,8 @@ blocks_on: none
 references: []
 claim: null
 archive: null
-created_at: 2026-09-23T15:43:00Z
-updated_at: 2026-09-23T15:43:00Z
+created_at: 2026-09-23T15:48:39Z
+updated_at: 2026-09-23T15:48:39Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -43,7 +43,7 @@ carries the fix inline: a safe `GET /api/health` to plant the `arkham_csrf`
 cookie, read it from `storageState()`, and send it as `X-CSRF-Token` on each
 mutation.
 
-### Acceptance criteria
+## Acceptance criteria
 
 - [ ] `npm run test:e2e` passes against a clean checkout.
 - [ ] The CSRF arming lives in one shared helper, not copy-pasted per spec.

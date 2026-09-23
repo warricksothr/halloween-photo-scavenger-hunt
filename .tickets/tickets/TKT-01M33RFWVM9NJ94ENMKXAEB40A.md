@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T15:43:36Z
+updated_at: 2026-09-23T15:48:54Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -89,7 +89,7 @@ unmount.
 The e2e spec cannot run through `npm run test:e2e` today: `game-loop.spec.js`
 and `readme-screenshots.spec.js` POST without a CSRF token and fail at login
 (the middleware post-dates them). That breakage is tracked as
-TKT-01M37EYF3P32XRSYZN8SV9YB5W; the new spec arms CSRF itself and passes when
+TKT-01M37F8TCTVKWB9XDSSTB8ZM96; the new spec arms CSRF itself and passes when
 run directly.
 
 ## Notes
@@ -119,3 +119,27 @@ While running it I found the pre-existing e2e specs (`game-loop`,
 `readme-screenshots`) fail at admin login with 403 `csrf_failed`: they POST
 without a CSRF token, and the middleware post-dates them (`d486dd8`). Filed
 TKT-01M37EYF3P32XRSYZN8SV9YB5W; the new spec arms CSRF itself.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:44:01Z
+
+Review request r2 (fresh, after the r1 fix): PR #35, head
+2601b1dbec3d99eb6eb3d20bbc526142af7e75ff, base 50f7bfe3db5482ac5907fba39fac648ce83c921d,
+request-id riddle-a11y-r2, dispatched to terva-review.yml on main.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:48:54Z
+
+Correction: the e2e CSRF follow-up ticket was refiled as
+TKT-01M37F8TCTVKWB9XDSSTB8ZM96 (the first attempt used `### Acceptance
+criteria`, which `git ticket check --strict` flags as `section_heading_demoted`;
+the refiled one uses `## Acceptance criteria`). The earlier note's ID is stale.
+
+r2 finding (medium, `web/src/screens/StrikeNotice.jsx:27`): the Tab trap
+focused a button that was `disabled` while the acknowledgement was in flight,
+so focus could sit on a dead target. Fixed by keeping the button focusable
+(`aria-disabled`/`aria-busy` instead of the `disabled` attribute) and letting
+the existing `busy` guard absorb a duplicate activation; the key handler also
+bails when the ref is null. Added a test that clicks acknowledge with a pending
+promise and asserts the button stays focusable and holds focus across Tab.
+
+Also fixed the CI failure on the previous head: `git ticket check --fix
+--dry-run --strict` now reports no problems.
