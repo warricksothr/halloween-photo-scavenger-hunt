@@ -19,7 +19,6 @@ const ENVIRONMENT = import.meta.env.VITE_ERROR_ENVIRONMENT || undefined;
 const RELEASE = import.meta.env.VITE_ERROR_RELEASE || undefined;
 
 const DROPPED_REQUEST_KEYS = ['headers', 'cookies', 'data', 'env', 'query_string'];
-const URL_DATA_KEYS = new Set(['url', 'http.url', 'http.query', 'http.fragment']);
 
 let lastRequestId = null;
 let sentry = null;
@@ -105,9 +104,11 @@ function scrubSpan(span) {
   if (cleaned.data && typeof cleaned.data === 'object') {
     const data = { ...cleaned.data };
     for (const [key, value] of Object.entries(data)) {
-      if (typeof value !== 'string') continue;
-      if (URL_DATA_KEYS.has(key)) data[key] = scrubUrl(value);
-      else if (value.startsWith('/')) data[key] = redactPath(value);
+      // A span-data string may be a URL, a bare path, or opaque text.
+      // scrubUrl is safe on all three: it redacts a bearer segment and
+      // drops a query or fragment wherever they sit, and leaves text
+      // without one unchanged.
+      if (typeof value === 'string') data[key] = scrubUrl(value);
     }
     cleaned.data = data;
   }

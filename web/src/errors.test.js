@@ -200,6 +200,26 @@ describe('error reporting', () => {
     expect(event.spans[0].data.url).toBe('https://hunt.example/j/<redacted>');
   });
 
+  it('drops a query or fragment in span data under any key', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      spans: [
+        {
+          data: {
+            path: '/api/state?token=SECRET',
+            'http.url': 'https://hunt.example/api/state?x=1',
+            note: 'see /some/path#credential',
+          },
+        },
+      ],
+    });
+
+    expect(event.spans[0].data.path).toBe('/api/state');
+    expect(event.spans[0].data['http.url']).toBe('https://hunt.example/api/state');
+    expect(event.spans[0].data.note).toBe('see /some/path');
+  });
+
   it('redacts the credential in breadcrumb messages and data', async () => {
     const errors = await loadErrors();
 

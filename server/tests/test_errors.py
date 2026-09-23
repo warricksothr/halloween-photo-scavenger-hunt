@@ -209,6 +209,29 @@ def test_scrub_transaction_scrubs_spans():
     )
 
 
+def test_scrub_transaction_drops_a_query_or_fragment_in_span_data():
+    # The credential can ride in a query string or fragment on an ordinary
+    # path, under any span-data key — not only an allowlisted URL key.
+    event = {
+        "spans": [
+            {
+                "data": {
+                    "path": "/api/state?token=SECRET",
+                    "http.url": "https://hunt.example/api/state?x=1",
+                    "note": "see /some/path#credential",
+                }
+            }
+        ]
+    }
+
+    cleaned = errors.scrub_transaction(event)
+
+    data = cleaned["spans"][0]["data"]
+    assert data["path"] == "/api/state"
+    assert data["http.url"] == "https://hunt.example/api/state"
+    assert data["note"] == "see /some/path"
+
+
 def test_scrub_event_scrubs_top_level_message():
     event = {"message": "GET /api/join/SECRET failed"}
     cleaned = errors.scrub_event(event)

@@ -53,8 +53,6 @@ DEFAULT_TRACES_SAMPLE_RATE = 0.1
 # A request mapping carries the credential-bearing URL, every header
 # (cookies, Authorization) and the body; none of it belongs in a report.
 _DROPPED_REQUEST_KEYS = ("headers", "cookies", "data", "env", "query_string")
-# Span data keys whose value is a URL rather than an opaque string.
-_URL_DATA_KEYS = frozenset({"url", "http.url", "http.query", "http.fragment"})
 # A path-like or URL-like run inside free text. The run starts at a ``/``
 # (a bare path) or a URL scheme, and continues over path/query characters.
 # Free text wraps it in quotes, follows a ``key=``, or puts it on its own
@@ -161,12 +159,12 @@ def _scrub_span(span: dict[str, Any]) -> dict[str, Any]:
     if isinstance(data, dict):
         data = dict(data)
         for key, value in data.items():
-            if not isinstance(value, str):
-                continue
-            if key in _URL_DATA_KEYS:
+            # A span-data string may be a URL, a bare path, or opaque text.
+            # scrub_url is safe on all three: it redacts a bearer segment
+            # and drops a query or fragment wherever they sit, and leaves
+            # text without one unchanged.
+            if isinstance(value, str):
                 data[key] = scrub_url(value)
-            elif value.startswith("/"):
-                data[key] = redact_path(value)
         span["data"] = data
     return span
 
