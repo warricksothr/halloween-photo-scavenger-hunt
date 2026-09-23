@@ -15,6 +15,150 @@ def test_migrations_are_idempotent(conn):
     assert db_module.apply_migrations(conn) == []
 
 
+def test_migration_with_transaction_control_is_refused(tmp_path, monkeypatch):
+    """The runner owns the transaction, so a file that tries to end it is
+    refused before anything executes — otherwise a COMMIT could persist a
+    partial migration that rollback could not undo."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text(
+        "CREATE TABLE canary (id INTEGER PRIMARY KEY);\nCOMMIT;\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "control.db")
+    try:
+        with pytest.raises(ValueError, match="transaction control"):
+            db_module.apply_migrations(conn)
+        # The check runs before execution: nothing was created.
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='canary'"
+            ).fetchone()
+            is None
+        )
+        assert conn.in_transaction is False
+    finally:
+        conn.close()
+
+
+def test_a_trigger_body_is_one_statement_not_transaction_control():
+    """BEGIN/END inside a CREATE TRIGGER is the trigger's body, not the
+    runner's transaction: the statement's first keyword is CREATE."""
+    sql = (
+        "CREATE TABLE t (id INTEGER);\n"
+        "CREATE TRIGGER trg AFTER INSERT ON t BEGIN UPDATE t SET id = id; END;\n"
+    )
+    statements = db_module._statements(sql)
+    assert len(statements) == 2
+    assert db_module._first_keyword(statements[1]) == "create"
+
+
+def test_bom_does_not_hide_transaction_control(tmp_path, monkeypatch):
+    """SQLite accepts a UTF-8 BOM before a keyword, so the rejection check
+    must strip it; the runner also reads files as utf-8-sig."""
+    assert db_module._first_keyword("\ufeffCOMMIT;") == "commit"
+
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text("COMMIT;\n", encoding="utf-8-sig")
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "bom.db")
+    try:
+        with pytest.raises(ValueError, match="transaction control"):
+            db_module.apply_migrations(conn)
+    finally:
+        conn.close()
+
+
+def test_two_statements_on_one_line_are_both_applied(tmp_path, monkeypatch):
+    """Splitting is per statement, not per line: executescript accepted two
+    statements on one line, so the replacement has to as well."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+        "    version INTEGER PRIMARY KEY,\n"
+        "    applied_at INTEGER NOT NULL\n"
+        ");\n"
+        "CREATE TABLE one (id INTEGER PRIMARY KEY);"
+        " CREATE TABLE two (id INTEGER PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "oneline.db")
+    try:
+        assert db_module.apply_migrations(conn) == [1]
+        names = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert {"one", "two"} <= names
+    finally:
+        conn.close()
+
+
+def test_failed_migration_leaves_no_partial_state(tmp_path, monkeypatch):
+    """A migration and its version row are one transaction, so a crash
+    mid-file leaves neither the schema change nor the record. The next
+    boot retries the file and succeeds — the recoverable state the ticket
+    asks for, without relying on the file being idempotent."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    bad = migrations / "0001_init.sql"
+    bad.write_text(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+        "    version INTEGER PRIMARY KEY,\n"
+        "    applied_at INTEGER NOT NULL\n"
+        ");\n"
+        "CREATE TABLE canary (id INTEGER PRIMARY KEY);\n"
+        "INSERT INTO no_such_table VALUES (1);\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "partial.db")
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            db_module.apply_migrations(conn)
+        # The rollback took the CREATE with it: no table, no version row.
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='canary'"
+            ).fetchone()
+            is None
+        )
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table'"
+                " AND name='schema_migrations'"
+            ).fetchone()
+            is None
+        )
+
+        # Next boot: the file is corrected and applies cleanly on the same
+        # connection, because the failed attempt left no trace.
+        bad.write_text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+            "    version INTEGER PRIMARY KEY,\n"
+            "    applied_at INTEGER NOT NULL\n"
+            ");\n"
+            "CREATE TABLE canary (id INTEGER PRIMARY KEY);\n",
+            encoding="utf-8",
+        )
+        assert db_module.apply_migrations(conn) == [1]
+        assert conn.execute("SELECT COUNT(*) AS n FROM canary").fetchone()["n"] == 0
+        assert (
+            conn.execute("SELECT version FROM schema_migrations").fetchone()["version"]
+            == 1
+        )
+    finally:
+        conn.close()
+
+
 def test_foreign_keys_enabled(seeded, conn):
     """FK pragma is on per-connection: a dangling insert is refused."""
     with pytest.raises(sqlite3.IntegrityError):
