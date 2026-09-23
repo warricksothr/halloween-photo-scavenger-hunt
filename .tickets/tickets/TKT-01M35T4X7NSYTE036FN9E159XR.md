@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:49:29Z
+updated_at: 2026-09-23T01:54:34Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -208,3 +208,9 @@ Quality gate re-run: exit 0 — 338 server tests @ 95.06%, 20 deploy checks, 68 
 Tenth Terva review (223, head abed8b3, run 1513c4a7-7f3c-4874-801e-67487bd6b0f7, Actions run #346/id 9137, request review-fixes-9): the breadcrumb-data finding resolved; one new high finding, accepted and fixed — same class in span data:
 - high nested span data: _scrub_span/scrubSpan scrubbed only top-level string values and never recursed, so a nested response.headers, request.cookies/env, or query_string survived, against ADR 0017's recursive-drop wording. Both now route span data through a recursive scrubber (_scrub_span_data / scrubData) that drops sensitive keys at any depth and scrub_url/scrubUrl's every string; the web scrubData is shared with scrubBreadcrumb, replacing the per-key url/from/to list. The span data drop and the string scrub now happen in one recursive pass (previously the server scrubbed strings first, then dropped keys, leaving nested strings unscrubbed). Tests added on both surfaces for nested headers, cookies, env, query_string, and a query string on a nested url.
 Quality gate re-run: exit 0 — 339 server tests @ 94.90%, 20 deploy checks, 69 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:54:34Z
+
+Eleventh Terva review (224, head f55a22a, run 954921ff-a6c4-4e6d-9e31-9fad81164da6, Actions run #348/id 9162, request review-fixes-10): the nested-span-data finding resolved; one new high finding, accepted and fixed:
+- high prose in span/breadcrumb data: the recursive data scrubbers sent every string through scrub_url/scrubUrl, which only redacts when the whole value starts with a bearer path or a URL, so a diagnostic field like note='request to /api/join/SECRET failed' kept its code. Both surfaces now send data strings through scrub_text/scrubText, which finds an embedded path and drops any query/fragment with it. On the server, _drop_sensitive_keys was folded into one recursive _scrub_data that both drops sensitive keys and scrubs every string, used by scrub_breadcrumb and _scrub_span (breadcrumb data previously dropped keys but did not scrub strings). Tests added on both surfaces for an embedded bearer path in span data and breadcrumb data.
+Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 70 frontend tests, build.
