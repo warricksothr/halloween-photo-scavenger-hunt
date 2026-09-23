@@ -37,11 +37,12 @@ function recapLine(entry, recapCopy) {
 
 function StandingsList({ standings, you }) {
   return (
-    <div class="panel" style={{ padding: '4px 16px' }}>
+    <div class="panel" role="list" style={{ padding: '4px 16px' }}>
       {standings.map((row) => (
         <div
           key={row.team_id}
           class="list-row"
+          role="listitem"
           style={row.you ? {
             background: 'rgba(127,212,232,0.06)',
             borderRadius: 'var(--radius)',
@@ -102,7 +103,7 @@ export function StandingsScreen({ snapshot, copy }) {
       if (!stale) setError(c.error);
     });
     return () => { stale = true; };
-  }, [closed, attempt]);
+  }, [closed, attempt, c.error]);
 
   // Closed: final standings + the night's timeline from /api/recap.
   if (closed) {

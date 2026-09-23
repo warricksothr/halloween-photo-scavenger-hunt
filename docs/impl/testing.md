@@ -28,7 +28,9 @@ representative row, foreign-key enforcement, and photo bytes. It does not read
 or write `data/`, `backups/`, production credentials, or uploaded photos.
 
 Run the server quality gate alone with `bash scripts/check-server.sh`. Run the
-frontend unit suite alone with `npm --prefix web test`.
+frontend suite alone with `npm --prefix web test`, which lints with ESLint
+(`web/eslint.config.js`, flat config) and then runs the Vitest units. Run only
+the lint pass with `npm --prefix web run lint`.
 
 The browser smoke builds the PWA, starts a temporary FastAPI instance with a
 throwaway SQLite database and photo directory, then runs Playwright headlessly:

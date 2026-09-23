@@ -89,7 +89,7 @@ async function normalizeDynamicValues(page) {
 
 async function capture(page, name, { frame = false } = {}) {
   await normalizeDynamicValues(page);
-  const target = frame ? page.locator('.frame') : page;
+  const target = frame ? page.getByTestId('app-frame') : page;
   await target.screenshot({ path: screenshotPath(name), fullPage: !frame });
 }
 
@@ -158,7 +158,7 @@ test('capture the README product tour', async ({ browser }) => {
     ).toBeVisible();
     await capture(player, 'riddle-board');
 
-    await player.locator('.tile[title="Find the Bat-Signal"]').click();
+    await player.getByRole('button', { name: 'Open riddle: Find the Bat-Signal' }).click();
     await expect(
       player.getByRole('heading', { name: 'Find the Bat-Signal' }),
     ).toBeVisible();
@@ -169,20 +169,22 @@ test('capture the README product tour', async ({ browser }) => {
     await expect(
       player.getByRole('heading', { name: 'Evidence Drawer' }),
     ).toBeVisible();
-    await player.locator('input[type="file"]').setInputFiles({
+    await player.getByLabel('Add a photo').setInputFiles({
       name: 'synthetic-evidence.png',
       mimeType: 'image/png',
       buffer: PHOTO,
     });
-    await expect(player.locator('main img')).toHaveCount(1);
+    await expect(
+      player.getByRole('img', { name: 'Your evidence photo' }),
+    ).toHaveCount(1);
     await capture(player, 'evidence-drawer');
 
     await player.getByRole('link', { name: 'Riddles' }).click();
-    await player.locator('.tile[title="Find the Bat-Signal"]').click();
+    await player.getByRole('button', { name: 'Open riddle: Find the Bat-Signal' }).click();
     await expect(
       player.getByRole('button', { name: 'Submit to the Batcomputer' }),
     ).toBeVisible();
-    await player.locator('main .tile-grid .tile').first().click();
+    await player.getByRole('button', { name: /^Evidence photo/ }).first().click();
     await player.getByRole('button', { name: 'Submit to the Batcomputer' }).click();
     await expect(player.getByText('SCANNING…')).toBeVisible();
 
@@ -220,7 +222,7 @@ test('capture the README product tour', async ({ browser }) => {
     await expect(
       player.getByRole('heading', { name: 'Standings' }),
     ).toBeVisible();
-    const standingsRow = player.locator('.panel .list-row').first();
+    const standingsRow = player.getByRole('listitem').first();
     await expect(standingsRow).toContainText('Batman');
     await expect(standingsRow).toContainText('1');
     await capture(player, 'standings');

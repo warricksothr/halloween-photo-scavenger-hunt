@@ -78,6 +78,7 @@ export function DrawerScreen({ snapshot, copy }) {
             type="file"
             accept="image/*"
             capture="environment"
+            aria-label={c.addLabel}
             style={{ display: 'none' }}
             onChange={onFileChosen}
           />
@@ -111,7 +112,7 @@ export function DrawerScreen({ snapshot, copy }) {
             <div key={item.id} class="tile" style={{ aspectRatio: '1' }}>
               <img
                 src={item.photo_url}
-                alt=""
+                alt={c.photoAlt}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
                 loading="lazy"
               />

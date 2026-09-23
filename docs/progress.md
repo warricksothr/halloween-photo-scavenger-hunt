@@ -46,6 +46,18 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — The frontend lints, and the e2e specs use roles.**
+  TKT-01M33RFWY6Q15S7JF417RQXH5Y. `web/eslint.config.js` adds ESLint 10 (flat
+  config) with `eslint-plugin-react-hooks`; `npm --prefix web test` now runs
+  `npm run lint` before Vitest, so the frontend step of
+  `scripts/check-quality.sh` fails on a lint error. The first pass fixed an
+  unused `responseId` initializer, an unused `modEvent` prop, a missing
+  `c.error` effect dep, and the service-worker globals. The browser specs stop
+  reaching into class names: riddle tiles and evidence photos are found by
+  their accessible names, the drawer file input gains `aria-label` and its
+  thumbnails real `alt` text (new `screens.drawer.addLabel`/`photoAlt` copy),
+  the standings board is a `role="list"` of `role="listitem"` rows, and the
+  screenshot frame is `data-testid="app-frame"`. Web suite 136 tests.
 - **2026-09-23 — Standings stop spinning and the console sets conduct inputs.**
   TKT-01M33RFWXA9R29N0YQXBYM43Y1. The closed-standings recap fetch swallowed
   failures, so a dropped connection left "Compiling the night's intel…" up

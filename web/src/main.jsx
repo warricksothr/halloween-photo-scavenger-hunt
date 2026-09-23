@@ -88,7 +88,7 @@ function PlayerApp() {
     // No event theme exists yet, so the boot line comes from the default
     // pack rather than a string baked into the shell (theme.js).
     const boot = state.copy ?? defaultCopy();
-    return <div class="frame"><main style={{ padding: 16 }}><p class="dim">{boot.screens.boot.loading}</p></main></div>;
+    return <div class="frame" data-testid="app-frame"><main style={{ padding: 16 }}><p class="dim">{boot.screens.boot.loading}</p></main></div>;
   }
 
   if (state.phase === 'error') {
@@ -120,15 +120,15 @@ function PlayerApp() {
   const { snapshot, modEvent, copy } = state;
   if (state.role === 'moderator') {
     return (
-      <div class="frame">
+      <div class="frame" data-testid="app-frame">
         <Header eventName={`${modEvent.name} — Moderator`} playerName="console" />
-        <ModConsoleScreen modEvent={modEvent} copy={copy} />
+        <ModConsoleScreen copy={copy} />
       </div>
     );
   }
   if (snapshot.event.status === 'lobby') {
     return (
-      <div class="frame">
+      <div class="frame" data-testid="app-frame">
         <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
         <LobbyScreen copy={copy} />
       </div>
@@ -169,7 +169,7 @@ function GameShell({ snapshot, copy }) {
   }
 
   return (
-    <div class="frame">
+    <div class="frame" data-testid="app-frame">
       <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
       {screen}
       {/* The strike-1 interstitial overlays the whole app (mock: dimmed

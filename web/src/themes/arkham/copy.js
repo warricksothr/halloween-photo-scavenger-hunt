@@ -95,6 +95,8 @@ export default {
     drawer: {
       headline: 'Evidence Drawer',
       capture: 'Take a Photo',
+      addLabel: 'Add a photo',
+      photoAlt: 'Your evidence photo',
       uploading: 'Uploading…',
       loading: 'Opening the drawer…',
       empty: 'No evidence yet. Take a photo of something suspicious.',

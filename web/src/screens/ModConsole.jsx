@@ -31,7 +31,7 @@ function ago(createdAt) {
   return mins < 1 ? 'just now' : `${mins} min ago`;
 }
 
-export function ModConsoleScreen({ modEvent, copy }) {
+export function ModConsoleScreen({ copy }) {
   const [queue, setQueue] = useState(null); // null = loading
   const [openId, setOpenId] = useState(null);
   const [flavor, setFlavor] = useState('');
