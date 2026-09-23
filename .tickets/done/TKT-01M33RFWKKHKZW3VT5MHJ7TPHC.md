@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWKKHKZW3VT5MHJ7TPHC
 title: Make the SSE broker thread-safe and bound subscriber queues
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/sse-broker-thread-safety
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 0bc6c11b1ff5611825299b1ef1be461c7fd4f19a
-  session: null
-  claimed_at: 2026-09-23T01:05:18Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T01:07:30Z
+updated_at: 2026-09-23T01:13:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,8 +36,8 @@ The broker's subscriber set is mutated from request threads while publishers may
 
 ## Acceptance criteria
 
-- [ ] Subscribe, unsubscribe, and publish are safe under concurrent access.
-- [ ] A slow or dead subscriber cannot grow the queue without bound; overflow is counted and logged.
+- [x] Subscribe, unsubscribe, and publish are safe under concurrent access.
+- [x] A slow or dead subscriber cannot grow the queue without bound; overflow is counted and logged.
 
 ## Implementation plan
 
@@ -120,3 +113,34 @@ trade-off is ADR 0017.
 
 `bash scripts/check-server.sh` green — 357 tests, coverage 95.36%, Ruff
 clean. ADR 0017 added; `docs/progress.md` updated.
+
+## Summary
+
+Merged in PR #21 as `9f82917` on 2026-09-22. `main` base `0bc6c11b`.
+
+### Where it landed
+
+`server/app/sse.py`: every subscriber queue is bounded at
+`SUBSCRIBER_QUEUE_MAX = 256`; `SseBroker._lock` guards `_subscribers` so the
+threadpool publisher and the loop-side `subscribe`/`unsubscribe` cannot race;
+`publish` snapshots the set under the lock and hands delivery to the new
+`_deliver` via `call_soon_threadsafe`, which catches `asyncio.QueueFull`,
+increments `overflow_count`, and logs `event="sse.overflow"` with the event
+id, role, delta name, queue max, and running total.
+
+Both acceptance criteria are ticked. The drop-newest policy, why it is not
+eviction, and the snapshot-resync recovery path are ADR 0017.
+
+### Tests
+
+- `test_sse_overflow_is_counted_and_logged`
+- `test_sse_subscriber_set_survives_concurrent_publish`
+
+plus the pre-existing `test_sse_player_routing_and_stream_cleanup`.
+
+### Evidence
+
+`bash scripts/check-server.sh` green at head `0676f782` — 357 tests,
+coverage 95.36%, Ruff clean. Terva review clean, no findings at the failure
+threshold (run `41d1eacf-7a92-4f0a-8c46-76c822d67ac4`, request
+`sse-broker-thread-safety`). CI fast quality gate green in 1m3s.
