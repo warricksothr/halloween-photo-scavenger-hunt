@@ -51,12 +51,14 @@ class MeteredLock:
     ``threading.RLock`` is a factory function, not a subclassable type, so
     the app's lock is wrapped in a small object that forwards the lock
     protocol (``acquire``/``release``/``with``) and measures each acquire.
-    Every successful acquire is counted; only an acquire that actually
-    waited counts as a contention, so a handler's reentrant re-entry
-    (ADR 0008) adds an acquisition but rarely a contention. Forwarding
-    ``acquire``/``release`` matters because a lock is sometimes driven
-    directly (tests, and any future non-``with`` caller): the wrapper has
-    to be a faithful stand-in for the lock it replaced.
+    Every successful acquire is counted; only an acquire that had to block
+    counts as a contention, so a free lock and a handler's reentrant
+    re-entry (ADR 0008) add acquisitions but no contention. A nonblocking
+    probe is what decides which branch it is — timing the acquire would
+    read the call overhead as a wait. Forwarding ``acquire``/``release``
+    matters because a lock is sometimes driven directly (tests, and any
+    future non-``with`` caller): the wrapper has to be a faithful stand-in
+    for the lock it replaced.
     """
 
     def __init__(self, lock, metrics: Metrics):
@@ -64,13 +66,24 @@ class MeteredLock:
         self._metrics = metrics
 
     def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        # Try the lock without waiting first. A lock that is free (including
+        # the reentrant same-thread case) hands it over here, and the call
+        # counts as an acquisition with no wait — measuring it instead would
+        # read the call overhead as contention, so every acquire would be a
+        # contention and the rate would be useless.
+        if self._lock.acquire(False):
+            self._metrics.record_lock(0.0)
+            return True
+        if not blocking:
+            return False
+        # It was held: this is a real wait, so time only the blocking part.
         start = time.perf_counter()
         if timeout == -1:
-            got = self._lock.acquire(blocking)
+            got = self._lock.acquire(True)
         else:
-            got = self._lock.acquire(blocking, timeout)
+            got = self._lock.acquire(True, timeout)
         if got:
-            self._metrics.record_lock(time.perf_counter() - start)
+            self._metrics.record_lock(time.perf_counter() - start, contended=True)
         return got
 
     def release(self) -> None:
@@ -120,10 +133,10 @@ class Metrics:
             if state in self._verdicts:
                 self._verdicts[state] += count
 
-    def record_lock(self, waited_seconds: float) -> None:
+    def record_lock(self, waited_seconds: float, contended: bool = False) -> None:
         with self._lock:
             self._lock_acquisitions += 1
-            if waited_seconds > 0:
+            if contended:
                 self._lock_contentions += 1
                 self._lock_wait_seconds += waited_seconds
 

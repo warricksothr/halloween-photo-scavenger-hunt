@@ -40,7 +40,7 @@ class TestCounters:
         m = Metrics()
         m.record_lock(0.0)
         m.record_lock(0.0)
-        m.record_lock(0.5)
+        m.record_lock(0.5, contended=True)
         lock = m.snapshot()["lock"]
         assert lock["acquisitions"] == 3
         assert lock["contentions"] == 1
@@ -198,6 +198,21 @@ class TestLockMetrics:
             with lock:  # reentrant, same thread: no deadlock
                 pass
         assert admin.app.state.db_lock is not None
+
+    def test_uncontended_and_reentrant_acquires_are_not_contentions(self, admin):
+        """A free lock, and a reentrant re-entry, must count acquisitions
+        without a contention — the reason contention is not inferred from
+        elapsed time, which every acquire spends a little of."""
+        lock = admin.app.state.db_lock
+        before = admin.get("/api/admin/readyz").json()["metrics"]["lock"]
+        with lock:
+            with lock:
+                pass
+        after = admin.get("/api/admin/readyz").json()["metrics"]["lock"]
+        # The reading request itself takes the writer lock once, so the
+        # floor is our two acquires and not an exact count.
+        assert after["acquisitions"] >= before["acquisitions"] + 2
+        assert after["contentions"] == before["contentions"]
 
     def test_readyz_exposes_metrics_and_overflow(self, admin):
         body = admin.get("/api/admin/readyz").json()
