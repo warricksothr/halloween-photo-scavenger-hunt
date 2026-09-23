@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWMFMPB3JY9CH60MAGR5
 title: Audit event edits and reconcile audit-actions drift
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -19,17 +19,10 @@ dependencies:
   - TKT-01M33RFWG7VYS4J83B5SQ4JTH0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/mod-link-oidc
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: c2cded6bd27d8dd1ae7f5db0ba566d12660e19e3
-  session: null
-  claimed_at: 2026-09-23T11:56:05Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:04:43Z
+updated_at: 2026-09-23T12:07:12Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -146,3 +139,45 @@ commit is now ordered before dispatch, per the S9CW lesson.
 
 - Head: `8e967fc` + the fix commit (see the commit that carries this note)
 - Request ID: `harden-audit-updates-r3`
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:07:12Z
+
+### Review request, round 3 — clean
+
+- PR: #27
+- Head reviewed: `3d511f6ba096160a6fb8165b3f6e174920ff1c9c`
+- Base: `a54999550b9fdf607d54e654a3d83a884d5659c5`
+- Request ID: `harden-audit-updates-r3`
+- Run: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/409 (id 22913)
+- Result: review id 243 — "Review completed; no findings at the failure threshold."
+  Quality / Fast quality gate: success.
+
+Merged head `3d511f6` as `38d36f5ccbef734219ff69c24a33fe614b43716e`.
+
+## Summary
+
+Editing an event now leaves a trail, and the enum doc matches the code.
+
+Landed in `main` as `38d36f5ccbef734219ff69c24a33fe614b43716e`, PR
+[#27](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/27)
+merged from `t3code/harden-audit-event-updates` (base a549995).
+
+`events.patch_event` logged nothing before this, so the one mutation the admin
+console makes most often was invisible to `audit_event`. It now adds
+`Action.EVENT_UPDATED` and writes one `event.updated` row, with
+`details={"old": {...}, "new": {...}}` over only the fields whose value moved,
+in the same locked transaction as the UPDATE. A PATCH that repeats the current
+values is a no-op and logs nothing. `docs/impl/audit-actions.md` gains the row
+and its `event.created` details now include `team_size_limit`, which the code
+had always recorded; `docs/impl/api.md` names the action too.
+
+Verification: `bash scripts/check-quality.sh` — 405 server tests at 95.64%
+coverage (90% floor), 20 deploy checks, 106 web tests, production build.
+
+Terva review: r1 superseded (a bookkeeping commit moved the head); r2 found
+that supplied-but-unchanged fields still logged a row, fixed by filtering to
+actual changes; r3 returned no findings on `3d511f6`, the merged head.
+
+Observation left for the sibling ticket TKT-01M33RFWN: `session.revoked`
+documents a `"moderator"` reason the code never emits, because no moderator
+logout route exists yet.
