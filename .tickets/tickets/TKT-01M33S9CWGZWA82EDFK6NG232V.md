@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T05:11:17Z
+updated_at: 2026-09-23T05:12:01Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -154,3 +154,16 @@ selector-not-credential decision.
 Plan slip worth knowing: the plan names the migration
 `0002_moderator_identity.sql`; the file that landed is
 `0002_moderator_subject.sql` (the column is `subject`).
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T05:12:01Z
+
+Ready for review, dispatch recorded.
+
+- PR: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/26
+- Head: f5ad9f002d111f3147cfaed34248becdb500890a
+- Base: 455f7639eab4a2a64ce2216150e7f7112e4c0536
+- Request: mod-link-oidc
+- Run: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/392
+
+`git ticket ac` ticks all four criteria on this head and the note above
+records the green `check-quality.sh` run.
