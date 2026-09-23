@@ -38,9 +38,9 @@ name now lives once as `DEFAULT_THEME`.
 
 **Only the latest request commits.** Two refreshes can overlap and resolve
 out of order, so `loadTheme` takes a generation number and skips the DOM
-when a newer request has started; the newest request wins the document, and
-a superseded caller gets the newest committed copy instead of pinning the
-older pack.
+when a newer request has started; the newest request wins the document. A
+superseded call resolves with the winning load's copy rather than its own,
+so no caller can pin a pack the document never adopts.
 
 ## Alternatives
 

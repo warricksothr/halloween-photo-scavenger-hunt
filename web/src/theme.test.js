@@ -54,4 +54,34 @@ describe('theme loader', () => {
       themeStylesheets[key] = original;
     }
   });
+
+  it('resolves a superseded load only after the winning pack lands', async () => {
+    const key = './themes/arkham/theme.css';
+    const original = themeStylesheets[key];
+    const resolvers = [];
+    themeStylesheets[key] = () => new Promise((resolve) => resolvers.push(resolve));
+
+    try {
+      const first = loadTheme('arkham');
+      const second = loadTheme('missing-theme');
+
+      let firstSettled = false;
+      first.then(() => {
+        firstSettled = true;
+      });
+
+      // The older request resolves while the newer one is still in flight;
+      // it must wait for the winner instead of resolving with its own copy.
+      resolvers[0]('/* first */');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(firstSettled).toBe(false);
+
+      resolvers[1]('/* second */');
+      await Promise.all([first, second]);
+      expect(firstSettled).toBe(true);
+      expect(document.head.querySelectorAll('style[data-theme]')).toHaveLength(1);
+    } finally {
+      themeStylesheets[key] = original;
+    }
+  });
 });

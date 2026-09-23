@@ -27,9 +27,10 @@ let injectedNodes = [];
 
 // The latest requested load. A refresh that overlapped another can resolve
 // after it, so each call only commits its stylesheet when it is still the
-// most recent request; otherwise the older pack would win the document.
+// most recent request, and a superseded call resolves with the winner's
+// copy rather than pinning a pack that never becomes active.
 let requestGeneration = 0;
-let activeTheme = null;
+let latestLoad = Promise.resolve(null);
 
 function copyModule(themeName) {
   const copyPath = `./themes/${themeName}/copy.js`;
@@ -44,7 +45,7 @@ export function defaultCopy() {
   return copyModule(DEFAULT_THEME).default;
 }
 
-export async function loadTheme(themeName) {
+export function loadTheme(themeName) {
   const cssPath = `./themes/${themeName}/theme.css`;
   // Unknown theme names fall back to arkham rather than breaking the
   // party — a typo in the event config should cost flavor, not access.
@@ -52,26 +53,28 @@ export async function loadTheme(themeName) {
   const loader = themeStylesheets[`./themes/${resolvedName}/theme.css`];
 
   const generation = ++requestGeneration;
-  const css = await loader();
+  const run = (async () => {
+    const css = await loader();
 
-  // A newer load started while this one was in flight: leave the DOM to it
-  // and hand back the newest committed copy so a stale caller cannot pin an
-  // older pack either.
-  if (generation !== requestGeneration) {
-    return copyModule(activeTheme ?? resolvedName).default;
-  }
+    // A newer load started while this one was in flight: leave the DOM to
+    // it, and resolve with its copy so a superseded caller cannot show a
+    // pack the document never adopts.
+    if (generation !== requestGeneration) return latestLoad;
 
-  const style = document.createElement('style');
-  style.dataset.theme = resolvedName;
-  style.textContent = css;
-  document.head.appendChild(style);
+    const style = document.createElement('style');
+    style.dataset.theme = resolvedName;
+    style.textContent = css;
+    document.head.appendChild(style);
 
-  // Drop the previous pack's stylesheet only after the new one is in the
-  // DOM, so the app is never unstyled mid-switch.
-  const previous = injectedNodes;
-  injectedNodes = [style];
-  activeTheme = resolvedName;
-  previous.forEach((node) => node.remove());
+    // Drop the previous pack's stylesheet only after the new one is in the
+    // DOM, so the app is never unstyled mid-switch.
+    const previous = injectedNodes;
+    injectedNodes = [style];
+    previous.forEach((node) => node.remove());
 
-  return copyModule(resolvedName).default;
+    return copyModule(resolvedName).default;
+  })();
+
+  latestLoad = run;
+  return run;
 }
