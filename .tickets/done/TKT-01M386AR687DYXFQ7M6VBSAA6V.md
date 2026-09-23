@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M386AR687DYXFQ7M6VBSAA6V
 title: Admin API token for scripted access (env-configured bearer)
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/deploy-targets-convention
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: c0c1b9b7d3b18b676f91a9b448d2ecd979c54218
-  session: null
-  claimed_at: 2026-09-23T22:48:10Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T22:31:39Z
-updated_at: 2026-09-23T23:00:30Z
+updated_at: 2026-09-23T23:07:24Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -121,11 +114,11 @@ CSRF (and then 401), never pass.
 
 ## Acceptance criteria
 
-- [ ] Unset ARKHAM_ADMIN_API_TOKEN: existing cookie login and all admin routes behave exactly as today (no regression).
-- [ ] Set it: Authorization: Bearer reaches an admin route with no cookie and no X-CSRF-Token, and a mutating route (create event) succeeds.
-- [ ] A wrong or absent token with no cookie still gets CSRF (unsafe) or 401, never a pass.
-- [ ] The token never appears in logs or error responses (a test asserts the configured value is absent from the recorded log output for a token-authenticated request).
-- [ ] Docs updated: runbook and the service-unit env comment; the token is env-only and rotatable by restart.
+- [x] Unset ARKHAM_ADMIN_API_TOKEN: existing cookie login and all admin routes behave exactly as today (no regression).
+- [x] Set it: Authorization: Bearer reaches an admin route with no cookie and no X-CSRF-Token, and a mutating route (create event) succeeds.
+- [x] A wrong or absent token with no cookie still gets CSRF (unsafe) or 401, never a pass.
+- [x] The token never appears in logs or error responses (a test asserts the configured value is absent from the recorded log output for a token-authenticated request).
+- [x] Docs updated: runbook and the service-unit env comment; the token is env-only and rotatable by restart.
 
 ## Implementation plan
 
@@ -189,3 +182,32 @@ PR #44, head f791e6527e4bbc9bcf36ff1b16d4b76ffaf7f3fc, base main. Terva review r
 **agent:opencode/t3code-0691bbb1** at 2026-09-23T23:00:30Z
 
 Terva r1 (run 7c3c21be, request admin-api-token-r1) returned one medium: the CSRF exemption was path-agnostic, so the admin token could skip CSRF on any unsafe route. Accepted and fixed in 76b193216d99795e9627ddc7bcaff8d820ac34bc via auth.is_admin_api_path (boundary match on /api/admin). Regression test fails pre-fix (non-admin POST got past the gate). Re-review requested as admin-api-token-r2.
+
+## Summary
+
+An env-configured admin API token for scripted clients.
+
+A script has no cookie jar, so reaching the admin API meant replaying the
+browser's CSRF handshake. ARKHAM_ADMIN_API_TOKEN, sent as
+Authorization: Bearer, is an admin-scoped standing credential. Unset
+means off and nothing changes; the password and SSO paths are untouched.
+
+current_admin resolves the token in constant time and returns a sentinel,
+so require_admin and every existing admin route are unchanged. The CSRF
+middleware exempts a valid token request only under /api/admin: a header
+credential is not the ambient cookie the check protects, and scoping the
+exemption keeps the token from acting as a general bypass for player or
+moderator writes. A wrong or absent token is still challenged, then 401s.
+
+Terva r1 found the exemption was path-agnostic; fixed by matching the
+/api/admin prefix on a boundary, with a regression test that fails
+pre-fix. r2 was clean.
+
+Tests cover: feature off no regression, bearer authenticates a mutation
+with no cookie or CSRF pair, a wrong token is refused both ways, an empty
+config never authenticates, and the token never reaches a log line or a
+response body. Docs: RUNBOOK §6, the service env block, CONTAINER.md.
+
+Merge 752409fcfcc969aa2ca3df5cbc664f460aa9fa21 (PR #44), reviewed clean
+on 02c0aa39886750d60a1ea9b668ea5fcd5e413ac5. Gate: 480 server tests,
+95.85% coverage, 23 deploy checks, web tests and build.
