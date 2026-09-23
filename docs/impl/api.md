@@ -83,6 +83,11 @@ DELETE /api/admin/events/{id}/riddles/{rid}   (409 if submissions reference it)
 Lifecycle transitions log `event.opened` / `event.closed`; riddle edits
 log `riddle.edited` with before/after text in `details`.
 
+The admin console has no separate session endpoint: `GET /api/admin/events`
+is the probe. A 401 means no admin session (the shell shows the login
+screen), a 200 list means the session is live and doubles as the console's
+first data. The admin cookie is httpOnly, so the client cannot read it.
+
 ### Single sign-on (S9CT)
 
 Optional OIDC authorization-code + PKCE against an Authentik issuer, so a

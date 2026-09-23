@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { getState, refresh, retry, subscribe } from './store';
 import { Header } from './components/Header';
+import { AdminScreen } from './screens/Admin';
 import { ConnectionErrorScreen } from './screens/ConnectionError';
 import { JoinScreen } from './screens/Join';
 import { ModJoinScreen } from './screens/ModJoin';
@@ -20,7 +21,20 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // the store's phase and, once ready, the event status. This is the
 // snapshot contract made visible — every screen renders FROM the
 // snapshot, and nothing here talks to the API except through store.js.
+//
+// /admin is the one exception, and the path decides before the store
+// exists: the host console is a separate document (a fresh page load, no
+// client-side router), so it must not boot the player store or pull in a
+// theme pack. App stays hook-free — the hooks live in PlayerApp — so the
+// switch cannot break the rules of hooks.
 function App() {
+  if (window.location.pathname.startsWith('/admin')) {
+    return <AdminScreen />;
+  }
+  return <PlayerApp />;
+}
+
+function PlayerApp() {
   const [state, setState] = useState(getState());
 
   useEffect(() => {
