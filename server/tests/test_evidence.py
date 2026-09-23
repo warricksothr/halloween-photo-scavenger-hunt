@@ -6,6 +6,7 @@ in the repo, and each test builds exactly the byte pattern it needs
 """
 
 import io
+import threading
 import time
 
 import pytest
@@ -317,3 +318,24 @@ class TestDiskGuardrail:
         # (the middleware's earlier check only sees the declared length).
         assert calls and calls[0][1] == client.app.state.min_free_bytes
         assert any(extra >= MAX_DERIVATIVE_BYTES for extra, _ in calls)
+
+
+class TestOffTheEventLoop:
+    """The upload route is ``async def`` (it awaits the body), so any
+    blocking call left in it would stall every player. The DB and file
+    half runs in the threadpool instead (RFWQM9)."""
+
+    def test_upload_stores_off_the_event_loop(self, admin, client, monkeypatch):
+        _party(admin, client)
+        names = []
+        real = storage.has_room
+
+        def spy(path, extra_bytes, minimum):
+            names.append(threading.current_thread().name)
+            return real(path, extra_bytes, minimum)
+
+        monkeypatch.setattr(storage, "has_room", spy)
+        assert _upload(client, make_jpeg()).status_code == 201
+        # Both the middleware's pre-body check and the route's own check
+        # stat the filesystem, so neither may run on the event loop.
+        assert names and all("worker" in name.lower() for name in names), names

@@ -81,26 +81,36 @@ def _item_json(row: sqlite3.Row) -> dict:
     }
 
 
-@router.post("", status_code=201)
-async def upload(
-    request: Request,
-    photo: UploadFile,
-    riddle_id: str | None = None,
-    ctx: auth.PlayerContext = Depends(auth.require_player),
-):
-    conn: sqlite3.Connection = reader(request)
+def _restriction_refusal(
+    request: Request, ctx: auth.PlayerContext
+) -> JSONResponse | None:
+    """Strike-ladder gate (derived state, ADR 0001): level 2 blocks until
+    cooldown_until; level 3 blocks for the rest of the event.
 
-    # Strike ladder gate (derived state, ADR 0001): level 2 blocks until
-    # cooldown_until; level 3 blocks for the rest of the event.
+    Runs in the threadpool (the reader query would otherwise stall the
+    loop) and before the body is read, so a restricted team's upload is
+    refused without spooling the photo.
+    """
+    conn: sqlite3.Connection = reader(request)
     restriction = derive_restriction(conn, ctx.player_id)
     if restriction.blocks_uploads(conduct_now()):
         return _err(
             403, "upload_restricted", "Uploads are temporarily disabled for your team."
         )
+    return None
 
-    data = await photo.read(MAX_BYTES + 1)
-    if len(data) > MAX_BYTES:
-        return _err(413, "too_large", "That photo is too large.")
+
+def _store_upload(
+    request: Request,
+    ctx: auth.PlayerContext,
+    data: bytes,
+    riddle_id: str | None,
+) -> JSONResponse:
+    """The blocking half of an upload: reader checks, the Pillow pipeline,
+    the writer transaction, and the file writes. Always called through
+    ``run_in_threadpool`` — SQLite and file I/O must never stall the loop.
+    """
+    conn: sqlite3.Connection = reader(request)
 
     # Disk guardrail before any Pillow work: a full disk fails SQLite writes
     # too, so refuse while the host can still recover. Guardrail, not a
@@ -136,16 +146,15 @@ async def upload(
             429, "rate_limited", "Too many uploads — give it a minute and try again."
         )
 
-    # Blocking Pillow work off the event loop (build plan's called-out
-    # trap): inside `async def` it would stall every player.
+    # Blocking Pillow work (build plan's called-out trap): this function
+    # runs in the threadpool, so it cannot stall the loop.
     try:
-        processed = await run_in_threadpool(process_upload, data)
+        processed = process_upload(data)
     except NotAnImageError:
         return _err(415, "not_an_image", "That file isn't a JPEG, PNG, or WebP photo.")
     except TooManyPixelsError:
         return _err(413, "too_large", "That photo's dimensions are too large.")
 
-    photos_dir = request.app.state.photos_dir
     evidence_id = ids.new_id()
     derivative_rel = f"derivatives/{evidence_id}.jpg"
     original_rel = f"originals/{evidence_id}"
@@ -254,6 +263,26 @@ async def upload(
     (photos_dir / original_rel).write_bytes(data)
 
     return _item_json(row)
+
+
+@router.post("", status_code=201)
+async def upload(
+    request: Request,
+    photo: UploadFile,
+    riddle_id: str | None = None,
+    ctx: auth.PlayerContext = Depends(auth.require_player),
+):
+    """Only the body read and the two threadpool hops touch the loop: every
+    SQLite call and file write lives in a sync helper (see ``_store_upload``)."""
+    refusal = await run_in_threadpool(_restriction_refusal, request, ctx)
+    if refusal is not None:
+        return refusal
+
+    data = await photo.read(MAX_BYTES + 1)
+    if len(data) > MAX_BYTES:
+        return _err(413, "too_large", "That photo is too large.")
+
+    return await run_in_threadpool(_store_upload, request, ctx, data, riddle_id)
 
 
 @router.get("")

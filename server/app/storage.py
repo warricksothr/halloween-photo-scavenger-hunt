@@ -27,6 +27,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -65,6 +66,15 @@ def has_room(path: Path, extra_bytes: int, minimum: int) -> bool:
     return free - extra_bytes >= minimum
 
 
+def _any_directory_full(directories: set[Path], extra_bytes: int, minimum: int) -> bool:
+    """True when any filesystem in ``directories`` would drop below
+    ``minimum``. Sync so the middleware can run it in the threadpool:
+    ``has_room`` stats the filesystem, and that must not block the loop."""
+    return any(
+        not has_room(directory, extra_bytes, minimum) for directory in directories
+    )
+
+
 def _content_length(scope: Scope) -> int | None:
     for name, value in scope.get("headers", []):
         if name.lower() != b"content-length":
@@ -90,6 +100,9 @@ class StorageGuardMiddleware:
 
     A chunked request declares no length, and reading the body to learn it
     would defeat the point; the app's request cap is the bound instead.
+
+    The disk query itself is a blocking ``statvfs``, so it runs in the
+    threadpool rather than on the event loop.
     """
 
     def __init__(
@@ -119,9 +132,8 @@ class StorageGuardMiddleware:
         declared = _content_length(scope)
         extra = declared if declared is not None else self.max_bytes
         directories = {self.photos_dir, self.spool_dir}
-        if any(
-            not has_room(directory, extra, self.min_free_bytes)
-            for directory in directories
+        if await run_in_threadpool(
+            _any_directory_full, directories, extra, self.min_free_bytes
         ):
             response = JSONResponse(
                 status_code=507,

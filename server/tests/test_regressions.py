@@ -14,18 +14,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import ASGITransport, AsyncClient
+from starlette.requests import Request
+from starlette.responses import StreamingResponse
 from support import arm_csrf
 from test_evidence import make_jpeg
 from test_mod import _mod, _submit
 from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
+from app import auth, events, mod, oidc, players, submissions, teams
 from app import db as db_module
-from app import events, mod, oidc, players, submissions, teams
 from app import evidence as evidence_module
 from app.audit import Action
 from app.main import create_app
-from app.sse import SUBSCRIBER_QUEUE_MAX, SseBroker, _stream
+from app.sse import SUBSCRIBER_QUEUE_MAX, SseBroker, _stream, events_stream
 
 
 def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
@@ -685,6 +687,46 @@ def test_sse_player_routing_and_stream_cleanup():
     assert owner not in broker._subscribers
     assert teammate.queue.empty()
     assert other_event.queue.empty()
+
+
+def test_sse_session_lookup_off_the_event_loop(admin, client, monkeypatch):
+    """events_stream is async, and its session lookups read SQLite and may
+    write last_seen_at, so they must run in the threadpool (RFWQM9)."""
+    party = _party(admin, client)
+    batman = party["players"]["Batman"]["client"]
+    names = []
+    real = auth.current_moderator
+
+    def spy(request):
+        names.append(threading.current_thread().name)
+        return real(request)
+
+    monkeypatch.setattr(auth, "current_moderator", spy)
+
+    cookie = "; ".join(f"{name}={value}" for name, value in batman.cookies.items())
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/events/stream",
+            "raw_path": b"/api/events/stream",
+            "query_string": b"",
+            "headers": [(b"cookie", cookie.encode())],
+            "client": ("test", 1234),
+            "server": ("test", 80),
+            "app": client.app,
+        }
+    )
+
+    async def call_route():
+        # The route returns once it has built the streaming response, so
+        # the session lookup has already run — no frame needs producing.
+        assert isinstance(await events_stream(request), StreamingResponse)
+
+    asyncio.run(call_route())
+    assert names and all("worker" in name.lower() for name in names), names
 
 
 def test_sse_overflow_is_counted_and_logged(caplog):
