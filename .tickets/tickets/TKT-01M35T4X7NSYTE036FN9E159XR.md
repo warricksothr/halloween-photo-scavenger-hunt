@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:45:41Z
+updated_at: 2026-09-23T01:49:29Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -202,3 +202,9 @@ Quality gate re-run: exit 0 — 337 server tests @ 95.11%, 20 deploy checks, 67 
 Ninth Terva review (222, head e6bd5fe, run df483f79-46e1-3b4d-8318-8f7d0dc913e1 -> run df483f79, Actions run #344/id 9132, request review-fixes-8): the span-data query/fragment finding resolved; one new high finding, accepted and fixed:
 - high breadcrumb data: scrub_breadcrumb/scrubBreadcrumb kept every breadcrumb data key except the three URL fields, so headers, cookies, body data, env and query_string rode along — against the ADR/PR promise that before_breadcrumb drops them. Both now call a new recursive drop helper (_drop_sensitive_keys / dropSensitiveKeys) that removes the sensitive keys at any depth, so a nested request/response shape is covered. The request drop-list constant was unified into _SENSITIVE_KEYS. ADR 0017 wording updated to say the drop is recursive and covers breadcrumb/span data. Tests added on both surfaces for headers, cookies, body data, env, query_string, and a nested response.headers.
 Quality gate re-run: exit 0 — 338 server tests @ 95.06%, 20 deploy checks, 68 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:49:29Z
+
+Tenth Terva review (223, head abed8b3, run 1513c4a7-7f3c-4874-801e-67487bd6b0f7, Actions run #346/id 9137, request review-fixes-9): the breadcrumb-data finding resolved; one new high finding, accepted and fixed — same class in span data:
+- high nested span data: _scrub_span/scrubSpan scrubbed only top-level string values and never recursed, so a nested response.headers, request.cookies/env, or query_string survived, against ADR 0017's recursive-drop wording. Both now route span data through a recursive scrubber (_scrub_span_data / scrubData) that drops sensitive keys at any depth and scrub_url/scrubUrl's every string; the web scrubData is shared with scrubBreadcrumb, replacing the per-key url/from/to list. The span data drop and the string scrub now happen in one recursive pass (previously the server scrubbed strings first, then dropped keys, leaving nested strings unscrubbed). Tests added on both surfaces for nested headers, cookies, env, query_string, and a query string on a nested url.
+Quality gate re-run: exit 0 — 339 server tests @ 94.90%, 20 deploy checks, 69 frontend tests, build.
