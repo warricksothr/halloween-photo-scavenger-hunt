@@ -5,6 +5,8 @@
 // and then hand the fresh snapshot back to the store. Errors follow
 // docs/impl/api.md: {"error": code, "message": human string}.
 
+import { recordRequestId } from './errors';
+
 // A fetch can stay pending indefinitely on a dead connection, which no
 // amount of retry logic can reach. Bound the whole exchange — headers *and*
 // body — so a hung connection turns into the same error shape a rejection
@@ -50,6 +52,9 @@ async function send(path, options = {}) {
       body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
       signal: controller.signal,
     });
+    // The request id is the join key to this request's server log line and
+    // error report, so a browser error can name the same request (ADR 0016).
+    recordRequestId(resp.headers?.get?.('X-Request-ID'));
     if (resp.status === 401) {
       // Not joined (or session revoked) — the store routes to the join
       // screen; it is not an error from the player's point of view.

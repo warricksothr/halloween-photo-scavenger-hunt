@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from './api';
+import { lastRequestIdForTest } from './errors';
 
-function response({ status = 200, body = {}, json = true } = {}) {
+function response({ status = 200, body = {}, json = true, requestId } = {}) {
   return {
     status,
     ok: status >= 200 && status < 300,
+    headers: {
+      get: vi.fn((name) =>
+        name === 'X-Request-ID' ? requestId ?? null : null,
+      ),
+    },
     json: json
       ? vi.fn().mockResolvedValue(body)
       : vi.fn().mockRejectedValue(new SyntaxError('not JSON')),
@@ -190,6 +196,16 @@ describe('api client', () => {
       '/api/join/J',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('records the response X-Request-ID for error reports', async () => {
+    globalThis.fetch.mockResolvedValue(
+      response({ body: {}, requestId: 'req-123' }),
+    );
+
+    await api.snapshot();
+
+    expect(lastRequestIdForTest()).toBe('req-123');
   });
 
   it('returns the second csrf_failed rather than retrying forever', async () => {

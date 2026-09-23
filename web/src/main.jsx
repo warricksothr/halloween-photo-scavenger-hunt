@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
+import { initErrorReporting } from './errors';
 import { getState, refresh, retry, subscribe } from './store';
 import { Header } from './components/Header';
 import { ConnectionErrorScreen } from './screens/ConnectionError';
@@ -25,6 +26,9 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = subscribe(setState);
+    // Boot the reporter before the first request so a failure on boot is
+    // reported; without a DSN this loads nothing.
+    initErrorReporting();
     refresh(); // boot: the snapshot decides everything
     return unsubscribe;
   }, []);
