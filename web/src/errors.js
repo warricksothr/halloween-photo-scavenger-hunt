@@ -102,33 +102,30 @@ function scrubSpan(span) {
     cleaned.description = scrubText(cleaned.description);
   }
   if (cleaned.data && typeof cleaned.data === 'object') {
-    const data = { ...cleaned.data };
-    for (const [key, value] of Object.entries(data)) {
-      // A span-data string may be a URL, a bare path, or opaque text.
-      // scrubUrl is safe on all three: it redacts a bearer segment and
-      // drops a query or fragment wherever they sit, and leaves text
-      // without one unchanged.
-      if (typeof value === 'string') data[key] = scrubUrl(value);
-    }
-    cleaned.data = data;
+    // A span-data string may be a URL, a bare path, or opaque text, and the
+    // data can nest a request/response mapping. Drop the sensitive keys and
+    // scrub every string at any depth.
+    cleaned.data = scrubData({ ...cleaned.data });
   }
   return cleaned;
 }
 
-// Recursively drop credential-bearing keys from arbitrary data. A
-// breadcrumb or span data mapping can nest the request under
-// request/response, so a top-level delete is not enough.
-function dropSensitiveKeys(value) {
-  if (Array.isArray(value)) return value.map(dropSensitiveKeys);
+// Recursively drop credential-bearing keys and scrub every string in
+// arbitrary data. A breadcrumb or span data mapping can nest the request
+// under request/response, so a top-level pass is not enough.
+function scrubData(value) {
+  if (Array.isArray(value)) return value.map(scrubData);
   if (value && typeof value === 'object') {
     const out = {};
     for (const [key, item] of Object.entries(value)) {
       if (DROPPED_REQUEST_KEYS.includes(key)) continue;
-      out[key] = dropSensitiveKeys(item);
+      out[key] = scrubData(item);
     }
     return out;
   }
-  return value;
+  // scrubUrl redacts a bearer segment and drops a query or fragment
+  // wherever they sit, and leaves plain text alone.
+  return typeof value === 'string' ? scrubUrl(value) : value;
 }
 
 function scrubBreadcrumb(crumb) {
@@ -138,11 +135,9 @@ function scrubBreadcrumb(crumb) {
     cleaned.message = scrubText(cleaned.message);
   }
   if (cleaned.data && typeof cleaned.data === 'object') {
-    const data = { ...cleaned.data };
-    for (const key of ['url', 'from', 'to']) {
-      if (typeof data[key] === 'string') data[key] = scrubUrl(data[key]);
-    }
-    cleaned.data = dropSensitiveKeys(data);
+    // scrubData drops the sensitive keys and scrubs every string — url,
+    // from, to and anything nested — so no per-key list is needed.
+    cleaned.data = scrubData({ ...cleaned.data });
   }
   return cleaned;
 }

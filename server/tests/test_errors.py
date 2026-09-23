@@ -232,6 +232,32 @@ def test_scrub_transaction_drops_a_query_or_fragment_in_span_data():
     assert data["note"] == "see /some/path"
 
 
+def test_scrub_transaction_drops_nested_sensitive_span_data():
+    event = {
+        "spans": [
+            {
+                "data": {
+                    "response": {
+                        "headers": {"Set-Cookie": "session=abc"},
+                        "url": "https://hunt.example/api/state?token=SECRET",
+                    },
+                    "request": {"cookies": {"session": "abc"}, "env": {"SECRET": "x"}},
+                    "query_string": "token=SECRET",
+                }
+            }
+        ]
+    }
+
+    cleaned = errors.scrub_transaction(event)
+
+    data = cleaned["spans"][0]["data"]
+    assert "headers" not in data["response"]
+    assert data["response"]["url"] == "https://hunt.example/api/state"
+    assert "cookies" not in data["request"]
+    assert "env" not in data["request"]
+    assert "query_string" not in data
+
+
 def test_scrub_event_scrubs_top_level_message():
     event = {"message": "GET /api/join/SECRET failed"}
     cleaned = errors.scrub_event(event)

@@ -177,16 +177,29 @@ def _scrub_span(span: dict[str, Any]) -> dict[str, Any]:
         span["description"] = scrub_text(span["description"])
     data = span.get("data")
     if isinstance(data, dict):
-        data = dict(data)
-        for key, value in data.items():
-            # A span-data string may be a URL, a bare path, or opaque text.
-            # scrub_url is safe on all three: it redacts a bearer segment
-            # and drops a query or fragment wherever they sit, and leaves
-            # text without one unchanged.
-            if isinstance(value, str):
-                data[key] = scrub_url(value)
-        span["data"] = data
+        # A span-data string may be a URL, a bare path, or opaque text, and
+        # the data can nest a request/response mapping. Drop the sensitive
+        # keys and scrub every string at any depth.
+        span["data"] = _scrub_span_data(dict(data))
     return span
+
+
+def _scrub_span_data(value: Any) -> Any:
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in _SENSITIVE_KEYS:
+                continue
+            if isinstance(item, str):
+                # scrub_url redacts a bearer segment and drops a query or
+                # fragment wherever they sit, and leaves plain text alone.
+                out[key] = scrub_url(item)
+            else:
+                out[key] = _scrub_span_data(item)
+        return out
+    if isinstance(value, list):
+        return [_scrub_span_data(item) for item in value]
+    return value
 
 
 def _scrub_exception_value(value: Any) -> Any:

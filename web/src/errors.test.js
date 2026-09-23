@@ -220,6 +220,32 @@ describe('error reporting', () => {
     expect(event.spans[0].data.note).toBe('see /some/path');
   });
 
+  it('drops nested credential-bearing keys from span data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      spans: [
+        {
+          data: {
+            response: {
+              headers: { 'Set-Cookie': 'session=abc' },
+              url: 'https://hunt.example/api/state?token=SECRET',
+            },
+            request: { cookies: { session: 'abc' }, env: { SECRET: 'x' } },
+            query_string: 'token=SECRET',
+          },
+        },
+      ],
+    });
+
+    const data = event.spans[0].data;
+    expect(data.response.headers).toBeUndefined();
+    expect(data.response.url).toBe('https://hunt.example/api/state');
+    expect(data.request.cookies).toBeUndefined();
+    expect(data.request.env).toBeUndefined();
+    expect(data.query_string).toBeUndefined();
+  });
+
   it('redacts the credential in breadcrumb messages and data', async () => {
     const errors = await loadErrors();
 
