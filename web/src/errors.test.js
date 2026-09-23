@@ -199,6 +199,14 @@ describe('error reporting', () => {
     );
   });
 
+  it('redacts a credential in a top-level event message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({ message: 'GET /api/join/SECRET failed' });
+
+    expect(event.message).toBe('GET /api/join/<redacted> failed');
+  });
+
   it('redacts a credential inside an exception message', async () => {
     const errors = await loadErrors();
 

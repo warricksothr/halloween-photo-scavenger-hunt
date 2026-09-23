@@ -140,6 +140,9 @@ export function scrubEvent(event) {
   if (typeof cleaned.transaction === 'string') {
     cleaned.transaction = scrubText(cleaned.transaction);
   }
+  if (typeof cleaned.message === 'string') {
+    cleaned.message = scrubText(cleaned.message);
+  }
   // An exception message can carry the failing URL, so the text fields
   // are scrubbed like any other free text, not only the request.
   if (cleaned.logentry && typeof cleaned.logentry === 'object') {

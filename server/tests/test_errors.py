@@ -177,6 +177,12 @@ def test_scrub_transaction_scrubs_spans():
     )
 
 
+def test_scrub_event_scrubs_top_level_message():
+    event = {"message": "GET /api/join/SECRET failed"}
+    cleaned = errors.scrub_event(event)
+    assert cleaned["message"] == "GET /api/join/<redacted> failed"
+
+
 def test_scrub_event_scrubs_exception_message_and_logentry():
     event = {
         "exception": {

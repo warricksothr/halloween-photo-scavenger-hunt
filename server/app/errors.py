@@ -184,6 +184,8 @@ def scrub_event(
         event["request"] = request
     if isinstance(event.get("transaction"), str):
         event["transaction"] = scrub_text(event["transaction"])
+    if isinstance(event.get("message"), str):
+        event["message"] = scrub_text(event["message"])
     # An exception message can carry the failing URL — an httpx error
     # echoes it, and a raise site may include the path — so the text
     # fields are scrubbed like any other free text, not only the request.
