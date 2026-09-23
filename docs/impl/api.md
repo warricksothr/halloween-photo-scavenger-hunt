@@ -49,7 +49,8 @@ Three checks wrap the routes, so they are not repeated per endpoint:
 Every `/api` response also carries `Cache-Control: no-store` (ADR 0021):
 the bodies are per-session, so a shared cache must never store one. The
 SPA shell and its hashed assets are served outside `/api` and keep their
-own caching.
+own caching. An unhandled error is built outside the middleware stack, so
+the app's 500 handler stamps the header for API paths too.
 
 ## Roles
 

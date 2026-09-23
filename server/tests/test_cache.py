@@ -5,6 +5,11 @@ The middleware stamps the header on every /api path; the SPA shell and
 its hashed assets live outside /api and keep their own caching.
 """
 
+from fastapi.testclient import TestClient
+
+from app.main import create_app
+from app.security import hash_password
+
 
 class TestNoStore:
     def test_api_response_is_no_store(self, client):
@@ -28,3 +33,24 @@ class TestNoStore:
         # /apiary and /api-docs are not the API.
         resp = client.get("/apiary")
         assert resp.headers.get("cache-control") != "no-store"
+
+    def test_unhandled_api_error_is_no_store(self, tmp_path):
+        # ServerErrorMiddleware builds the 500 outside the middleware
+        # stack, so the handler has to stamp the header itself.
+        app = create_app(
+            tmp_path / "boom.db",
+            admin_config=("admin", hash_password("pw")),
+            cookie_secure=False,
+            photos_dir=tmp_path / "photos",
+            static_dir=None,
+        )
+
+        @app.get("/api/boom")
+        def boom():
+            raise RuntimeError("kaboom")
+
+        with TestClient(app, raise_server_exceptions=False) as c:
+            resp = c.get("/api/boom")
+
+        assert resp.status_code == 500
+        assert resp.headers["cache-control"] == "no-store"

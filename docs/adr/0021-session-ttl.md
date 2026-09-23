@@ -71,5 +71,9 @@ hashed assets are outside `/api` and keep their own caching.
 - `no-store` also applies to the SSE stream, replacing its `no-cache`; the
   stronger value is correct and a proxy cannot act on two conflicting
   headers anyway.
+- An unhandled API error is built by Starlette's `ServerErrorMiddleware`,
+  which sits outside every user middleware, so the layer never sees it.
+  The app's 500 handler stamps `no-store` on API paths itself, since an
+  error body is the last response that should be cached.
 - Tests exercise expiry by backdating `created_at`/`expires_at` rather
   than sleeping, and assert `Max-Age` on each credential cookie.

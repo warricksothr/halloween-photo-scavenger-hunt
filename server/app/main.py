@@ -208,6 +208,12 @@ def create_app(
         if request_id:
             body["request_id"] = request_id
         response = JSONResponse(body, status_code=500)
+        # ServerErrorMiddleware builds this response outside the user
+        # middleware stack, so NoStoreMiddleware never sees it (ADR 0021).
+        # Stamp it here for the same reason the layer exists at all: an
+        # error body is still per-session and must not be cached.
+        if cache.is_api_path(request.url.path):
+            response.headers["Cache-Control"] = "no-store"
         if request_id:
             response.headers[REQUEST_ID_HEADER] = request_id
         return response
