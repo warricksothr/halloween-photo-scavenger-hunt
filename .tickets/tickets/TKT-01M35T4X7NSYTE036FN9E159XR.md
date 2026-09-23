@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:54:34Z
+updated_at: 2026-09-23T01:59:16Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -214,3 +214,9 @@ Quality gate re-run: exit 0 — 339 server tests @ 94.90%, 20 deploy checks, 69 
 Eleventh Terva review (224, head f55a22a, run 954921ff-a6c4-4e6d-9e31-9fad81164da6, Actions run #348/id 9162, request review-fixes-10): the nested-span-data finding resolved; one new high finding, accepted and fixed:
 - high prose in span/breadcrumb data: the recursive data scrubbers sent every string through scrub_url/scrubUrl, which only redacts when the whole value starts with a bearer path or a URL, so a diagnostic field like note='request to /api/join/SECRET failed' kept its code. Both surfaces now send data strings through scrub_text/scrubText, which finds an embedded path and drops any query/fragment with it. On the server, _drop_sensitive_keys was folded into one recursive _scrub_data that both drops sensitive keys and scrubs every string, used by scrub_breadcrumb and _scrub_span (breadcrumb data previously dropped keys but did not scrub strings). Tests added on both surfaces for an embedded bearer path in span data and breadcrumb data.
 Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 70 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:59:16Z
+
+Twelfth Terva review (225, head a070252, run 35a58e74-7599-4bf6-a4cd-876508d50860, Actions run #350/id 9176, request review-fixes-11): the prose-in-data finding resolved; one new medium finding, accepted and fixed:
+- medium uncorrelated errors re-correlated at beforeSend: reportError(error, context, null) means 'do not correlate', but scrubEvent's fallback re-added the module-global lastRequestId whenever the event had no request_id tag, so a concurrent request finishing between capture and beforeSend could attach the wrong id. reportError now marks an explicit null with scope.setContext('arkham_uncorrelated', {value: true}); scrubEvent reads and deletes that marker and skips the global fallback. Test: explicit-null report, then the global moves, then scrubEvent — no tag attached and the marker removed. Server unchanged: it has no global fallback, bind_request_id is tag-only and auto-capture is the single path.
+Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 71 frontend tests, build.
