@@ -106,11 +106,24 @@ needs to judge readiness — `db_writable` (a `BEGIN IMMEDIATE` plus a
 header write rolled back, so it proves the volume can accept a real page,
 not merely take the write lock), `schema_version`, `disk` (`free_bytes` /
 `total_bytes` on the DB volume), `photo_count` (evidence rows),
-`sse_subscribers` (live stream clients), `release` (`ARKHAM_RELEASE`, else
-`unknown`), and `uptime_seconds`. A read-only or full database reports
-`db_writable: false` rather than raising, so the endpoint answers precisely
-when things are wrong. `GET /api/health` stays the public liveness check
-and never reveals the build or counts.
+`sse_subscribers` (live stream clients) and `sse_overflow` (frames dropped
+because a subscriber's queue filled — a non-zero value means a client is
+falling behind and recovering via reconnect), `release` (`ARKHAM_RELEASE`,
+else `unknown`), `uptime_seconds`, and `metrics` (below). A read-only or
+full database reports `db_writable: false` rather than raising, so the
+endpoint answers precisely when things are wrong. `GET /api/health` stays
+the public liveness check and never reveals the build or counts.
+
+`metrics` is the process's in-memory counters (`app/metrics.py`): `uploads`
+keyed by outcome (`accepted` plus `upload_restricted`, `too_large_bytes`,
+`too_large_pixels`, `riddle_not_found`, `rate_limited`, `not_an_image` —
+the two `too_large` variants separate a big upload from a decompression
+bomb), `verdicts` keyed by the status a submission settled into
+(`verified`, `obscured`, `not_found`, `too_small`, `misaligned`,
+`inappropriate`, `expired`), and `lock` (`acquisitions`, `contentions`,
+`wait_seconds` for the writer lock). Observed requests add no database
+write; the counters reset with the process, which is the honest scope —
+they describe this instance, not history.
 
 ### Single sign-on (S9CT)
 

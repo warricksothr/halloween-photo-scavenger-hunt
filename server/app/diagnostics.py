@@ -50,6 +50,19 @@ def _subscriber_count(request: Request) -> int | None:
     return broker.subscriber_count() if broker is not None else None
 
 
+def _sse_overflow(request: Request) -> int | None:
+    """Frames dropped because a subscriber's queue filled (app/sse.py).
+    A non-zero value means a client is falling behind and recovering via
+    a reconnect; useful next to the live subscriber count."""
+    broker = getattr(request.app.state, "sse_broker", None)
+    return broker.overflow_count if broker is not None else None
+
+
+def _metrics(request: Request) -> dict[str, Any] | None:
+    collector = getattr(request.app.state, "metrics", None)
+    return collector.snapshot() if collector is not None else None
+
+
 def snapshot(request: Request) -> dict[str, Any]:
     """The readiness body. Every probe is cheap and side-effect-free
     except the writability check, which rolls back."""
@@ -61,6 +74,8 @@ def snapshot(request: Request) -> dict[str, Any]:
         "disk": _disk(request),
         "photo_count": _photo_count(request),
         "sse_subscribers": _subscriber_count(request),
+        "sse_overflow": _sse_overflow(request),
+        "metrics": _metrics(request),
         "release": os.environ.get(RELEASE_ENV) or "unknown",
         "uptime_seconds": (
             round(time.monotonic() - started_at, 3) if started_at is not None else None

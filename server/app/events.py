@@ -336,6 +336,8 @@ def close_event(event_id: str, request: Request, _: str = Depends(auth.require_a
             entity_id=event_id,
             details={"expired_pending": cur.rowcount},
         )
+    if cur.rowcount:
+        request.app.state.metrics.record_verdict_count("expired", cur.rowcount)
     sse.publish(request, event_id, "event_status", {"status": "closed"})
     # The final reveal: standings become visible to every player the
     # moment the round closes, throttle or no throttle.

@@ -35,6 +35,7 @@ from app import (
     evidence,
     leaderboard,
     limits,
+    metrics,
     mod,
     oidc,
     players,
@@ -137,10 +138,14 @@ def create_app(
         # uptime is measured from boot (app/diagnostics.py).
         app.state.db_path = Path(db_path)
         app.state.started_at = time.monotonic()
+        # In-process counters (app/metrics.py). The writer lock is wrapped
+        # so its contention is observable; every ``with app.state.db_lock``
+        # site is measured without changing those sites.
+        app.state.metrics = metrics.Metrics()
         # Sync endpoints share one writer. Race-sensitive mutation
         # handlers hold this reentrant lock for the full request, then
         # acquire it again around their transaction blocks.
-        app.state.db_lock = threading.RLock()
+        app.state.db_lock = metrics.MeteredLock(threading.RLock(), app.state.metrics)
         app.state.admin_config = admin_config
         app.state.admin_sessions = {}  # in-memory; auth.py explains why
         # Session lifetime for every kind of session (auth.py). Read once

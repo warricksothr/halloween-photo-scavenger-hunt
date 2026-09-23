@@ -63,6 +63,17 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": code, "message": message})
 
 
+def _reject(
+    request: Request, status: int, code: str, message: str, outcome: str
+) -> JSONResponse:
+    """Count a refused upload by reason, then return the wire error. The
+    outcome key differs from the wire ``code`` where one code covers two
+    distinct failure modes (``too_large`` for wire bytes vs decoded
+    pixels), so an operator can tell them apart (app/metrics.py)."""
+    request.app.state.metrics.record_upload(outcome)
+    return _err(status, code, message)
+
+
 def _item_json(row: sqlite3.Row) -> dict:
     """Drawer shape. photo_path never leaves the server — the photo URL
     is the authenticated endpoint, and paths are an implementation detail
@@ -94,8 +105,12 @@ def _restriction_refusal(
     conn: sqlite3.Connection = reader(request)
     restriction = derive_restriction(conn, ctx.player_id)
     if restriction.blocks_uploads(conduct_now()):
-        return _err(
-            403, "upload_restricted", "Uploads are temporarily disabled for your team."
+        return _reject(
+            request,
+            403,
+            "upload_restricted",
+            "Uploads are temporarily disabled for your team.",
+            "upload_restricted",
         )
     return None
 
@@ -132,7 +147,13 @@ def _store_upload(
             (riddle_id, ctx.event_id),
         ).fetchone()
         if riddle is None:
-            return _err(404, "riddle_not_found", "No such riddle on this event.")
+            return _reject(
+                request,
+                404,
+                "riddle_not_found",
+                "No such riddle on this event.",
+                "riddle_not_found",
+            )
 
     # Rolling-window team rate limit — checked before any Pillow work so
     # flooding is cheap to refuse.
@@ -142,8 +163,12 @@ def _store_upload(
         (ctx.team_id, cutoff),
     ).fetchone()[0]
     if recent >= RATE_LIMIT_UPLOADS:
-        return _err(
-            429, "rate_limited", "Too many uploads — give it a minute and try again."
+        return _reject(
+            request,
+            429,
+            "rate_limited",
+            "Too many uploads — give it a minute and try again.",
+            "rate_limited",
         )
 
     # Blocking Pillow work (build plan's called-out trap): this function
@@ -151,9 +176,21 @@ def _store_upload(
     try:
         processed = process_upload(data)
     except NotAnImageError:
-        return _err(415, "not_an_image", "That file isn't a JPEG, PNG, or WebP photo.")
+        return _reject(
+            request,
+            415,
+            "not_an_image",
+            "That file isn't a JPEG, PNG, or WebP photo.",
+            "not_an_image",
+        )
     except TooManyPixelsError:
-        return _err(413, "too_large", "That photo's dimensions are too large.")
+        return _reject(
+            request,
+            413,
+            "too_large",
+            "That photo's dimensions are too large.",
+            "too_large_pixels",
+        )
 
     evidence_id = ids.new_id()
     derivative_rel = f"derivatives/{evidence_id}.jpg"
@@ -169,10 +206,12 @@ def _store_upload(
         # The reader checks above are only a fast-fail before that work.
         restriction = derive_restriction(writer, ctx.player_id)
         if restriction.blocks_uploads(conduct_now()):
-            return _err(
+            return _reject(
+                request,
                 403,
                 "upload_restricted",
                 "Uploads are temporarily disabled for your team.",
+                "upload_restricted",
             )
         if riddle_id is not None:
             riddle = writer.execute(
@@ -180,16 +219,24 @@ def _store_upload(
                 (riddle_id, ctx.event_id),
             ).fetchone()
             if riddle is None:
-                return _err(404, "riddle_not_found", "No such riddle on this event.")
+                return _reject(
+                    request,
+                    404,
+                    "riddle_not_found",
+                    "No such riddle on this event.",
+                    "riddle_not_found",
+                )
         recent = writer.execute(
             "SELECT COUNT(*) FROM evidence_item WHERE team_id = ? AND created_at > ?",
             (ctx.team_id, cutoff),
         ).fetchone()[0]
         if recent >= RATE_LIMIT_UPLOADS:
-            return _err(
+            return _reject(
+                request,
                 429,
                 "rate_limited",
                 "Too many uploads — give it a minute and try again.",
+                "rate_limited",
             )
         writer.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
@@ -262,6 +309,7 @@ def _store_upload(
     (photos_dir / derivative_rel).write_bytes(processed.derivative_bytes)
     (photos_dir / original_rel).write_bytes(data)
 
+    request.app.state.metrics.record_upload("accepted")
     return _item_json(row)
 
 
@@ -280,7 +328,9 @@ async def upload(
 
     data = await photo.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
-        return _err(413, "too_large", "That photo is too large.")
+        return _reject(
+            request, 413, "too_large", "That photo is too large.", "too_large_bytes"
+        )
 
     return await run_in_threadpool(_store_upload, request, ctx, data, riddle_id)
 

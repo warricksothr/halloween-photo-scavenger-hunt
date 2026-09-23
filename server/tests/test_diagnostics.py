@@ -22,6 +22,8 @@ def test_readyz_reports_the_shape(admin):
     assert body["disk"]["total_bytes"] > 0
     assert body["photo_count"] == 0
     assert body["sse_subscribers"] == 0
+    assert body["sse_overflow"] == 0
+    assert body["metrics"]["uploads"]["accepted"] == 0
     assert body["release"] == "unknown"
     assert body["uptime_seconds"] >= 0
 
