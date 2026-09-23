@@ -115,3 +115,36 @@ If all eight pass, the night is ready.
 | Players can't upload big photos | nginx `client_max_body_size 16m` sits above the app's 15 MB cap, so the app owns the 413 |
 | 502 after reboot | `loginctl enable-linger "$USER"`; `systemctl --user status arkham-hunt` |
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |
+| Nothing in GlitchTip | `ARKHAM_ERROR_DSN` / `VITE_ERROR_DSN` are set and the app was restarted/rebuilt; the CSP `connect-src` includes the GlitchTip origin |
+
+## Error reporting (GlitchTip)
+
+Both halves of the app report to the self-hosted GlitchTip. Reporting is
+opt-in: with no DSN the SDKs stay inert, so a developer checkout and the
+test suite send nothing.
+
+Put the DSNs in `~/.config/arkham-hunt.env` (the browser DSN also needs to
+be in the build environment). They are ingest keys rather than hard secrets —
+the browser one ships in the bundle — but anyone holding one can post events
+to the project, so keep them out of the repo.
+
+```sh
+export ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/<project>
+export ARKHAM_TRACES_SAMPLE_RATE=0.1   # optional; 0 disables tracing
+export ARKHAM_ENVIRONMENT=production   # optional
+export ARKHAM_RELEASE=$(git -C ~/arkham rev-parse HEAD)  # optional
+```
+
+The browser DSN is compiled into the bundle, so it is a **build** input —
+set it before `npm run build` (or pass it as a build arg to the container):
+
+```sh
+cd ~/arkham/web
+VITE_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/<project> \
+VITE_TRACES_SAMPLE_RATE=0.1 npm run build
+```
+
+Check it works: open the site and watch for a request in GlitchTip's Issues. A
+backend 500 — or any unhandled server error — arrives with a `request_id` tag
+that matches the `X-Request-ID` header and the request log line.
+

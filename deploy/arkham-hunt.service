@@ -20,6 +20,16 @@
 #     ARKHAM_ADMIN_USERNAME=you
 #     ARKHAM_ADMIN_PASSWORD_HASH=<output of `python -m app.security 'pw'`
 #                                 run from the repo's server/ venv>
+#     ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/1
+#     ARKHAM_TRACES_SAMPLE_RATE=0.1
+#     ARKHAM_ENVIRONMENT=production
+#     ARKHAM_RELEASE=<git revision>
+#
+# ARKHAM_ERROR_DSN turns on server error/trace reporting to GlitchTip
+# (app/errors.py, ADR 0017). Unset means reporting is off, which is the
+# right default for a checkout. The server-side DSN is a public ingest
+# key but still belongs in this uncommitted file rather than the unit.
+# The browser DSN is baked into web/dist at build time (VITE_ERROR_DSN).
 
 [Unit]
 Description=Arkham Halloween photo scavenger hunt (uvicorn)
