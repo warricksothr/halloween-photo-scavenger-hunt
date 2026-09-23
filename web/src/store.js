@@ -120,12 +120,17 @@ async function withRetry(request) {
   return result;
 }
 
-// A failure the player cannot act on — a 5xx or a dead connection — is a
-// bug worth a report; a 4xx is the game telling the player something and
-// is not. The result carries its own request id, so concurrent requests
-// cannot cross-tag. Reporting is inert with no DSN (errors.js).
+// A failure the player cannot act on — a dead connection or a server fault —
+// is a bug worth a report; a 4xx is the game telling the player something and
+// is not. A 5xx the app answered carries a request id and the server already
+// captured its own event for it, with the real stack, so the browser reports
+// only the 5xx that has no id: one a proxy or a network boundary produced,
+// which no server event describes. The result carries its own request id, so
+// concurrent requests cannot cross-tag. Reporting is inert with no DSN
+// (errors.js).
 function reportFailure(result, context) {
-  if (result.network || result.status >= 500) {
+  const serverAlreadyReported = result.status >= 500 && result.requestId != null;
+  if (result.network || (result.status >= 500 && !serverAlreadyReported)) {
     reportError(
       new Error(result.message || 'request failed'),
       {

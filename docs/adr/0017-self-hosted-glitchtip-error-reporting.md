@@ -42,6 +42,13 @@ event as a duplicate — was rejected: it produced two events per 500, because t
 two carries differ in `mechanism` and dedupe does not merge them. One path is
 easier to reason about than a suppression rule.
 
+The browser honours the same rule from its side. A 5xx the app answered carries
+a request id, and the server already captured that request's event with the real
+stack, so the browser reports a 5xx only when the result has no request id — one
+a proxy or a network boundary produced, which no server event describes. A dead
+connection is always reported: the server never saw the request. The two
+surfaces therefore add an event only where the other could not.
+
 **Credentials are scrubbed before every send, in both directions.** This app
 puts bearer secrets in the URL: `/api/join/<code>`, `/api/mod/join/<code>`,
 `/api/team/invites/<token>` and the SPA links `/j/<code>`, `/m/<code>`,

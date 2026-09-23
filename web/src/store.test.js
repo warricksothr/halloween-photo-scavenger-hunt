@@ -304,7 +304,7 @@ describe('store', () => {
     }, null);
   });
 
-  it('reports under the failing request id, not a shared global', async () => {
+  it('does not report a 5xx the server already reported under its own id', async () => {
     vi.useFakeTimers();
     mocks.api.snapshot.mockResolvedValue({
       error: 'request_failed',
@@ -319,7 +319,27 @@ describe('store', () => {
     await vi.advanceTimersByTimeAsync(2000);
     await done;
 
-    expect(mocks.reportError.mock.calls[0][2]).toBe('req-own');
+    expect(mocks.reportError).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('reports a dead connection under its own request id', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({
+      error: 'network_error',
+      message: 'No connection.',
+      network: true,
+      requestId: 'req-net',
+    });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(mocks.reportError).toHaveBeenCalledTimes(1);
+    expect(mocks.reportError.mock.calls[0][2]).toBe('req-net');
     vi.useRealTimers();
   });
 });
