@@ -165,26 +165,35 @@ class TestVerdictMetrics:
 
 class TestLockMetrics:
     def test_contended_acquire_records_wait(self, admin):
-        """One thread holds the lock while another waits on it; the waiter
-        reports one contention and a positive wait."""
+        """One thread holds the lock while a second waits on it; the waiter
+        reports one contention and a positive wait. The holder is released
+        explicitly by this thread, not by its own timeout."""
         lock = admin.app.state.db_lock
         held = threading.Event()
         release = threading.Event()
+        acquired = threading.Event()
 
         def holder():
             with lock:
                 held.set()
                 release.wait(timeout=2)
 
-        thread = threading.Thread(target=holder)
-        thread.start()
-        held.wait(timeout=2)
-        try:
+        def waiter():
             with lock:
-                pass
-        finally:
-            release.set()
-            thread.join(timeout=2)
+                acquired.set()
+
+        holder_thread = threading.Thread(target=holder)
+        waiter_thread = threading.Thread(target=waiter)
+        holder_thread.start()
+        held.wait(timeout=2)
+        waiter_thread.start()
+        # While the holder holds, the waiter must not get in; that is the
+        # state the metric is meant to see. Then release and let it land.
+        assert not acquired.wait(timeout=0.2)
+        release.set()
+        waiter_thread.join(timeout=2)
+        holder_thread.join(timeout=2)
+        assert acquired.is_set()
 
         lock_metrics = admin.get("/api/admin/readyz").json()["metrics"]["lock"]
         assert lock_metrics["acquisitions"] >= 2
