@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T04:48:36Z
+updated_at: 2026-09-23T04:52:02Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -132,3 +132,24 @@ Base `6d87fbe`. Result: findings at the failure threshold.
 
 The scope note (no `docs/design.md` in the diff) needs no change; the riddle
 endpoints were already reviewed and shipped server-side.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T04:52:02Z
+
+### Review round 2 — one medium, accepted
+
+Same PR #25, reviewed head
+`71562dc75f6d1f182060516213e68ef94c6efef3`, request `admin-riddle-management`,
+run `c7878ef4-c353-422d-a565-c134d9d51850`, [Actions run #385](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/385).
+Result: findings at the failure threshold; the previous three findings are
+recorded as resolved.
+
+- **medium — a failed load's banner outlived the selection.** Loading event A
+  failed, so the error stayed set; switching to event B cleared the rows but
+  not the message, and B's successful response only replaced `riddles`, so A's
+  failure sat above B's valid rows. Accepted: a selection change clears the
+  error, and a successful load clears it too, in both the effect and the
+  mutation refetch. A test switches from a failing event to a working one and
+  asserts the message is gone.
+
+The scope note about `docs/design.md` and the server implementation is the
+same as round 1 and needs no change.
