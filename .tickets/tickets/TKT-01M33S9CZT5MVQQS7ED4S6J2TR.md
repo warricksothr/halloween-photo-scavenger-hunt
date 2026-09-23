@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T04:41:56Z
+updated_at: 2026-09-23T04:48:36Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -100,3 +100,35 @@ text; delete asks for confirmation then calls the endpoint; a refused delete
 shows the server message and the row stays. Extend `Admin.test.jsx` only for
 the tab wiring. `docs/progress.md` entry; no ADR — this fills in a screen the
 spec's mock already fixes, with S9CY's ADR 0019 covering the QR decision.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T04:48:36Z
+
+### Review round 1 — three findings, all accepted
+
+PR #25, reviewed head `711a07237dc2279f8207b0e99a3b45c45ac76e22`, request
+`admin-riddle-management`, run `f6d11b59-52ff-40b8-9499-2af59400e5ec`,
+[Actions run #383](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/383).
+Base `6d87fbe`. Result: findings at the failure threshold.
+
+- **high — a partially failed reorder left the screen stale.** `onMove` issues
+  one PATCH per changed row; if an early PATCH landed and a later one failed,
+  `mutate` returned on the error before refetching, so the host saw the old
+  order while the server held the new one, and the next move computed from
+  stale sort orders. Accepted: `mutate` now refetches on both paths, keeping
+  the action's message in the banner. A test makes the first PATCH succeed and
+  the second return 404, then asserts the reloaded order (and the message).
+- **medium — the event selector stayed live during a mutation.** A switch
+  mid-write would let that write's refetch land under the new selection.
+  Accepted: the selector is disabled while `busy`, and the refetch takes the
+  event id explicitly so a response cannot be applied to a different event
+  than the one fetched.
+- **medium — an event-list failure read as "no events".** The error was set
+  but the no-events branch returned before the banner, so the host was told to
+  create an event. Accepted: a `eventsLoaded` flag separates loading from
+  loaded-empty, the empty state shows the API message when there is one, and a
+  test covers an `adminEvents` error response.
+
+The scope note (no `docs/design.md` in the diff) needs no change; the riddle
+endpoints were already reviewed and shipped server-side.
