@@ -115,6 +115,14 @@ def test_scrub_url_drops_url_user_info():
     )
 
 
+def test_scrub_url_drops_a_query_on_a_host_only_url():
+    assert (
+        errors.scrub_url("https://key@hunt.example?token=SECRET")
+        == "https://hunt.example"
+    )
+    assert errors.scrub_url("https://hunt.example#SECRET") == "https://hunt.example"
+
+
 def test_scrub_text_drops_user_info_in_an_absolute_url():
     assert (
         errors.scrub_text("post to https://key@hunt.example/api/state failed")

@@ -171,6 +171,18 @@ describe('error reporting', () => {
     expect(event.message).toBe('post to https://hunt.example/api/state failed');
   });
 
+  it('drops a query or fragment on a host-only URL', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: { url: 'https://key@hunt.example?token=SECRET' },
+      message: 'see https://hunt.example#SECRET',
+    });
+
+    expect(event.request.url).toBe('https://hunt.example');
+    expect(event.message).toBe('see https://hunt.example');
+  });
+
   it('drops headers, cookies and query string from the request', async () => {
     const errors = await loadErrors();
 

@@ -44,7 +44,9 @@ export function lastRequestIdForTest() {
   return lastRequestId;
 }
 
-const ABSOLUTE_URL = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]*/;
+// The authority ends at the first `/`, `?`, or `#`, so a host-only URL
+// (https://host?token=SECRET) does not swallow its query into the origin.
+const ABSOLUTE_URL = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*/;
 
 // A path-like or URL-like run inside free text — quoted, key-prefixed, or
 // on its own line — so the credential is not hidden by surrounding prose
