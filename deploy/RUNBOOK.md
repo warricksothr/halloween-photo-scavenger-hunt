@@ -62,7 +62,8 @@ directory (an unmounted mount point).
 
 1. Open `https://<host>/admin` in a browser — the admin console is behind
    the login: SSO if §6 is configured, or the local break-glass password
-   from `~/.config/arkham-hunt.env`.
+   you chose when generating `ARKHAM_ADMIN_PASSWORD_HASH` (the file holds
+   only the hash).
 2. Create the event; choose `live` or `final-reveal` standings.
 3. Add the 12–15 riddles in `sort_order` order.
 4. Print two QR codes — the **join link** (`https://<host>/j/<code>`)
@@ -209,9 +210,11 @@ party — it just disables the SSO button.
   (or start at `https://<host>/api/auth/oidc/login`). A host account
   lands on `/admin`; a moderator account following the `/m/<code>` mod
   link lands on the moderator console.
-- The local password from §2 still works: the console's password form is
-  the break-glass path and stays independent of Authentik. Use it if
-  Authentik is unreachable.
+- The password form still works: it is the break-glass path and stays
+  independent of Authentik. `~/.config/arkham-hunt.env` stores only the
+  hash (`ARKHAM_ADMIN_PASSWORD_HASH`), so the plaintext is the one you
+  typed when the hash was generated — keep it in a password manager, not
+  on the host. Use the form if Authentik is unreachable.
 
 ### Troubleshooting OIDC
 
