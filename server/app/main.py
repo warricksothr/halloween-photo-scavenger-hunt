@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from app import (
     csrf,
+    errors,
     events,
     evidence,
     leaderboard,
@@ -162,6 +163,11 @@ def create_app(
     # uvicorn's own raw-path access line dropped (app/logging.py).
     configure_logging()
 
+    # Install the error/trace reporter before the app and its routes are
+    # built: the FastAPI integration patches the route handler factory, so
+    # it only sees routes created afterwards. Inert without ARKHAM_ERROR_DSN.
+    errors.init_error_reporting()
+
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
 
     # An unhandled exception is turned into a 500 by ServerErrorMiddleware,
@@ -171,6 +177,10 @@ def create_app(
     def _internal_error(request: Request, exc: Exception) -> PlainTextResponse:
         response = PlainTextResponse("Internal Server Error", status_code=500)
         request_id = getattr(request.state, "request_id", None)
+        # Tag the scope rather than report here: ServerErrorMiddleware
+        # re-raises after this handler returns, and Sentry's ASGI
+        # middleware captures exactly one event from that re-raise.
+        errors.bind_request_id(request_id)
         if request_id:
             response.headers[REQUEST_ID_HEADER] = request_id
         return response
