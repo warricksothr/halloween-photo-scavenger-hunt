@@ -15,6 +15,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
 import { AdminEvents } from './AdminEvents';
+import { AdminHost } from './AdminHost';
 import { AdminRiddles } from './AdminRiddles';
 import '../admin.css';
 
@@ -87,14 +88,7 @@ export function AdminScreen() {
       </nav>
       {tab === 'events' && <AdminEvents initialEvents={events} />}
       {tab === 'riddles' && <AdminRiddles />}
-      {tab === 'host' && (
-        <div class="admin-panel">
-          <p>Host actions — strike reversal and player history — arrive next.</p>
-          <p class="admin-note">
-            The round lifecycle (open, close, purge) is on the events panel.
-          </p>
-        </div>
-      )}
+      {tab === 'host' && <AdminHost />}
     </Shell>
   );
 }

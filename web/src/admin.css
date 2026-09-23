@@ -239,6 +239,39 @@ body:has(.admin-shell) {
   resize: vertical;
 }
 
+/* Strike rows: the same list shape as riddles, but the left border
+   carries the danger colour — these are conduct records, not content —
+   and drops to the neutral border once the strike is reversed. */
+.admin-strike {
+  align-items: flex-start;
+  border-left: 3px solid var(--admin-danger);
+  border-top: 1px solid var(--admin-border);
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 10px 12px;
+}
+
+.admin-strike.reversed {
+  border-left-color: var(--admin-border);
+}
+
+.admin-strike-body {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-strike-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-reason {
+  flex: 1;
+  min-width: 180px;
+}
+
 .admin-order {
   color: var(--admin-dim);
   font-variant-numeric: tabular-nums;

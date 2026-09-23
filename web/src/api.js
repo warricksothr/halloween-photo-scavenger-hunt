@@ -233,4 +233,14 @@ export const api = {
     request(`/api/admin/events/${eventId}/riddles/${riddleId}`, {
       method: 'DELETE',
     }),
+  // ── Admin host actions (S9D0) ──
+  // The reversal endpoint already owned the mutation (server/app/events.py);
+  // this is the host's read: each player with their derived restriction and
+  // strike history, so the strike to reverse can be found.
+  adminPlayers: (eventId) => request(`/api/admin/events/${eventId}/players`),
+  adminReverseStrike: (strikeId, reason) =>
+    request(`/api/admin/strikes/${strikeId}/reverse`, {
+      method: 'POST',
+      body: { reason: reason ?? '' },
+    }),
 };
