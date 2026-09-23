@@ -1,0 +1,7 @@
+# Deployment-target notes live here but are NOT tracked: they carry real
+# host names, addresses, paths, and SSO group names. Ignore everything in
+# this directory except this file, so the exclusion is visible in a fresh
+# clone and `git status` stays quiet when a target file is added.
+*
+!.gitignore
+!README.md

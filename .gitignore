@@ -12,6 +12,14 @@ data/
 # Secrets (compose interpolation source) — never commit.
 .env
 
+# Deployment targets: host names, addresses, paths, and group names for
+# real environments. Local only — a per-host file lives here and is never
+# committed. deploy/targets/.gitignore re-states this inside the directory.
+deploy/targets/*.md
+deploy/targets/*.env
+deploy/targets/*.yml
+deploy/targets/*.yaml
+
 # Python
 __pycache__/
 *.pyc
