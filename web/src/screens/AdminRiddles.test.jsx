@@ -152,6 +152,56 @@ describe('admin riddle management', () => {
     expect(screen.getByText('Referenced.')).toBeTruthy();
   });
 
+  it('refetches after a reorder that fails halfway', async () => {
+    const [first, second] = [
+      riddle('r1', 'First.', 0),
+      riddle('r2', 'Second.', 1),
+    ];
+    mocks.api.adminRiddles.mockResolvedValue([first, second]);
+    // The first PATCH lands, the second is refused: the server now holds
+    // Second. first, so the screen must not keep showing the old order.
+    mocks.api.adminPatchRiddle
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        error: 'riddle_not_found',
+        message: 'No such riddle on this event.',
+        status: 404,
+      });
+    mocks.api.adminRiddles
+      .mockResolvedValueOnce([first, second])
+      .mockResolvedValue([{ ...second, sort_order: 0 }, { ...first, sort_order: 1 }]);
+
+    const { container } = render(<AdminRiddles />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Move riddle 2 up' }),
+    );
+
+    expect(await screen.findByText('No such riddle on this event.')).toBeTruthy();
+    await waitFor(() => {
+      expect(texts(container)).toEqual(['Second.', 'First.']);
+    });
+  });
+
+  it('shows why the event list failed instead of asking for a new event', async () => {
+    mocks.api.adminEvents.mockResolvedValue({
+      error: 'internal_error',
+      message: 'Something went wrong loading events.',
+      status: 500,
+    });
+
+    render(<AdminRiddles />);
+
+    expect(
+      await screen.findByText('Something went wrong loading events.'),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'Create an event on the Events tab first; riddles belong to an event.',
+      ),
+    ).toBeNull();
+  });
+
   it('points at the Events tab when there is no event yet', async () => {
     mocks.api.adminEvents.mockResolvedValue([]);
 

@@ -11,6 +11,7 @@ import { api } from '../api';
 
 export function AdminRiddles() {
   const [events, setEvents] = useState([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [eventId, setEventId] = useState(null);
   const [riddles, setRiddles] = useState([]);
   const [error, setError] = useState(null);
@@ -23,10 +24,13 @@ export function AdminRiddles() {
     let live = true;
     (async () => {
       const result = await api.adminEvents();
-      if (!live || result?.error || result?.unauthenticated) {
-        if (live && result?.error) setError(result.message);
+      if (!live) return;
+      setEventsLoaded(true);
+      if (result?.error) {
+        setError(result.message);
         return;
       }
+      if (result?.unauthenticated) return;
       setEvents(result);
       setEventId((current) => current ?? result[0]?.id ?? null);
     })();
@@ -49,26 +53,32 @@ export function AdminRiddles() {
     };
   }, [eventId]);
 
-  async function reload() {
-    const result = await api.adminRiddles(eventId);
-    if (result?.error) setError(result.message);
-    else if (!result?.unauthenticated) setRiddles(result);
+  // Takes the event explicitly so a response can never be applied to a
+  // different selection than the one it was fetched for.
+  async function fetchRiddles(targetId) {
+    const result = await api.adminRiddles(targetId);
+    if (result?.unauthenticated) return result;
+    if (!result?.error) setRiddles(result);
+    return result;
   }
 
   // One guard for every riddle mutation, held across the refetch: a reorder
   // is several PATCHes and the list must not offer a second move until the
   // new order is on screen (same rule as the event lifecycle in S9CY).
+  //
+  // The refetch happens even when the action errors. A multi-write action
+  // can fail halfway — the first PATCH of a move may have landed — so the
+  // server is not the list on screen, and leaving it would let the next
+  // move compute from stale orders.
   async function mutate(action) {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
       const result = await action();
-      if (result?.error) {
-        setError(result.message);
-        return result;
-      }
-      await reload();
+      const refreshed = await fetchRiddles(eventId);
+      if (result?.error) setError(result.message);
+      else if (refreshed?.error) setError(refreshed.message);
       return result;
     } finally {
       setBusy(false);
@@ -124,13 +134,27 @@ export function AdminRiddles() {
     if (result && !result.error) setConfirming(null);
   }
 
+  if (!eventsLoaded) {
+    return (
+      <div class="admin-panel">
+        <h2>Riddles</h2>
+        <p class="admin-note">Loading events…</p>
+      </div>
+    );
+  }
+
   if (events.length === 0) {
     return (
       <div class="admin-panel">
         <h2>Riddles</h2>
-        <p class="admin-note">
-          Create an event on the Events tab first; riddles belong to an event.
-        </p>
+        {error ? (
+          <div class="admin-error">{error}</div>
+        ) : (
+          <p class="admin-note">
+            Create an event on the Events tab first; riddles belong to an
+            event.
+          </p>
+        )}
       </div>
     );
   }
@@ -148,6 +172,9 @@ export function AdminRiddles() {
               class="admin-input"
               id="riddle-event"
               value={eventId ?? ''}
+              // Disabled while a mutation is in flight: a switch mid-write
+              // would let the write's refetch land under the new event.
+              disabled={busy}
               onChange={(e) => {
                 setRiddles([]);
                 setEditing(null);
