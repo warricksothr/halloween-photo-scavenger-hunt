@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWVM9NJ94ENMKXAEB40A
 title: Make riddle tiles and dialogs keyboard- and screen-reader-operable
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -16,17 +16,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/riddle-a11y
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 50f7bfe3db5482ac5907fba39fac648ce83c921d
-  session: null
-  claimed_at: 2026-09-23T15:23:15Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T15:48:54Z
+updated_at: 2026-09-23T15:55:23Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -42,9 +35,9 @@ Riddle tiles are divs with click handlers, focus styles are suppressed, and dial
 
 ## Acceptance criteria
 
-- [ ] Every interactive element is a real button or link and is reachable and activatable by keyboard.
-- [ ] Dialogs trap and restore focus and expose a label.
-- [ ] Text remains legible at 200% zoom.
+- [x] Every interactive element is a real button or link and is reachable and activatable by keyboard.
+- [x] Dialogs trap and restore focus and expose a label.
+- [x] Text remains legible at 200% zoom.
 
 ## Implementation plan
 
@@ -143,3 +136,42 @@ promise and asserts the button stays focusable and holds focus across Tab.
 
 Also fixed the CI failure on the previous head: `git ticket check --fix
 --dry-run --strict` now reports no problems.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:51:42Z
+
+Review request r3 (fresh, after the r2 fix): PR #35, head
+ff4f7c1f147500429d3996f2d42f65e166092043, base 50f7bfe3db5482ac5907fba39fac648ce83c921d,
+request-id riddle-a11y-r3, dispatched to terva-review.yml on main.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:55:23Z
+
+Review history for PR #35.
+
+- r1 (head 75f0ef2b739da36a1378252e74e55d9a31d42586): findings, Actions run #487
+  (id 9384), run 2a2866a8-015f-4341-b829-201f354e46f5, review sha256
+  99636ae380d81eaf421d9de12828e2400d7a2dea668f5c4177bc8dd14b3a2508. One
+  medium: the resize-text test did not exercise 200% zoom. Fixed with
+  web/e2e/resize-text.spec.js.
+- r2 (head 2601b1dbec3d99eb6eb3d20bbc526142af7e75ff): findings, Actions run #489
+  (id 9386), run 92766894-773b-4090-8359-d96f28eb474c, review sha256
+  a47c120eb1f94cef33a320d90b1d3001f595e713624e7d3a02ad9e0d4c5d58e2. One
+  medium: the strike-dialog Tab trap targeted a disabled button. Fixed by
+  keeping it focusable while acknowledging.
+- r3 (head ff4f7c1f147500429d3996f2d42f65e166092043): clean, run
+  5cf885e2-8dad-4d34-9097-32837ae1ddd9, recorded as an issue comment
+  (<!-- terva-clean:v1 -->).
+
+Follow-up filed: TKT-01M37F8TCTVKWB9XDSSTB8ZM96 — the pre-existing e2e specs
+fail at admin login with 403 csrf_failed because they predate the CSRF
+middleware (d486dd8). Not fixed here; the new spec arms CSRF itself.
+
+## Summary
+
+Riddle tiles, the evidence picker, and the moderator queue row are now real
+buttons with state-bearing accessible names; the strike notice is a labelled
+alert dialog that moves focus in, holds it (including while the acknowledgement
+is in flight), and restores it on unmount; focus-visible outlines are back in
+both stylesheets. A browser-level Playwright spec drives the built app at 200%
+text zoom and confirms no horizontal overflow plus keyboard operability, and a
+unit test guards the resize configuration. The web suite is 117 tests and
+`bash scripts/check-quality.sh` passes; Terva review r3 is clean.
