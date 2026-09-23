@@ -22,12 +22,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T05:23:13Z
+updated_at: 2026-09-23T00:20:31Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/glitchtip-integration
   name: ""
 extensions: {}
 ---
@@ -42,3 +42,9 @@ Bugsink is Sentry-SDK compatible and self-hosted, so sentry-sdk can report excep
 - [ ] before_send and before_breadcrumb strip url, query_string, headers, cookies, and known bearer-code path segments.
 - [ ] The request id is attached as a tag.
 - [ ] A test asserts the DSN secret and a join code never appear in the serialized event.
+
+## Notes
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T00:20:31Z
+
+Superseded in shape by TKT-01M35T4X7NSYTE036FN9E159XR: the no-op error layer becomes sentry-sdk[fastapi] in server/app/errors.py against hosted GlitchTip. The scrubber and request-id-tag intent carries over.
