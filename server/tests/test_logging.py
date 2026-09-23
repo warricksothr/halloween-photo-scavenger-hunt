@@ -7,7 +7,9 @@ import logging
 import re
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
+from support import arm_csrf
 
 from app import logging as app_logging
 from app.main import create_app
@@ -64,6 +66,77 @@ def _request_lines(caplog):
 )
 def test_redact_path(path, expected):
     assert app_logging.redact_path(path) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/api/join/ABC234", ("ABC234",)),
+        ("/api/mod/join/MOD234/extra", ("MOD234",)),
+        ("/api/team/invites/tok123/redeem", ("tok123",)),
+        ("/j/ABC234", ("ABC234",)),
+        ("/m/MOD234/", ("MOD234",)),
+        # The same prefix rules as ``redact_path``: no credential, none back.
+        ("/api/leaderboard", ()),
+        ("/api/join/", ()),
+        ("/api/joinfake/x", ()),
+    ],
+)
+def test_bearer_secrets_returns_the_credential(path, expected):
+    assert app_logging.bearer_secrets(path) == expected
+
+
+def test_request_secrets_collects_the_requests_own_values():
+    secrets = app_logging._request_secrets(
+        {
+            "path": "/api/team/invites/tok123/redeem",
+            "query_string": b"code=querysecret",
+            "headers": [
+                (b"authorization", b"Bearer topsecrettoken"),
+                (b"cookie", b"arkham_session=cookiesecret; theme=dark"),
+            ],
+        }
+    )
+
+    assert set(secrets) >= {
+        "tok123",
+        "querysecret",
+        "topsecrettoken",
+        "cookiesecret",
+    }
+    # No length floor: a short code or PIN is still a secret, so it is
+    # scrubbed even though the replacement may touch ordinary words.
+    assert "dark" in secrets
+    # Longest first, so a secret containing another cannot leave a fragment.
+    assert list(secrets) == sorted(secrets, key=len, reverse=True)
+
+
+def test_request_secrets_unquotes_a_cookie_value():
+    """The framework strips a cookie's quotes, so the scrubber must too."""
+    secrets = app_logging._request_secrets(
+        {
+            "path": "/api/health",
+            "query_string": b"",
+            "headers": [(b"cookie", b'arkham_session="topsecret"')],
+        }
+    )
+
+    assert "topsecret" in secrets
+
+
+def test_scrub_secrets_replaces_the_longest_first():
+    scrubbed = app_logging._scrub_secrets("a abcdef abc", ("abc", "abcdef"))
+    assert scrubbed == "a <redacted> <redacted>"
+
+
+def test_scrub_secrets_does_not_rescan_the_marker():
+    """A secret inside ``<redacted>`` must not survive the next pass.
+
+    ``redact`` is a substring of the marker, so a second sequential
+    replace would rewrite the marker and keep the value in the traceback.
+    """
+    scrubbed = app_logging._scrub_secrets("hunter2 redact", ("hunter2", "redact"))
+    assert scrubbed == f"{app_logging.REDACTED} {app_logging.REDACTED}"
 
 
 def test_every_request_logs_one_structured_line(client, caplog):
@@ -135,6 +208,510 @@ def test_unhandled_error_still_echoes_the_request_id(tmp_path, caplog):
     line = _request_lines(caplog)[-1]
     assert line.status == 500
     assert line.request_id == resp.headers[app_logging.REQUEST_ID_HEADER]
+
+
+def test_body_secrets_reads_json_and_form_values():
+    # Keys as well as values: a route can quote either.
+    assert set(
+        app_logging._body_secrets(
+            "application/json",
+            b'{"display_name": "Bruce Wayne", "password": "hunter2"}',
+        )
+    ) >= {"display_name", "Bruce Wayne", "password", "hunter2"}
+
+    # The raw, escaped JSON rides along: ``json.loads`` decodes the escape,
+    # and a route that read the body quotes the escaped form.
+    assert set(
+        app_logging._body_secrets(
+            "application/json", b'{"password": "top\\u002fsecret"}'
+        )
+    ) >= {"top/secret", "top\\u002fsecret"}
+
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded", b"code=JOIN234&password=hunter2"
+        )
+    ) >= {"password", "JOIN234", "hunter2"}
+
+    # A repeated field keeps every value, not just the last: the app can
+    # read them all through the form's multi-value interface.
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded",
+            b"password=firstsecret&password=secondsecret",
+        )
+    ) >= {"password", "firstsecret", "secondsecret"}
+
+    # The raw, still-encoded form is held too: ``parse_qsl`` decodes it
+    # away, and a route can quote the body it read.
+    assert set(
+        app_logging._body_secrets(
+            "application/x-www-form-urlencoded", b"password=top%2Fsecret"
+        )
+    ) >= {"top/secret", "top%2Fsecret"}
+
+
+def test_body_secrets_skips_binary_and_malformed_bodies():
+    # A photo upload is not text; mining it would redact noise.
+    assert app_logging._body_secrets("image/jpeg", b"\xff\xd8\xff\xe0topsecret") == ()
+    # A body that does not parse is not a body the scrub set can stand
+    # for: ``None`` tells the caller to drop the message.
+    assert app_logging._body_secrets("application/json", b"{not json") is None
+    # A number or boolean formats to text no string candidate covers, so
+    # the body is not representable either, at any depth.
+    assert (
+        app_logging._body_secrets("application/json", b'{"recovery_code": 12345678}')
+        is None
+    )
+    assert (
+        app_logging._body_secrets(
+            "application/json", b'{"a": {"b": [true]}, "c": "ok"}'
+        )
+        is None
+    )
+
+
+def test_unhandled_exception_logs_one_correlated_traceback(tmp_path, caplog):
+    """TKT-01M33S2WK: one traceback, tied to the request, without the
+    cookie, the Authorization header, or the body.
+
+    The route raises with a value the request carried in each place a
+    secret can enter — the path, a header, and the JSON body — so the
+    assertions show the scrubber at work, not merely that an unused value
+    was left out.
+    """
+    app = create_app(
+        tmp_path / "boom.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(token: str, request: Request, payload: dict):
+        raise RuntimeError(
+            f"kaboom token={token} auth={request.headers['authorization']} "
+            f"password={payload['password']}"
+        )
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"display_name": "Bruce Wayne", "password": "hunter2"},
+            headers={"Authorization": "Bearer topsecrettoken"},
+        )
+
+    request_id = resp.headers[app_logging.REQUEST_ID_HEADER]
+    assert resp.status_code == 500
+    assert resp.json() == {
+        "error": "internal_error",
+        "message": "Something went wrong.",
+        "request_id": request_id,
+    }
+
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record.request_id == request_id
+    assert record.method == "POST"
+    assert record.path == "/api/team/invites/<redacted>/boom"
+    assert record.exception_type == "RuntimeError"
+
+    text = _rendered(caplog)
+    assert "kaboom" in text
+    assert "Traceback" in text
+    assert app_logging.REDACTED in text
+    assert "SUPERSECRETCODE" not in text
+    assert "topsecrettoken" not in text
+    # The body value the route raised with, and one it did not: the whole
+    # JSON body's strings are scrubbed, not just the field named password.
+    assert "hunter2" not in text
+    assert "Bruce Wayne" not in text
+
+
+def test_a_truncated_body_drops_the_exception_message(tmp_path, caplog, monkeypatch):
+    """The safe path for a body the scrubber could not inspect whole.
+
+    ``_BUFFERED_BODY_BYTES`` is shrunk so a small body exercises it. The
+    route raises with a value from a body the scrubber saw only in part,
+    so the frames are logged and the message is left out rather than
+    logged unscanned.
+    """
+    monkeypatch.setattr(app_logging, "_BUFFERED_BODY_BYTES", 64)
+    app = create_app(
+        tmp_path / "truncated.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom password={payload['password']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"padding": "x" * 200, "password": "hunter2"},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].exception_type == "RuntimeError"
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    # The frames survive; the message that could quote the unscanned body
+    # does not, and neither does the header ``format_exception`` adds.
+    assert ", in boom" in text
+    assert "Traceback" not in text
+    assert "RuntimeError: kaboom" not in text
+    assert "hunter2" not in text
+
+
+def test_a_repeated_form_value_is_scrubbed(tmp_path, caplog):
+    """A form field the app reads past the last is still scrubbed.
+
+    The route raises with the *first* of two fields sharing a name, which
+    a dict parse would have dropped from the scrub set.
+    """
+    app = create_app(
+        tmp_path / "duplicate-form.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        form = await request.form()
+        raise RuntimeError(f"kaboom password={form.getlist('password')[0]}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            data={"password": ["firstsecret", "secondsecret"]},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "firstsecret" not in text
+    assert "secondsecret" not in text
+
+
+def test_a_json_key_quoted_by_route_code_is_scrubbed(tmp_path, caplog):
+    """A request-controlled key is as much a secret as a value."""
+    app = create_app(
+        tmp_path / "json-key.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom key={next(iter(payload))}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"topsecretkey": "topsecretvalue"},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "topsecretkey" not in text
+    # The message itself survives; only the key inside it goes.
+    assert "RuntimeError: kaboom key=" in text
+
+
+def test_a_short_query_value_is_scrubbed(tmp_path, caplog):
+    """A short PIN or code is still a secret, floor or no floor."""
+    app = create_app(
+        tmp_path / "short-query.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/short-boom")
+    def short_boom(request: Request):
+        raise RuntimeError(f"pin={request.query_params['pin']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get("/api/team/invites/SUPERSECRETCODE/short-boom?pin=1234")
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "1234" not in text
+    assert "RuntimeError:" in text
+
+
+def test_a_quoted_cookie_value_is_scrubbed(tmp_path, caplog):
+    """The framework unquotes a cookie, so the route reads a new string."""
+    app = create_app(
+        tmp_path / "quoted-cookie.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/cookie-boom")
+    def cookie_boom(request: Request):
+        raise RuntimeError(f"cookie={request.cookies['arkham_session']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get(
+            "/api/team/invites/SUPERSECRETCODE/cookie-boom",
+            headers={"cookie": 'arkham_session="topsecret"'},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "topsecret" not in text
+    assert "RuntimeError: cookie=" in text
+
+
+def test_a_malformed_json_body_drops_the_exception_message(tmp_path, caplog):
+    """A body that will not parse cannot be represented by the scrub set.
+
+    The route reads the raw bytes, so it sees a value the scrub set does
+    not; the message is dropped rather than logged unscanned.
+    """
+    app = create_app(
+        tmp_path / "malformed-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b'{"password": "topsecret", not json',
+            headers={"content-type": "application/json"},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    assert "topsecret" not in text
+    assert "RuntimeError: kaboom" not in text
+
+
+def test_a_numeric_json_value_drops_the_exception_message(tmp_path, caplog):
+    """A number is a value the scrub set cannot hold, so the message goes.
+
+    The route formats the number with an f-string, which the string
+    candidates never see.
+    """
+    app = create_app(
+        tmp_path / "numeric-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    def boom(payload: dict):
+        raise RuntimeError(f"kaboom code={payload['recovery_code']}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            json={"recovery_code": 12345678},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+
+    text = _rendered(caplog)
+    assert "12345678" not in text
+    assert "RuntimeError: kaboom" not in text
+
+
+def test_a_raw_encoded_query_is_scrubbed(tmp_path, caplog):
+    """A route that quotes the raw query is scrubbed, not just the decoded.
+
+    ``parse_qsl`` turns this into ``top/secret``; the raw string a route
+    reads off the URL is ``top%2Fsecret``, and both must go.
+    """
+    app = create_app(
+        tmp_path / "raw-query.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/team/invites/{token}/boom")
+    def boom(request: Request):
+        raise RuntimeError(f"kaboom qs={request.url.query}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.get("/api/team/invites/SUPERSECRETCODE/boom?password=top%2Fsecret")
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top%2Fsecret" not in text
+    assert "top/secret" not in text
+
+
+def test_a_raw_encoded_form_body_is_scrubbed(tmp_path, caplog):
+    """The undecoded body a route reads is scrubbed beside the parsed one."""
+    app = create_app(
+        tmp_path / "raw-form.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b"password=top%2Fsecret",
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top%2Fsecret" not in text
+    assert "top/secret" not in text
+
+
+def test_a_raw_escaped_json_body_is_scrubbed(tmp_path, caplog):
+    """A valid JSON escape a route reads raw is scrubbed beside the decode."""
+    app = create_app(
+        tmp_path / "escaped-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b'{"password": "top\\u002fsecret"}',
+            headers={"content-type": "application/json"},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top\\u002fsecret" not in text
+    assert "top/secret" not in text
+    assert "RuntimeError: kaboom" in text
+
+
+def test_a_multipart_body_drops_the_exception_message(tmp_path, caplog):
+    """A body format the scrubber does not read loses the message."""
+    app = create_app(
+        tmp_path / "multipart.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/upload-boom")
+    async def upload_boom(request: Request):
+        form = await request.form()
+        try:
+            raise RuntimeError(f"note={form['note']}")
+        finally:
+            # A spooled upload left open trips pytest's unraisable check in
+            # a later test, so close it the way the app would.
+            await form.close()
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/upload-boom",
+            files={"note": ("note.txt", b"topsecret", "text/plain")},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+    assert "topsecret" not in _rendered(caplog)
 
 
 def test_query_string_is_redacted(client, caplog):

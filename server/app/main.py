@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx2
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app import (
     csrf,
@@ -41,7 +41,12 @@ from app import (
     teams,
 )
 from app import db as db_module
-from app.logging import REQUEST_ID_HEADER, RequestLogMiddleware, configure_logging
+from app.logging import (
+    REQUEST_ID_HEADER,
+    RequestLogMiddleware,
+    configure_logging,
+    log_unhandled_exception,
+)
 
 # The production frontend is the Vite build at web/dist (built with
 # `npm run build`; NOT gitignored artifacts in the repo — the deploy
@@ -174,9 +179,23 @@ def create_app(
     # which wraps this app's middleware stack — so that response never
     # passes the request log's ``send`` wrapper and would lose the request
     # id. The log middleware puts the id on the scope for this handler.
-    def _internal_error(request: Request, exc: Exception) -> PlainTextResponse:
-        response = PlainTextResponse("Internal Server Error", status_code=500)
+    def _internal_error(request: Request, exc: Exception) -> JSONResponse:
+        log_unhandled_exception(
+            exc,
+            request_id=getattr(request.state, "request_id", None),
+            method=request.method,
+            path=getattr(request.state, "redacted_path", None),
+            request_secrets=getattr(request.state, "request_secrets", ()),
+            include_message=not getattr(request.state, "safe_traceback", False),
+        )
         request_id = getattr(request.state, "request_id", None)
+        body: dict[str, str] = {
+            "error": "internal_error",
+            "message": "Something went wrong.",
+        }
+        if request_id:
+            body["request_id"] = request_id
+        response = JSONResponse(body, status_code=500)
         if request_id:
             response.headers[REQUEST_ID_HEADER] = request_id
         return response
