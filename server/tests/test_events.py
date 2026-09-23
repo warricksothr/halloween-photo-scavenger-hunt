@@ -98,6 +98,26 @@ class TestEvents:
         assert resp.json()["leaderboard_visibility"] == "final-reveal"
         assert resp.json()["team_size_limit"] == 2
 
+    def test_patch_logs_before_and_after(self, admin):
+        event = _create_event(admin)
+        admin.patch(
+            f"/api/admin/events/{event['id']}",
+            json={"name": "Gotham After Dark", "team_size_limit": 2},
+        )
+        rows = _audit_rows(admin, "event.updated")
+        assert len(rows) == 1
+        details = json.loads(rows[0]["details"])
+        # Before/after, per the enum doc: the audit log is the history.
+        assert details["old"] == {"name": "Gotham Halloween", "team_size_limit": 4}
+        assert details["new"] == {"name": "Gotham After Dark", "team_size_limit": 2}
+
+    def test_patch_with_no_fields_writes_no_row(self, admin):
+        event = _create_event(admin)
+        assert (
+            admin.patch(f"/api/admin/events/{event['id']}", json={}).status_code == 200
+        )
+        assert _audit_rows(admin, "event.updated") == []
+
     def test_patch_404(self, admin):
         resp = admin.patch("/api/admin/events/nope", json={"name": "x"})
         assert resp.status_code == 404

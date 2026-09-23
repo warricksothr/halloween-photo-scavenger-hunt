@@ -196,11 +196,13 @@ def patch_event(
         return _err(404, "event_not_found", "No such event.")
     updates = body.model_dump(exclude_none=True)
     with locked_transaction(request) as writer:
-        if _get_event(writer, event_id) is None:
+        row = _get_event(writer, event_id)
+        if row is None:
             # The event can be purged between the reader check and this
             # transaction (ADR 0013).
             return _err(404, "event_not_found", "No such event.")
         if updates:
+            before = {k: row[k] for k in updates}
             assignments = ", ".join(f"{k} = ?" for k in updates)
             # A locked transaction, not a bare execute + commit: an
             # unlocked commit here could land mid-mutation in another
@@ -208,6 +210,19 @@ def patch_event(
             writer.execute(
                 f"UPDATE event SET {assignments} WHERE id = ?",
                 (*updates.values(), event_id),
+            )
+            # One row per state mutation (enum doc): the edit was a state
+            # mutation like any other, and the row rides the same
+            # transaction as the UPDATE.
+            log_action(
+                writer,
+                event_id=event_id,
+                actor_type=ActorType.ADMIN,
+                actor_id=None,
+                action=Action.EVENT_UPDATED,
+                entity_type="event",
+                entity_id=event_id,
+                details={"old": before, "new": updates},
             )
         updated = _get_event(writer, event_id)
     return _event_json(updated)
