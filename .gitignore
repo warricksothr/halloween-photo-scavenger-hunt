@@ -13,12 +13,13 @@ data/
 .env
 
 # Deployment targets: host names, addresses, paths, and group names for
-# real environments. Local only — a per-host file lives here and is never
-# committed. deploy/targets/.gitignore re-states this inside the directory.
-deploy/targets/*.md
-deploy/targets/*.env
-deploy/targets/*.yml
-deploy/targets/*.yaml
+# real environments. Local only. Everything here is ignored; only the
+# convention's own files are committed, whitelisted with the `!` lines
+# below. deploy/targets/.gitignore repeats this inside the directory, so
+# either rule alone keeps a note out of the repository.
+deploy/targets/*
+!deploy/targets/.gitignore
+!deploy/targets/README.md
 
 # Python
 __pycache__/
