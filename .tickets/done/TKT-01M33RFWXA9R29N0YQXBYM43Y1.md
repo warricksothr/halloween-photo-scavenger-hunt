@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWXA9R29N0YQXBYM43Y1
 title: Fix standings loading and add mod cooldown/note controls
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/standings-mod-controls
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: c59e089db03acacb94c2dc42cb329a5cef886e20
-  session: null
-  claimed_at: 2026-09-23T16:32:55Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T16:43:46Z
+updated_at: 2026-09-23T16:47:44Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -44,8 +37,8 @@ Standings can spin forever when the response is empty or an error is swallowed, 
 
 ## Acceptance criteria
 
-- [ ] Standings render an empty or error state instead of an endless spinner.
-- [ ] A moderator can set a cooldown and attach a note from the console.
+- [x] Standings render an empty or error state instead of an endless spinner.
+- [x] A moderator can set a cooldown and attach a note from the console.
 
 ## Implementation plan
 
@@ -66,3 +59,17 @@ Terva review history.
 PR #37, base c59e089db03acacb94c2dc42cb329a5cef886e20.
 
 - r1: request standings-mod-controls-r1, head 3f6d1465a5f7bc79d6b298680ed568b712ff0a0a, run 4d37cd1c-df7f-4024-99fc-77966e9b491b (Actions run #505, id 9403). One medium finding: a rejected `api.recap()` promise never reaches `.then`, so the closed-standings loading line still never cleared (web/src/screens/Standings.jsx:93). Fixed in d1d1c53 by adding a rejection handler that sets the same error state under the `stale` guard, plus a test that rejects and asserts the error + Retry; the test was verified to fail on the pre-fix component.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T16:47:44Z
+
+r2: request standings-mod-controls-r2, head 0d357e1e4324b990118adeed1a0e12763833279f, run 369a0d6c-291a-44c1-bf20-58a71998f96f, clean (no findings at the failure threshold); Quality gate success 2m14s. Merged at the reviewed head.
+
+## Summary
+
+Merged as PR #37 (head 0d357e1e4324b990118adeed1a0e12763833279f, base c59e089db03acacb94c2dc42cb329a5cef886e20, merge aa49bd09a2692d9b8621cd08083a6e34203882f2) after a clean Terva r2 and a green quality gate.
+
+Standings: the closed recap fetch now captures a resolved error, an unauthenticated response, and a rejected promise into an error state that renders a themed error line with a Retry button; a final board with no rows shows the empty state, and a missing timeline is guarded. Copy keys `screens.standings.error` and `.retry` were added to the arkham pack.
+
+Moderator console: the conduct section takes a note (280 chars) and a strike-2 cooldown in minutes (1–1440, default 15), rejects an out-of-range value before firing, and resets both when the open item changes. The values reach `api.modInappropriate`, which already forwarded them; the server ignores the cooldown outside strike 2.
+
+Tests: new `web/src/screens/Standings.test.jsx` and `web/src/screens/ModConsole.test.jsx`; web suite 134 tests. `bash scripts/check-quality.sh` passes.
