@@ -414,7 +414,11 @@ goal is access control + reuse detection, not DRM:
 
 - **Riddles are standalone**: players see the full riddle list when the
   round opens and may submit in any order. No unlock chains, no
-  dependencies, no per-riddle hints.
+  dependencies. A riddle may carry an **ordered hint ladder** (vague to
+  specific, at most five levels); the player reveals one level per press
+  and nothing is shown until they ask. Hints are a nudge, not a gate:
+  they carry no score, and a riddle with none simply has no reveal
+  control.
 - **Leaderboard visibility**: intentionally left open as a build option —
   implement as an event-level toggle (`live` / `final-reveal`) rather than
   deciding now.

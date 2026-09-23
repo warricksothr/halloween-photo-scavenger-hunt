@@ -144,6 +144,36 @@ body {
 .subtext { color: var(--text); font-size: 0.9rem; }
 .dim     { color: var(--text-dim); font-size: 0.85rem; }
 
+/* ── Hint ladder (riddle detail) ─────────────────────────────────── */
+/* Revealed one level per press. The cyan level tag matches the HUD's
+ * index styling; the row rule keeps a long ladder scannable. */
+
+.hint-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.hint-item {
+  border-left: 2px solid var(--cyan-dim);
+  color: var(--text);
+  display: flex;
+  font-size: 0.9rem;
+  gap: 10px;
+  padding: 6px 0 6px 10px;
+}
+
+.hint-item + .hint-item {
+  margin-top: 6px;
+}
+
+.hint-level {
+  color: var(--cyan);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  padding-top: 2px;
+}
+
 /* Headline + cyan rule pattern from the riddle-scan HUD. */
 .headline-rule {
   display: flex;

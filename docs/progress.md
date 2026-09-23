@@ -196,6 +196,17 @@ when the increment runs and its tests pass.
   on, and starts the SSO round-trip itself when there is no session
   (ADR 0020).
 
+- **2026-09-23 — Riddles carry an ordered hint ladder.**
+  TKT-01M388EAYCH2J50GQ0WRZM11BB. A riddle may now hold up to five hints,
+  vaguest first, in a `riddle_hint` child table keyed by riddle and level
+  (migration 0003, unique on `(riddle_id, level)`, cascade on delete). The
+  admin create/patch bodies take `hints`: omitting it on PATCH leaves the
+  ladder alone, `[]` clears it, and a list replaces it whole, all inside one
+  transaction. The player snapshot carries each riddle's hints in order, and
+  the detail screen shows nothing until the player presses "Need a nudge?",
+  then reveals one level per press. Design.md's "no per-riddle hints" line is
+  superseded: hints are a nudge, not a gate, and carry no score.
+
 - **2026-09-22 — The console edits each event's riddles.**
   TKT-01M33S9CZT5MVQQS7ED4S6J2TR. The Riddles tab picks an event, then lists
   its riddles in sort order with Edit, ↑/↓, and Delete on each row and an add

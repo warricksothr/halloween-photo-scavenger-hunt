@@ -18,7 +18,16 @@ export function AdminRiddles({ onSessionExpired }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null); // riddle id being edited
   const [editText, setEditText] = useState('');
+  const [editHints, setEditHints] = useState(['']);
+  const [hintDraft, setHintDraft] = useState(['']);
   const [confirming, setConfirming] = useState(null); // riddle id awaiting delete
+
+  // A hint ladder is vague → specific; the server caps it (MAX_HINTS).
+  // Trailing blank rows are dropped here so an empty box never becomes
+  // an empty hint, and the add/edit boxes stay forgiving of whitespace.
+  function hintList(rows) {
+    return rows.map((h) => h.trim()).filter(Boolean);
+  }
 
   // A 401 mid-use means the admin session expired; the shell owns the
   // recovery, and the panel clears so the board does not outlive the login.
@@ -27,6 +36,8 @@ export function AdminRiddles({ onSessionExpired }) {
     setRiddles([]);
     setEditing(null);
     setConfirming(null);
+    setEditHints(['']);
+    setHintDraft(['']);
     setError(null);
     onSessionExpired?.();
   }
@@ -127,9 +138,16 @@ export function AdminRiddles({ onSessionExpired }) {
     // reorder left with duplicate or sparse orders.
     const next = riddles.reduce((top, r) => Math.max(top, r.sort_order), -1) + 1;
     const result = await mutate(() =>
-      api.adminCreateRiddle(eventId, { text, sort_order: next }),
+      api.adminCreateRiddle(eventId, {
+        text,
+        sort_order: next,
+        hints: hintList(hintDraft),
+      }),
     );
-    if (result && !result.error) form.reset();
+    if (result && !result.error) {
+      form.reset();
+      setHintDraft(['']);
+    }
   }
 
   async function onMove(index, delta) {
@@ -156,10 +174,56 @@ export function AdminRiddles({ onSessionExpired }) {
   async function onSaveEdit(riddleId) {
     const text = editText.trim();
     if (!text) return;
+    // Send the ladder whole: [] clears it, which is how the host removes
+    // every hint from an existing riddle.
     const result = await mutate(() =>
-      api.adminPatchRiddle(eventId, riddleId, { text }),
+      api.adminPatchRiddle(eventId, riddleId, {
+        text,
+        hints: hintList(editHints),
+      }),
     );
     if (result && !result.error) setEditing(null);
+  }
+
+  // One shared editor for both ladders. `setRows` is the state setter,
+  // so edit and add behave identically: type in any box, blank boxes drop.
+  function hintEditor(rows, setRows, label) {
+    return (
+      <div class="admin-hints">
+        {rows.map((hint, level) => (
+          <div class="admin-hint-row" key={level}>
+            <span class="admin-dim">L{level + 1}</span>
+            <input
+              class="admin-input"
+              type="text"
+              aria-label={`${label} hint level ${level + 1}`}
+              value={hint}
+              onInput={(e) => {
+                const next = [...rows];
+                next[level] = e.target.value;
+                setRows(next);
+              }}
+            />
+            <button
+              class="admin-btn secondary"
+              type="button"
+              aria-label={`Remove ${label} hint level ${level + 1}`}
+              onClick={() => setRows(rows.filter((_, i) => i !== level))}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          class="admin-btn secondary"
+          type="button"
+          disabled={rows.length >= 5}
+          onClick={() => setRows([...rows, ''])}
+        >
+          Add hint level
+        </button>
+      </div>
+    );
   }
 
   async function onDelete(riddleId) {
@@ -245,6 +309,7 @@ export function AdminRiddles({ onSessionExpired }) {
                     value={editText}
                     onInput={(e) => setEditText(e.target.value)}
                   />
+                  {hintEditor(editHints, setEditHints, `Riddle ${index + 1}`)}
                   <span class="admin-actions">
                     <button
                       class="admin-btn secondary"
@@ -291,6 +356,11 @@ export function AdminRiddles({ onSessionExpired }) {
                       onClick={() => {
                         setEditing(riddle.id);
                         setEditText(riddle.text);
+                        // Empty ladder → one blank box, so the host can
+                        // start typing a first hint without a click.
+                        setEditHints(
+                          riddle.hints?.length ? [...riddle.hints] : [''],
+                        );
                       }}
                     >
                       Edit
@@ -335,6 +405,10 @@ export function AdminRiddles({ onSessionExpired }) {
               rows="2"
               placeholder="The subject must be findable and photographable at the venue — check it in person before the night."
             />
+          </div>
+          <div class="admin-field">
+            <label>Hints, vague to specific</label>
+            {hintEditor(hintDraft, setHintDraft, 'New riddle')}
           </div>
           <div class="admin-actions">
             <button class="admin-btn" type="submit" disabled={busy}>

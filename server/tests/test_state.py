@@ -152,3 +152,30 @@ class TestStateSnapshot:
 
     def test_requires_auth(self, client):
         assert client.get("/api/state").status_code == 401
+
+    def test_riddles_carry_hints_in_order(self, admin, client):
+        resp = admin.post("/api/admin/events", json={"name": "Hint Party"})
+        event = resp.json()
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={
+                "text": "Look up.",
+                "sort_order": 1,
+                "hints": ["Higher.", "Braced or cabled.", "The leaning sign."],
+            },
+        )
+        admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "No nudge.", "sort_order": 2},
+        )
+        admin.post(f"/api/admin/events/{event['id']}/open")
+        client.post(f"/api/join/{event['join_code']}", json={"display_name": "Batman"})
+
+        snap = client.get("/api/state").json()
+        by_text = {r["text"]: r["hints"] for r in snap["riddles"]}
+        assert by_text["Look up."] == [
+            "Higher.",
+            "Braced or cabled.",
+            "The leaning sign.",
+        ]
+        assert by_text["No nudge."] == []

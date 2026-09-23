@@ -67,6 +67,7 @@ describe('admin riddle management', () => {
       expect(mocks.api.adminCreateRiddle).toHaveBeenCalledWith('ev-1', {
         text: 'A new clue.',
         sort_order: 5,
+        hints: [],
       });
     });
     expect(textarea.value).toBe('');
@@ -114,6 +115,60 @@ describe('admin riddle management', () => {
     await waitFor(() => {
       expect(mocks.api.adminPatchRiddle).toHaveBeenCalledWith('ev-1', 'r1', {
         text: 'Sharper wording.',
+        hints: [],
+      });
+    });
+  });
+
+  it('sends a hint ladder in vague-to-specific order', async () => {
+    mocks.api.adminRiddles.mockResolvedValue([riddle('r1', 'Look up.', 0)]);
+
+    render(<AdminRiddles />);
+
+    await screen.findByText('Look up.');
+    fireEvent.input(screen.getByLabelText('Add a riddle'), {
+      target: { value: 'Look up.' },
+    });
+    fireEvent.input(screen.getByLabelText('New riddle hint level 1'), {
+      target: { value: 'Higher.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add hint level' }));
+    fireEvent.input(screen.getByLabelText('New riddle hint level 2'), {
+      target: { value: 'Braced or cabled.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add hint level' }));
+    // A blank level drops out rather than becoming an empty hint.
+    fireEvent.click(screen.getByRole('button', { name: 'Add to board' }));
+
+    await waitFor(() => {
+      expect(mocks.api.adminCreateRiddle).toHaveBeenCalledWith('ev-1', {
+        text: 'Look up.',
+        sort_order: 1,
+        hints: ['Higher.', 'Braced or cabled.'],
+      });
+    });
+  });
+
+  it('seeds the edit form with a riddle\'s existing hints', async () => {
+    mocks.api.adminRiddles.mockResolvedValue([
+      { ...riddle('r1', 'Look up.', 0), hints: ['Higher.', 'The sign.'] },
+    ]);
+
+    render(<AdminRiddles />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.getByLabelText('Riddle 1 hint level 1').value).toBe('Higher.');
+    expect(screen.getByLabelText('Riddle 1 hint level 2').value).toBe('The sign.');
+
+    fireEvent.input(screen.getByLabelText('Riddle 1 hint level 1'), {
+      target: { value: 'Much higher.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mocks.api.adminPatchRiddle).toHaveBeenCalledWith('ev-1', 'r1', {
+        text: 'Look up.',
+        hints: ['Much higher.', 'The sign.'],
       });
     });
   });

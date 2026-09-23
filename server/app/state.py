@@ -53,11 +53,24 @@ def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
         " ORDER BY r.sort_order, r.created_at",
         (ctx.team_id, ctx.event_id),
     ).fetchall()
+    # Hints for the whole board in one query, grouped in Python: the
+    # snapshot is small and rebuilt from source every call, and the
+    # alternative is one query per riddle.
+    hint_rows = conn.execute(
+        "SELECT riddle_id, text FROM riddle_hint"
+        " WHERE riddle_id IN (SELECT id FROM riddle WHERE event_id = ?)"
+        " ORDER BY riddle_id, level",
+        (ctx.event_id,),
+    ).fetchall()
+    hints_by_riddle: dict[str, list[str]] = {}
+    for h in hint_rows:
+        hints_by_riddle.setdefault(h["riddle_id"], []).append(h["text"])
     riddles = [
         {
             "id": r["id"],
             "text": r["text"],
             "sort_order": r["sort_order"],
+            "hints": hints_by_riddle.get(r["id"], []),
             # A team has at most one pending sub per riddle (partial unique
             # index); verified is terminal. Anything else → unsolved.
             "state": {"pending": "pending", "verified": "verified"}.get(
