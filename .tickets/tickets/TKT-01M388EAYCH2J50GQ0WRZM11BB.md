@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T23:08:34Z
-updated_at: 2026-09-23T23:19:41Z
+updated_at: 2026-09-23T23:33:47Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -163,3 +163,7 @@ labelled by position, so copy stays out of the theme pack.
 **agent:opencode/t3code-0691bbb1** at 2026-09-23T23:18:33Z
 
 Scope change from the riddle review round (2026-09-23, user): hints are a progression, vague to specific, several per riddle — not a single optional string. Model as an ordered child table riddle_hint(riddle_id, level, text) and carry the list on the riddle payload; the single-column shape in the description is superseded. Revisit the acceptance criteria when planning.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T23:33:47Z
+
+PR #45 opened for the hint ladder. Head fe6b07218cbd99b04c70e9c07fa3693c1e067fc2, base 5eca07953e873ff31e3dd827a125168e8252641e. Dispatched Terva request riddle-hint-levels-r1 next.
