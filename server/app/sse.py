@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import threading
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request
@@ -28,10 +30,18 @@ from app import auth
 
 router = APIRouter(prefix="/api", tags=["sse"])
 
+logger = logging.getLogger("arkham.sse")
+
 # Seconds between heartbeat comments. Venue proxies and phone browsers
 # both drop quiet connections; a comment line keeps the stream alive
 # without meaning anything to the client.
 HEARTBEAT_SECONDS = 15
+
+# Frames one subscriber may fall behind before the broker drops deltas.
+# A healthy client drains in milliseconds (heartbeat 15s, party ≤30), so
+# this is minutes of backlog, not a working limit; a wedged client hits it
+# instead of growing without bound.
+SUBSCRIBER_QUEUE_MAX = 256
 
 
 class _Subscriber:
@@ -43,7 +53,9 @@ class _Subscriber:
     def __init__(
         self, *, event_id: str, role: str, team_id: str | None, player_id: str | None
     ):
-        self.queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
+        self.queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue(
+            maxsize=SUBSCRIBER_QUEUE_MAX
+        )
         self.event_id = event_id
         self.role = role  # "player" | "moderator"
         self.team_id = team_id  # None for moderators (they see all teams)
@@ -59,6 +71,12 @@ class SseBroker:
     def __init__(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
         self._subscribers: set[_Subscriber] = set()
+        # subscribe/unsubscribe run on the loop; publish runs on the
+        # threadpool. The set is not thread-safe, so every touch takes
+        # the lock and publish walks a snapshot.
+        self._lock = threading.Lock()
+        # Only the loop thread writes this (see ``_deliver``).
+        self.overflow_count = 0
 
     def subscribe(
         self,
@@ -71,11 +89,33 @@ class SseBroker:
         sub = _Subscriber(
             event_id=event_id, role=role, team_id=team_id, player_id=player_id
         )
-        self._subscribers.add(sub)
+        with self._lock:
+            self._subscribers.add(sub)
         return sub
 
     def unsubscribe(self, sub: _Subscriber) -> None:
-        self._subscribers.discard(sub)
+        with self._lock:
+            self._subscribers.discard(sub)
+
+    def _deliver(self, sub: _Subscriber, name: str, payload: dict) -> None:
+        """Loop-side hand-off: the queue is asyncio, so only the loop may
+        touch it. A full queue drops the newest delta and says so; the
+        client recovers by reconnecting to the snapshot (ADR 0003)."""
+        try:
+            sub.queue.put_nowait((name, payload))
+        except asyncio.QueueFull:
+            self.overflow_count += 1
+            logger.warning(
+                "sse subscriber queue overflow",
+                extra={
+                    "event": "sse.overflow",
+                    "event_id": sub.event_id,
+                    "role": sub.role,
+                    "delta": name,
+                    "queue_max": SUBSCRIBER_QUEUE_MAX,
+                    "dropped_total": self.overflow_count,
+                },
+            )
 
     def publish(
         self,
@@ -92,7 +132,9 @@ class SseBroker:
         or "player" (one player, with ``player_id`` — conduct deltas
         stay between the player, mods, and host per design.md).
         Safe to call from any thread."""
-        for sub in list(self._subscribers):
+        with self._lock:
+            subscribers = tuple(self._subscribers)
+        for sub in subscribers:
             if sub.event_id != event_id:
                 continue
             if to == "moderators" and sub.role != "moderator":
@@ -101,9 +143,7 @@ class SseBroker:
                 continue
             if to == "player" and sub.player_id != player_id:
                 continue
-            # put_nowait: queues are unbounded — party scale (≤30
-            # players + a few mods) cannot outrun a 15s heartbeat loop.
-            self._loop.call_soon_threadsafe(sub.queue.put_nowait, (name, payload))
+            self._loop.call_soon_threadsafe(self._deliver, sub, name, payload)
 
 
 def format_sse(name: str, payload: dict) -> bytes:

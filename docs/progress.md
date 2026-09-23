@@ -39,6 +39,14 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — The SSE broker is thread-safe and its queues are bounded.**
+  TKT-01M33RFWKKHKZW3VT5MHJ7TPHC. Subscriber queues cap at 256 frames, the
+  subscriber set is guarded by a lock because sync endpoints publish from
+  the threadpool, and delivery moved to a loop-side callback so a full queue
+  drops the newest delta, counts it in `overflow_count`, and logs one
+  `arkham` warning (`event="sse.overflow"`). The drop policy and its
+  resync caveat are ADR 0017.
+
 - **2026-09-22 — Unhandled exceptions log one correlated traceback.**
   TKT-01M33S2WK. The app's `Exception` handler now logs one `arkham` line
   (`event="unhandled_exception"`) with the request id, method, and redacted
