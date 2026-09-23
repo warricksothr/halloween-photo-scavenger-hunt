@@ -52,15 +52,39 @@ function emitDelta(name, payload) {
 //
 // One EventSource for the life of a session. Payloads are thin by
 // design, so every delta routes back to refresh() — the snapshot stays
-// the single resync point. EventSource reconnects itself on drop; the
-// 'open' handler refreshes after a reconnect so nothing is missed.
+// the single resync point. EventSource retries a transient drop on its
+// own, and the 'open' handler refreshes after a reconnect so nothing is
+// missed. A drop the browser gives up on (readyState CLOSED: a 401, a
+// proxy fault, a lost network) is dead, so onerror rebuilds it through
+// refresh() — snapshot first, then a fresh stream (design.md "Realtime").
 let eventSource = null;
+
+// A dead stream rebuilds on the same short ladder as boot. The count
+// resets on the next open so a flapping connection backs off instead of
+// hammering the server.
+const STREAM_RETRY_DELAYS_MS = [500, 1000, 2000, 5000];
+let streamRetries = 0;
+let streamTimer = null;
+
+function scheduleStreamReconnect() {
+  if (streamTimer != null) return;
+  const delay =
+    STREAM_RETRY_DELAYS_MS[
+      Math.min(streamRetries, STREAM_RETRY_DELAYS_MS.length - 1)
+    ];
+  streamRetries += 1;
+  streamTimer = setTimeout(() => {
+    streamTimer = null;
+    refresh();
+  }, delay);
+}
 
 function startStream() {
   if (eventSource) return;
   eventSource = new EventSource('/api/events/stream');
   let opened = false;
   eventSource.onopen = () => {
+    streamRetries = 0;
     if (opened) refresh(); // reconnect: refetch the snapshot
     opened = true;
   };
@@ -79,11 +103,19 @@ function startStream() {
     });
   }
   eventSource.onerror = () => {
-    // EventSource retries on its own; nothing to do but not crash.
+    // CONNECTING: the browser is already retrying, and its next 'open'
+    // refetches. CLOSED: it has given up, so rebuild through refresh().
+    if (eventSource?.readyState !== EventSource.CLOSED) return;
+    stopStream();
+    scheduleStreamReconnect();
   };
 }
 
 function stopStream() {
+  if (streamTimer != null) {
+    clearTimeout(streamTimer);
+    streamTimer = null;
+  }
   eventSource?.close();
   eventSource = null;
 }
@@ -168,6 +200,7 @@ export async function refresh() {
       // The probe failed too, so this is a connection problem, not an
       // unauthenticated visitor — do not drop them on the join screen.
       reportFailure(mod, { where: 'refresh.modState' });
+      stopStream();
       set({ phase: 'error', error: mod.message });
       return;
     }
@@ -189,6 +222,7 @@ export async function refresh() {
   }
   if (result.error) {
     reportFailure(result, { where: 'refresh.snapshot' });
+    stopStream();
     set({ phase: 'error', error: result.message });
     return;
   }
