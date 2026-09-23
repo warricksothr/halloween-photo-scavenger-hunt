@@ -39,6 +39,15 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — The admin console shell exists at `/admin`.** TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0.
+  The SPA routes `/admin` to a self-contained `AdminScreen` before the player
+  store boots, so the console never loads the theme pack and never inherits
+  the Arkham frame. `GET /api/admin/events` is the session probe (401 = login,
+  200 = console); login offers the Authentik start route plus the argon2
+  password fallback with the server's error surfaced. The shell has events,
+  riddles, and host-actions navigation; the panels themselves arrive with
+  S9CY, S9CZ, and S9D0.
+
 - **2026-09-22 — The SSE broker is thread-safe and its queues are bounded.**
   TKT-01M33RFWKKHKZW3VT5MHJ7TPHC. Subscriber queues cap at 256 frames, the
   subscriber set is guarded by a lock because sync endpoints publish from
