@@ -34,6 +34,7 @@ from app.conduct import now as conduct_now
 from app.db import locked_transaction, reader
 from app.images import (
     MAX_BYTES,
+    MAX_DERIVATIVE_BYTES,
     NotAnImageError,
     TooManyPixelsError,
     process_upload,
@@ -104,13 +105,15 @@ async def upload(
     # Disk guardrail before any Pillow work: a full disk fails SQLite writes
     # too, so refuse while the host can still recover. Guardrail, not a
     # reservation — two uploads can both pass and then write (ADR 0023).
+    # The middleware of the same name refuses earlier, before the body is
+    # parsed; this one accounts for the derivative as well as the body.
     photos_dir = request.app.state.photos_dir
-    if not storage.has_room(photos_dir, len(data), request.app.state.min_free_bytes):
-        return _err(
-            507,
-            "storage_full",
-            "The server is out of storage space — tell the host.",
-        )
+    if not storage.has_room(
+        photos_dir,
+        len(data) + MAX_DERIVATIVE_BYTES,
+        request.app.state.min_free_bytes,
+    ):
+        return _err(507, "storage_full", storage.STORAGE_FULL_MESSAGE)
 
     # Optional aim tag: must be a riddle on this event.
     if riddle_id is not None:

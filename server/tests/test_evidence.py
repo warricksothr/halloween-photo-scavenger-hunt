@@ -16,6 +16,7 @@ from app import evidence as evidence_module
 from app import storage
 from app.images import (
     MAX_BYTES,
+    MAX_DERIVATIVE_BYTES,
     NotAnImageError,
     TooManyPixelsError,
     process_upload,
@@ -304,5 +305,8 @@ class TestDiskGuardrail:
 
         monkeypatch.setattr(storage, "has_room", spy)
         assert _upload(client, make_jpeg()).status_code == 201
-        # The guardrail was consulted, not skipped on the happy path.
+        # The guardrail was consulted, not skipped on the happy path, and
+        # the route's check accounts for the derivative as well as the body
+        # (the middleware's earlier check only sees the declared length).
         assert calls and calls[0][1] == client.app.state.min_free_bytes
+        assert any(extra >= MAX_DERIVATIVE_BYTES for extra, _ in calls)

@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:56:29Z
+updated_at: 2026-09-23T13:03:32Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -101,3 +101,27 @@ anything when the filesystem would fall below a free-space floor.
   documented bound); `deploy/RUNBOOK.md` pre-event `df`/`du` step and a
   507 cheatsheet row; `deploy/CONTAINER.md` env-var note;
   `docs/progress.md`.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T13:03:32Z
+
+### r1 fix note
+
+Terva r1 raised two findings; both accepted.
+
+- **high — the route check runs after the body may already be spooled.**
+  Starlette parses the multipart form and can spool a part to a temp file
+  on the same filesystem before the handler runs, so a handler-only check
+  cannot promise "refuse before any work". Added
+  `storage.StorageGuardMiddleware` (registered outside the body cap in
+  `main.py`): it answers 507 from the declared `Content-Length` before any
+  body bytes are read, and falls back to the app request cap for a chunked
+  body rather than reading it. The route check stays as the second layer.
+- **medium — accounting ignored the files upload writes.** The route check
+  now passes `len(data) + images.MAX_DERIVATIVE_BYTES`, an upper bound on
+  the re-encoded derivative, instead of `len(data)`.
+
+Tests: middleware rejects before the downstream app reads the body; passes
+an upload through when there is room; bounds a chunked upload by the cap;
+ignores non-upload requests. The route happy-path test asserts a check
+carrying at least `MAX_DERIVATIVE_BYTES`. ADR 0023, `docs/progress.md`
+updated to the two-layer story.

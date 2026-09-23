@@ -13,6 +13,11 @@ per-team share — the point is to stop the disk reaching zero, not to
 partition it. ``MIN_FREE_BYTES_DEFAULT`` leaves room for SQLite's WAL to
 grow and for the host's own writes; ``ARKHAM_MIN_FREE_BYTES`` overrides it
 for a small SD-card host or a big one.
+
+Two layers enforce the floor, because the route-level check alone is too
+late. ``StorageGuardMiddleware`` runs before Starlette parses the
+multipart form; the route's check (evidence.upload) runs after, and
+accounts for the files that upload will write, not just the body.
 """
 
 from __future__ import annotations
@@ -21,9 +26,17 @@ import os
 import shutil
 from pathlib import Path
 
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+
 # 256 MiB. Comfortably above a burst of 15 MB uploads plus WAL growth, and
 # small enough to be irrelevant on any host that can run the event.
 MIN_FREE_BYTES_DEFAULT = 256 * 1024 * 1024
+
+# The one endpoint that writes player-supplied bytes to disk.
+UPLOAD_PATH = "/api/evidence"
+
+STORAGE_FULL_MESSAGE = "The server is out of storage space — tell the host."
 
 
 def configured_min_free_bytes() -> int:
@@ -49,3 +62,63 @@ def has_room(path: Path, extra_bytes: int, minimum: int) -> bool:
         probe = probe.parent
     free = shutil.disk_usage(probe).free
     return free - extra_bytes >= minimum
+
+
+def _content_length(scope: Scope) -> int | None:
+    for name, value in scope.get("headers", []):
+        if name.lower() != b"content-length":
+            continue
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+class StorageGuardMiddleware:
+    """Refuse an upload before Starlette reads or spools the body.
+
+    A route dependency (``UploadFile``) is parsed before the handler runs,
+    and Starlette spools a multipart part past its memory threshold to a
+    temporary file — on the same filesystem the guardrail exists to
+    protect. Checking in the handler therefore cannot keep the promise
+    "refuse before any work". This sits outermost and answers 507 from
+    the declared ``Content-Length`` alone, so a full disk costs no body
+    bytes.
+
+    A chunked request declares no length, and reading the body to learn it
+    would defeat the point; the app's request cap is the bound instead.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        photos_dir: Path,
+        min_free_bytes: int,
+        max_bytes: int,
+    ) -> None:
+        self.app = app
+        self.photos_dir = photos_dir
+        self.min_free_bytes = min_free_bytes
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope["method"] != "POST"
+            or scope["path"] != UPLOAD_PATH
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        declared = _content_length(scope)
+        extra = declared if declared is not None else self.max_bytes
+        if not has_room(self.photos_dir, extra, self.min_free_bytes):
+            response = JSONResponse(
+                status_code=507,
+                content={"error": "storage_full", "message": STORAGE_FULL_MESSAGE},
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)

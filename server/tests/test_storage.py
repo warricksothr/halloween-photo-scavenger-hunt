@@ -1,5 +1,6 @@
 """Disk guardrail unit tests (ticket RFWPVZ)."""
 
+import asyncio
 from collections import namedtuple
 
 import pytest
@@ -43,3 +44,113 @@ def test_has_room_against_the_real_filesystem(tmp_path):
     assert storage.has_room(tmp_path, 1, 0) is True
     free = storage.shutil.disk_usage(tmp_path).free
     assert storage.has_room(tmp_path, 0, free + 1) is False
+
+
+class _Downstream:
+    """A stand-in app that reads one body message and answers 200."""
+
+    def __init__(self) -> None:
+        self.called = False
+        self.body_reads = 0
+
+    async def __call__(self, scope, receive, send):
+        self.called = True
+        await receive()
+        self.body_reads += 1
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+
+def _call_middleware(middleware, scope, messages):
+    incoming = list(messages)
+
+    async def receive():
+        return incoming.pop(0)
+
+    sent = []
+
+    async def send(message):
+        sent.append(message)
+
+    asyncio.run(middleware(scope, receive, send))
+    return sent
+
+
+def _scope(method="POST", path=storage.UPLOAD_PATH, content_length=None):
+    headers = []
+    if content_length is not None:
+        headers.append((b"content-length", str(content_length).encode()))
+    return {"type": "http", "method": method, "path": path, "headers": headers}
+
+
+def test_middleware_rejects_before_the_body_is_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "has_room", lambda *a, **k: False)
+    downstream = _Downstream()
+    middleware = storage.StorageGuardMiddleware(
+        downstream, photos_dir=tmp_path, min_free_bytes=1, max_bytes=100
+    )
+
+    sent = _call_middleware(
+        middleware,
+        _scope(content_length=10),
+        [{"type": "http.request", "body": b"0123456789", "more_body": False}],
+    )
+
+    assert sent[0]["status"] == 507
+    assert b"storage_full" in sent[1]["body"]
+    # The whole point: the body was never touched, so nothing spooled.
+    assert downstream.called is False
+    assert downstream.body_reads == 0
+
+
+def test_middleware_passes_an_upload_through_when_there_is_room(tmp_path):
+    downstream = _Downstream()
+    middleware = storage.StorageGuardMiddleware(
+        downstream, photos_dir=tmp_path, min_free_bytes=0, max_bytes=100
+    )
+
+    sent = _call_middleware(
+        middleware,
+        _scope(content_length=10),
+        [{"type": "http.request", "body": b"0123456789", "more_body": False}],
+    )
+
+    assert sent[0]["status"] == 200
+    assert downstream.called is True
+
+
+def test_middleware_bounds_a_chunked_upload_by_the_request_cap(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        storage,
+        "has_room",
+        lambda path, extra, minimum: seen.append(extra) or True,
+    )
+    middleware = storage.StorageGuardMiddleware(
+        _Downstream(), photos_dir=tmp_path, min_free_bytes=0, max_bytes=777
+    )
+
+    # No content-length: the declared size is unknown, so the cap stands in.
+    _call_middleware(
+        middleware,
+        _scope(),
+        [{"type": "http.request", "body": b"x", "more_body": False}],
+    )
+    assert seen == [777]
+
+
+def test_middleware_ignores_other_requests(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        storage, "has_room", lambda *a, **k: pytest.fail("consulted off the path")
+    )
+    downstream = _Downstream()
+    middleware = storage.StorageGuardMiddleware(
+        downstream, photos_dir=tmp_path, min_free_bytes=0, max_bytes=100
+    )
+
+    _call_middleware(
+        middleware,
+        _scope(method="GET", path="/api/state"),
+        [{"type": "http.request", "body": b"", "more_body": False}],
+    )
+    assert downstream.called is True

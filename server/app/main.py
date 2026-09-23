@@ -111,6 +111,11 @@ def create_app(
     if photos_dir is None:
         photos_dir = Path(db_path).parent / "photos"
 
+    # Uploads refuse below this free-space floor (app/storage.py). Read
+    # once here so the env var is a process setting, like the TTL — and so
+    # the middleware below can be built with it.
+    min_free_bytes = storage.configured_min_free_bytes()
+
     # SSO is optional, so an unset config is the normal local case rather
     # than the startup error a missing admin credential is.
     if oidc_config is None:
@@ -158,8 +163,7 @@ def create_app(
         app.state.rate_limiter = ratelimit.RateLimiter()
         app.state.photos_dir = photos_dir
         # Uploads refuse below this free-space floor (app/storage.py).
-        # Read once here so the env var is a process setting, like the TTL.
-        app.state.min_free_bytes = storage.configured_min_free_bytes()
+        app.state.min_free_bytes = min_free_bytes
         # The broker captures the running loop: sync endpoints publish
         # from the threadpool, and asyncio queues can only be fed from
         # the loop's thread (see app/sse.py).
@@ -227,10 +231,18 @@ def create_app(
     # Middleware is added inner-to-outer: the last one added wraps the
     # rest. The body cap goes on first so an oversized request is refused
     # before CSRF or any route touches it; CSRF sits just inside it. The
-    # request log goes on last so it wraps both, logs the requests they
-    # reject, and measures the whole request.
+    # storage guard sits outside the body cap so a full disk refuses an
+    # upload before even the cap reads the body (ADR 0023). The request log
+    # goes on last so it wraps both, logs the requests they reject, and
+    # measures the whole request.
     app.add_middleware(csrf.CsrfMiddleware)
     app.add_middleware(limits.BodyLimitMiddleware)
+    app.add_middleware(
+        storage.StorageGuardMiddleware,
+        photos_dir=photos_dir,
+        min_free_bytes=min_free_bytes,
+        max_bytes=limits.MAX_REQUEST_BYTES,
+    )
     app.add_middleware(cache.NoStoreMiddleware)
     app.add_middleware(RequestLogMiddleware)
     app.include_router(events.router)
