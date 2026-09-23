@@ -14,6 +14,8 @@ technically over the photo cap but under this one.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -85,11 +87,22 @@ class BodyLimitMiddleware:
     declared; it only watches how many bytes the app reads and refuses the
     ones past the cap. Without a declared length it has to read the body to
     know its size — a route that ignores the body would otherwise never
-    trip the cap, so it buffers up to the cap and replays it."""
+    trip the cap, so it buffers up to the cap and replays it.
 
-    def __init__(self, app: ASGIApp, max_bytes: int = MAX_REQUEST_BYTES) -> None:
+    ``on_reject`` is how a body refused here still reaches the counters the
+    route's own 413 would touch: this middleware runs before routing, so it
+    has no ``Request`` and no ``app.state``, and the observer it is given
+    sees only the scope. The caller decides which paths count."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int = MAX_REQUEST_BYTES,
+        on_reject: Callable[[Scope], None] | None = None,
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.on_reject = on_reject
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -101,6 +114,7 @@ class BodyLimitMiddleware:
         declared = _content_length(scope)
         if declared is not None:
             if declared > self.max_bytes:
+                self._note(scope)
                 await _reject(scope, receive, send)
                 return
             await self._watching(scope, receive, send)
@@ -110,9 +124,14 @@ class BodyLimitMiddleware:
         # when the route never touches the body, then replay what we read.
         buffered, too_large = await _read_capped(receive, self.max_bytes)
         if too_large:
+            self._note(scope)
             await _reject(scope, receive, send)
             return
         await self.app(scope, _replaying(buffered, receive), send)
+
+    def _note(self, scope: Scope) -> None:
+        if self.on_reject is not None:
+            self.on_reject(scope)
 
     async def _watching(self, scope: Scope, receive: Receive, send: Send) -> None:
         received = 0
@@ -140,4 +159,5 @@ class BodyLimitMiddleware:
             # a chunked body can trip the cap mid-response, and then the
             # headers are already on the wire.
             if not responded:
+                self._note(scope)
                 await _reject(scope, receive, send)

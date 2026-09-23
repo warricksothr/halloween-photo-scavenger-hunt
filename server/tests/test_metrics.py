@@ -13,6 +13,7 @@ from test_mod import _mod, _submit
 from test_mod import _party as _mod_party
 
 from app.images import MAX_BYTES
+from app.limits import MAX_REQUEST_BYTES
 from app.metrics import UPLOAD_OUTCOMES, VERDICT_STATES, Metrics
 
 
@@ -81,6 +82,19 @@ class TestUploadMetrics:
         assert _upload(client, b"x" * (MAX_BYTES + 1)).status_code == 413
         metrics = admin.get("/api/admin/readyz").json()["metrics"]
         assert metrics["uploads"]["not_an_image"] == 1
+        assert metrics["uploads"]["too_large_bytes"] == 1
+        assert metrics["uploads"]["accepted"] == 0
+
+    def test_middleware_rejected_upload_is_counted(self, admin, client):
+        """A body past the app-level cap is refused before the route runs,
+        so nothing in the handler's rejection path executes. The middleware
+        has no ``Request``, but the upload outcome must still be complete:
+        the refuser reports to the same counter."""
+        _, _ = _party(admin, client)
+        resp = _upload(client, b"x" * (MAX_REQUEST_BYTES + 1))
+        assert resp.status_code == 413
+        assert resp.json()["error"] == "request_too_large"
+        metrics = admin.get("/api/admin/readyz").json()["metrics"]
         assert metrics["uploads"]["too_large_bytes"] == 1
         assert metrics["uploads"]["accepted"] == 0
 

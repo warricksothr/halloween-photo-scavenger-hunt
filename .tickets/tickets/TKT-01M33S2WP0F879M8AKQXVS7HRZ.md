@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T12:30:17Z
+updated_at: 2026-09-23T13:15:45Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -151,6 +151,19 @@ contention. Re-requested.
 
 Recovered ticket bookkeeping after a `git reset --hard` discarded the
 uncommitted claim/AC/note writes; no source change was lost.
+
+**agent:opencode/session** at 2026-09-23T13:15:45Z
+
+Round 5 finding (medium, review 258): an upload past the app-level
+request cap is refused by `limits.BodyLimitMiddleware` before the route
+runs, so none of the handler's `_reject` calls fire and the largest
+uploads were absent from the outcome counters. The middleware now takes
+an `on_reject` observer; `create_app` builds the `Metrics` instance (it
+is no longer lifespan-only, because the middleware predates the
+lifespan) and passes an observer that records `too_large_bytes` when the
+scope path is `/api/evidence`. New test
+`test_middleware_rejected_upload_is_counted` sends a body one byte past
+`MAX_REQUEST_BYTES` and asserts the counter.
 
 ## Summary
 

@@ -141,7 +141,7 @@ def create_app(
         # In-process counters (app/metrics.py). The writer lock is wrapped
         # so its contention is observable; every ``with app.state.db_lock``
         # site is measured without changing those sites.
-        app.state.metrics = metrics.Metrics()
+        app.state.metrics = app_metrics
         # Sync endpoints share one writer. Race-sensitive mutation
         # handlers hold this reentrant lock for the full request, then
         # acquire it again around their transaction blocks.
@@ -200,6 +200,12 @@ def create_app(
     # set it per process.
     errors.init_error_reporting()
 
+    # Counters live here, not in the lifespan, because the body-limit
+    # middleware is built before the lifespan runs and an oversized upload
+    # is refused there — the route's own 413 is never reached, so the
+    # refuser needs the same counter the route writes to (S2WP review).
+    app_metrics = metrics.Metrics()
+
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
 
     # An unhandled exception is turned into a 500 by ServerErrorMiddleware,
@@ -247,7 +253,14 @@ def create_app(
     # goes on last so it wraps both, logs the requests they reject, and
     # measures the whole request.
     app.add_middleware(csrf.CsrfMiddleware)
-    app.add_middleware(limits.BodyLimitMiddleware)
+    app.add_middleware(
+        limits.BodyLimitMiddleware,
+        on_reject=lambda scope: (
+            app_metrics.record_upload("too_large_bytes")
+            if scope.get("path") == "/api/evidence"
+            else None
+        ),
+    )
     app.add_middleware(
         storage.StorageGuardMiddleware,
         photos_dir=photos_dir,
