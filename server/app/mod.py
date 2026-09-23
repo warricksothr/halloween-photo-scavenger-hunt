@@ -6,6 +6,11 @@ mints a ``moderator`` row plus a ``moderator_session`` — the same
 bearer-cookie story as players, with the label kept so the queue can
 say "ORACLE IS VIEWING".
 
+Since S9CW the mod link is a selector, not a credential: joining also
+requires a signed-in OIDC moderator (``oidc.require_oidc_moderator``),
+and the row records that identity's subject and name. The code picks the
+event; SSO picks the person.
+
 The queue itself, verdicts, flags, and player history follow this
 module's conventions:
 
@@ -26,7 +31,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids, ratelimit, sse
+from app import auth, ids, oidc, ratelimit, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import hold_request_lock, locked_transaction, reader
@@ -40,8 +45,15 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 
 
 @router.post("/join/{mod_code}", status_code=201)
-def join(mod_code: str, request: Request):
-    # Same brute-force gate as the player join (ADR 0015).
+def join(
+    mod_code: str,
+    request: Request,
+    identity: oidc.OidcIdentity = Depends(oidc.require_oidc_moderator),
+):
+    # SSO first, brute-force gate second: an anonymous caller is sent to
+    # sign in (401) rather than being counted, and a code-guesser without
+    # an identity never reaches the code lookup at all. The gate still
+    # bounds an authenticated moderator probing codes.
     source_key = ("mod_join:source", ratelimit.source(request))
     global_key = ("mod_join:global", "all")
     reservation, wait = ratelimit.admit(
@@ -65,7 +77,10 @@ def join(mod_code: str, request: Request):
         return _err(409, "event_closed", "This event has already ended.")
 
     now = int(time.time())
-    moderator_id = ids.new_id()
+    # The label is the person, so the queue says a name rather than a
+    # code-shaped id. OIDC has already resolved whatever claim it has;
+    # the subject is the floor when it has no display name.
+    label = identity.name or identity.email or identity.subject
     with locked_transaction(request) as writer:
         # Re-check on the writer (ADR 0013): the reader serves the last
         # committed snapshot, so a purge or a close can land between the
@@ -80,15 +95,40 @@ def join(mod_code: str, request: Request):
             )
         if event["status"] == "closed":
             return _err(409, "event_closed", "This event has already ended.")
-        writer.execute(
-            "INSERT INTO moderator (id, event_id, label, created_at)"
-            " VALUES (?, ?, ?, ?)",
-            (moderator_id, event["id"], f"moderator-{moderator_id[:4]}", now),
-        )
+        # One row per person per event: a rejoin reuses the row (and so
+        # the id that verdicts and strikes already point at) and refreshes
+        # the label in case the directory name changed.
+        existing = writer.execute(
+            "SELECT id FROM moderator WHERE event_id = ? AND subject = ?",
+            (event["id"], identity.subject),
+        ).fetchone()
+        if existing is not None:
+            moderator_id = existing["id"]
+            writer.execute(
+                "UPDATE moderator SET label = ? WHERE id = ?",
+                (label, moderator_id),
+            )
+        else:
+            moderator_id = ids.new_id()
+            writer.execute(
+                "INSERT INTO moderator (id, event_id, label, subject, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (moderator_id, event["id"], label, identity.subject, now),
+            )
         token = auth.issue_moderator_session(writer, moderator_id=moderator_id)
-        # No audit row for the join itself: audit-actions.md has no
-        # moderator.joined — moderator presence is not a state mutation
-        # the recap or forensics need (the verdicts they issue are).
+        # The join names the person, never the code (audit-actions.md): a
+        # moderator entering the event is the forensics-relevant fact, and
+        # the subject is what lets two visits be connected.
+        log_action(
+            writer,
+            event_id=event["id"],
+            actor_type=ActorType.MODERATOR,
+            actor_id=moderator_id,
+            action=Action.MODERATOR_JOINED,
+            entity_type="moderator",
+            entity_id=moderator_id,
+            details={"subject": identity.subject, "name": identity.name},
+        )
 
     resp = JSONResponse(
         status_code=201,

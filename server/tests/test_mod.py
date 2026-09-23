@@ -11,9 +11,10 @@ cookie jar, and a mod cookie must not clobber a player jar).
 
 import json
 import time
+import uuid
 
 from fastapi.testclient import TestClient
-from support import arm_csrf
+from support import arm_csrf, sign_in_moderator
 from test_evidence import make_jpeg
 
 
@@ -46,10 +47,16 @@ def _party(admin, client, riddles=("Find it",)):
     }
 
 
-def _mod(client, mod_code, label_client=None):
+def _mod(client, mod_code, label_client=None, *, subject=None, name=None):
     """A moderator in their own cookie jar. ``label_client`` lets a test
-    hold two distinct moderators."""
+    hold two distinct moderators; two calls get distinct identities (and
+    so distinct rows) unless a ``subject`` is passed."""
     mod_client = label_client or arm_csrf(TestClient(client.app))
+    sign_in_moderator(
+        mod_client,
+        subject=subject or f"mod-{uuid.uuid4().hex[:8]}",
+        name=name or "Moderator",
+    )
     resp = mod_client.post(f"/api/mod/join/{mod_code}")
     assert resp.status_code == 201, resp.text
     return mod_client
@@ -67,14 +74,78 @@ def _submit(client, riddle_id, evidence_id):
 class TestModJoin:
     def test_join_sets_cookie_and_returns_event(self, admin, client):
         p = _party(admin, client)
-        resp = arm_csrf(TestClient(client.app)).post(f"/api/mod/join/{p['mod_code']}")
+        mod = arm_csrf(TestClient(client.app))
+        sign_in_moderator(mod, subject="mod-ada", name="Ada Lovelace")
+        resp = mod.post(f"/api/mod/join/{p['mod_code']}")
         assert resp.status_code == 201
         assert resp.json()["event"]["id"] == p["event_id"]
         assert "arkham_mod" in resp.cookies
 
+    def test_label_and_audit_come_from_the_identity(self, admin, client):
+        """S9CW: the row and the audit name the person, not the code."""
+        p = _party(admin, client)
+        mod = _mod(client, p["mod_code"], subject="mod-ada", name="Ada Lovelace")
+        assert mod.get("/api/mod/state").json()["moderator"]["label"] == "Ada Lovelace"
+
+        conn = client.app.state.db
+        row = conn.execute(
+            "SELECT * FROM moderator WHERE event_id = ?", (p["event_id"],)
+        ).fetchone()
+        assert row["subject"] == "mod-ada"
+        assert row["label"] == "Ada Lovelace"
+        audit = conn.execute(
+            "SELECT * FROM audit_event WHERE action = 'moderator.joined'"
+        ).fetchall()
+        assert len(audit) == 1
+        assert json.loads(audit[0]["details"]) == {
+            "subject": "mod-ada",
+            "name": "Ada Lovelace",
+        }
+        assert audit[0]["actor_type"] == "moderator"
+        assert p["mod_code"] not in audit[0]["details"]
+
+    def test_rejoin_reuses_the_row_and_refreshes_the_label(self, admin, client):
+        p = _party(admin, client)
+        first = _mod(client, p["mod_code"], subject="mod-ada", name="Ada Lovelace")
+        second = _mod(client, p["mod_code"], subject="mod-ada", name="Ada Byron")
+        first_state = first.get("/api/mod/state").json()["moderator"]
+        second_state = second.get("/api/mod/state").json()["moderator"]
+        assert first_state["id"] == second_state["id"]
+        assert second_state["label"] == "Ada Byron"
+        conn = client.app.state.db
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM moderator WHERE event_id = ?", (p["event_id"],)
+            ).fetchone()[0]
+            == 1
+        )
+
+    def test_join_without_identity_is_401_and_mints_nothing(self, admin, client):
+        p = _party(admin, client)
+        mod = arm_csrf(TestClient(client.app))
+        resp = mod.post(f"/api/mod/join/{p['mod_code']}")
+        assert resp.status_code == 401
+        assert "arkham_mod" not in resp.cookies
+        conn = client.app.state.db
+        assert conn.execute("SELECT COUNT(*) FROM moderator").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM moderator_session").fetchone()[0] == 0
+
+    def test_admin_identity_is_not_a_moderator(self, admin, client):
+        """The host may open a mod link; the mod surface still needs a
+        moderator, and the code must not be redeemed as one."""
+        p = _party(admin, client)
+        mod = arm_csrf(TestClient(client.app))
+        sign_in_moderator(mod, subject="host-1", name="Host", role="admin")
+        assert mod.post(f"/api/mod/join/{p['mod_code']}").status_code == 401
+        assert (
+            client.app.state.db.execute("SELECT COUNT(*) FROM moderator").fetchone()[0]
+            == 0
+        )
+
     def test_bad_code_404_and_closed_event_409(self, admin, client):
         p = _party(admin, client)
         mod = arm_csrf(TestClient(client.app))
+        sign_in_moderator(mod)
         assert mod.post("/api/mod/join/nope").status_code == 404
         admin.post(f"/api/admin/events/{p['event_id']}/close")
         resp = mod.post(f"/api/mod/join/{p['mod_code']}")
@@ -108,17 +179,20 @@ class TestQueue:
 
     def test_claim_is_advisory_and_visible(self, admin, client):
         p = _party(admin, client)
-        mod_a = _mod(client, p["mod_code"])
-        mod_b = _mod(client, p["mod_code"])
+        mod_a = _mod(client, p["mod_code"], name="Oracle")
+        mod_b = _mod(client, p["mod_code"], name="Question")
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
 
         assert mod_a.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 200
         item = mod_b.get("/api/mod/queue").json()[0]
-        assert item["claimed_by"]["label"].startswith("moderator-")
+        assert item["claimed_by"]["label"] == "Oracle"
 
         # The claim never blocks: mod B can re-claim and, crucially,
-        # still verdict (ADR 0002).
+        # still verdict (ADR 0002). The latest viewer owns the claim.
         assert mod_b.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 200
+        assert (
+            mod_a.get("/api/mod/queue").json()[0]["claimed_by"]["label"] == "Question"
+        )
         resp = mod_b.post(
             f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
         )
@@ -232,8 +306,7 @@ class TestVerdict:
         p = _party(admin, client)
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         other_event = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = arm_csrf(TestClient(client.app))
-        other_mod.post(f"/api/mod/join/{other_event['mod_code']}")
+        other_mod = _mod(client, other_event["mod_code"])
         assert other_mod.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 404
         resp = other_mod.post(
             f"/api/mod/queue/{sub['id']}/verdict", json={"verdict": "verified"}
@@ -345,8 +418,7 @@ class TestPlayerHistory:
     def test_history_scoped_to_event(self, admin, client):
         p = _party(admin, client)
         other = admin.post("/api/admin/events", json={"name": "Other"}).json()
-        other_mod = arm_csrf(TestClient(client.app))
-        other_mod.post(f"/api/mod/join/{other['mod_code']}")
+        other_mod = _mod(client, other["mod_code"])
         resp = other_mod.get(f"/api/mod/players/{p['player_id']}")
         assert resp.status_code == 404
 

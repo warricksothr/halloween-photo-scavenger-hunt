@@ -46,6 +46,21 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — The moderator link is a selector, not a credential.**
+  TKT-01M33S9CWGZWA82EDFK6NG232V. `POST /api/mod/join/{code}` now requires
+  an OIDC moderator session before the rate-limit gate even runs, so a
+  leaked QR mints nothing; the code still picks the event, and the label
+  and `moderator.joined` audit come from the identity (subject/name,
+  never the code). Migration `0002_moderator_subject.sql` adds
+  `moderator.subject` with a partial unique index on `(event_id, subject)`,
+  so rejoining reuses the row instead of piling up moderators. The
+  callback refuses a mod-surface sign-in with `?sso=not_authorized` (not
+  a moderator) or `?sso=not_moderator` (the host on a mod link) rather
+  than a bare JSON error; `ModJoin`, previously only reached at
+  `/m/<code>`, now also serves the bare `/mod` form the callback lands
+  on, and starts the SSO round-trip itself when there is no session
+  (ADR 0020).
+
 - **2026-09-22 — The console edits each event's riddles.**
   TKT-01M33S9CZT5MVQQS7ED4S6J2TR. The Riddles tab picks an event, then lists
   its riddles in sort order with Edit, ↑/↓, and Delete on each row and an add

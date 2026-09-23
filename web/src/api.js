@@ -110,6 +110,13 @@ async function request(path, options = {}) {
   return send(path, options);
 }
 
+// Single sign-on (S9CW): an unauthenticated mod screen sends the browser
+// here to start the OIDC dance, carrying where to come back to. The
+// server clamps `next` to a same-origin path.
+export function oidcLoginUrl(next) {
+  return `/api/auth/oidc/login?next=${encodeURIComponent(next)}`;
+}
+
 export const api = {
   snapshot: () => request('/api/state'),
   join: (joinCode, displayName, deviceLabel) =>

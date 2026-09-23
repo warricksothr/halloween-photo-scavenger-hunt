@@ -11,7 +11,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
-from support import arm_csrf
+from support import arm_csrf, sign_in_moderator
 from test_mod import _party
 
 from app.ratelimit import Limit, RateLimiter, retry_response, source
@@ -158,13 +158,20 @@ def test_each_entry_point_has_a_global_cap(client, monkeypatch, path, constant):
     monkeypatch.setattr(
         ratelimit, constant.replace("GLOBAL", "SOURCE"), ratelimit.Limit(1000, 600)
     )
+    moderator_entry = path.startswith("/api/mod")
 
     for index in range(2):
         guesser = arm_csrf(TestClient(client.app, client=(f"10.0.0.{index}", 1)))
+        if moderator_entry:
+            # S9CW: the mod link needs an OIDC moderator before the
+            # brute-force gate is consulted at all.
+            sign_in_moderator(guesser, subject=f"mod-{index}")
         resp = guesser.post(path.format(code="NOPE"), json={"display_name": "R"})
         assert resp.status_code == 404, resp.text
 
     fresh = arm_csrf(TestClient(client.app, client=("10.0.0.99", 1)))
+    if moderator_entry:
+        sign_in_moderator(fresh, subject="mod-fresh")
     blocked = fresh.post(path.format(code="NOPE"), json={"display_name": "R"})
 
     assert blocked.status_code == 429
@@ -314,6 +321,7 @@ def test_failures_from_one_source_do_not_lock_out_another(client):
 
 
 def test_mod_join_locks_out_after_repeated_bad_codes(client):
+    sign_in_moderator(client, subject="mod-guesser")
     for _ in range(30):
         assert client.post("/api/mod/join/NOPE").status_code == 404
 

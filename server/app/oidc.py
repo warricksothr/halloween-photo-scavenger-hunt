@@ -449,6 +449,39 @@ def _safe_next(value: Any) -> str | None:
     return value
 
 
+def _is_mod_surface(target: str) -> bool:
+    """Whether a same-origin ``next`` points at the moderator console.
+
+    The SPA serves the mod link at ``/m/<code>`` and the console at
+    ``/mod`` (``web/src/main.jsx``), and the callback's default moderator
+    target is ``/mod``. A refusal aimed at one of these returns to the app
+    with a marker so the screen can explain itself, rather than a JSON 401
+    the browser lands on as a dead end.
+    """
+    return (
+        target == "/mod"
+        or target.startswith("/mod/")
+        or target == "/m"
+        or target.startswith("/m/")
+    )
+
+
+def _with_marker(target: str, marker: str) -> str:
+    separator = "&" if "?" in target else "?"
+    return f"{target}{separator}sso={marker}"
+
+
+def _refusal_redirect(target: str, marker: str) -> RedirectResponse:
+    """Send a refused sign-in back to the app it started from.
+
+    Single-use like every other correlated outcome: the transaction cookie
+    does not survive, so the attempt cannot be replayed.
+    """
+    response = RedirectResponse(_with_marker(target, marker), status_code=303)
+    response.delete_cookie(TXN_COOKIE_NAME, path="/")
+    return response
+
+
 def _same(left: str, right: str) -> bool:
     # compare_digest rejects non-ASCII str, and ``state`` is attacker
     # controlled, so encode with replacement rather than raising.
@@ -627,10 +660,15 @@ async def callback(
         return _failure(502, "oidc_unavailable", "Single sign-on is unavailable.")
 
     role = role_for(provider.config, group_names(claims.get("groups")))
+    requested = _safe_next(txn.get("next"))
     if role is None:
         logger.warning(
             "oidc identity in no allowed group", extra={"event": "oidc.denied"}
         )
+        # A mod-link attempt returns to the screen with a marker; anything
+        # else keeps the JSON 401 an API caller can read.
+        if requested is not None and _is_mod_surface(requested):
+            return _refusal_redirect(requested, "not_authorized")
         return _failure(
             401,
             "not_authorized",
@@ -641,7 +679,18 @@ async def callback(
     if not isinstance(subject, str) or not subject:
         return _failure(401, "oidc_bad_token", "The identity token had no subject.")
 
-    target = _safe_next(txn.get("next")) or ("/admin" if role == "admin" else "/mod")
+    # The host who followed a moderator link is not a moderator. Mint the
+    # admin session — they really are the host — but return to the app with
+    # a marker so the mod screen can say so instead of looping back into a
+    # sign-in the person already completed.
+    marker = (
+        "not_moderator"
+        if role == "admin" and requested is not None and _is_mod_surface(requested)
+        else None
+    )
+    target = requested or ("/admin" if role == "admin" else "/mod")
+    if marker is not None:
+        target = _with_marker(target, marker)
     response = RedirectResponse(target, status_code=303)
     if role == "admin":
         token_value = auth.issue_admin_session(request)

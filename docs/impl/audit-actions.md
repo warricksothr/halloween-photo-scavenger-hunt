@@ -31,6 +31,7 @@ Rules repeated from ADR 0004 so this file stands alone:
 | `evidence.quarantined`   | moderator  | evidence_item| `{ submission_id }`                             | 8 |
 | `submission.created`     | player     | submission   | `{ riddle_id, evidence_item_id }`               | 6 |
 | `verdict.issued`         | moderator  | submission   | `{ verdict, flavor_text }`                      | 7 |
+| `moderator.joined`       | moderator  | moderator    | `{ subject, name }`                             | S9CW |
 | `duplicate_flag.raised`  | system     | evidence_item| `{ other_team_id, other_evidence_id, distance }`| 6 |
 | `duplicate_flag.resolved`| moderator  | evidence_item| `{ resolution: "cleared" \| "confirmed" }`      | 7 |
 | `strike.issued`          | moderator  | strike       | `{ level, cooldown_until, note }`               | 8 |

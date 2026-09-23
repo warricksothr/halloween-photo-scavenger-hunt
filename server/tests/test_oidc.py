@@ -268,6 +268,44 @@ def test_user_in_neither_group_is_refused(oidc_client, stub):
     assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
 
 
+def test_mod_link_refusal_returns_to_the_screen(oidc_client, stub):
+    """S9CW: a refused mod-link sign-in goes back to /m/<code> with a
+    marker, so the screen renders the refusal instead of a dead-end JSON
+    page. No session is minted and the transaction is single-use."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_authorized"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
+
+
+def test_host_following_a_mod_link_is_told_not_a_moderator(oidc_client, stub):
+    """The host is signed in as host; the mod screen needs to say so rather
+    than loop back into a sign-in they already completed."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_moderator"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME)
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+    assert oidc_client.get("/api/admin/events").status_code == 200
+
+
+def test_refusal_for_a_non_mod_target_stays_json(oidc_client, stub):
+    _, query = start_login(oidc_client, next_path="/admin/events")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "not_authorized"
+
+
 def test_bad_state_is_rejected(oidc_client, stub):
     _, query = start_login(oidc_client)
     stub.nonce = query["nonce"][0]
@@ -527,7 +565,7 @@ def test_uncorrelated_callback_leaves_the_transaction_cookie(oidc_client, stub):
 @pytest.mark.parametrize(
     ("requested", "expected"),
     [
-        ("/m/MODCODE1", "/m/MODCODE1"),
+        ("/m/MODCODE1", "/m/MODCODE1?sso=not_moderator"),
         ("/admin/events?tab=1", "/admin/events?tab=1"),
         ("//evil.example/steal", "/admin"),
         ("https://evil.example/steal", "/admin"),

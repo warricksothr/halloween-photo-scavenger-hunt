@@ -212,6 +212,11 @@ export function retry() {
 
 export async function modJoin(modCode) {
   const result = await api.modJoin(modCode);
+  if (result.unauthenticated) {
+    // No OIDC moderator session (S9CW): the screen sends the browser to
+    // sign in. Refreshing would only re-probe and land back on join.
+    return result;
+  }
   if (result.error) {
     reportFailure(result, { where: 'modJoin' });
     return result; // the mod join screen shows the message

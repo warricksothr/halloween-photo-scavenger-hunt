@@ -104,6 +104,13 @@ GET    /api/auth/oidc/login            303 → issuer with state, nonce, PKCE S2
                                        optional ?next=<same-origin path>
 GET    /api/auth/oidc/callback         code+state → 303 to /admin (host group) or
                                        /mod (moderator group) | 401 | 502
+                                       With a ?next that names a mod surface
+                                       (/mod, /m/<code>) a refusal returns
+                                       there instead of JSON: 303 with
+                                       ?sso=not_authorized (no group) or
+                                       ?sso=not_moderator (host following a
+                                       mod link), so the screen can explain
+                                       rather than dead-end (S9CW).
 ```
 
 Both routes answer `503 {"error":"oidc_disabled"}` when SSO is unset. The
@@ -168,7 +175,12 @@ POST   /api/submissions                 { riddle_id, evidence_item_id }
 ### Moderation (increment 7)
 
 ```
-POST   /api/mod/join/{mod_code}         → moderator cookie + { event }
+POST   /api/mod/join/{mod_code}         requires a signed-in OIDC moderator
+                                        (S9CW) → moderator cookie + { event }
+                                        | 401 without one. The code selects
+                                        the event; the identity supplies the
+                                        label. Logs moderator.joined with the
+                                        subject and name, never the code.
                                         (429 after repeated bad codes)
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
