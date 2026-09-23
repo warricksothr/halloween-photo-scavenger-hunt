@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWWFJJJ7JP9JE7ZRE54K
 title: Remove theme leakage from the core UI
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: null
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 4d1df7e26aac0c53e2967a6b690f4c922f08486b
-  session: null
-  claimed_at: 2026-09-23T15:56:22Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T16:02:45Z
+updated_at: 2026-09-23T16:26:20Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,8 +36,8 @@ Arkham-specific copy and a stale theme stylesheet live in shared components, so 
 
 ## Acceptance criteria
 
-- [ ] User-facing strings come from the active theme pack.
-- [ ] No theme stylesheet persists when the theme is switched.
+- [x] User-facing strings come from the active theme pack.
+- [x] No theme stylesheet persists when the theme is switched.
 
 ## Implementation plan
 
@@ -111,3 +104,68 @@ console.
   default-copy rule for pre-event surfaces.
 - `docs/adr/0024-theme-stylesheet-lifecycle.md`.
 - `docs/progress.md`: a note under Notes / blockers.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T16:26:10Z
+
+Review history (all requests dispatched after every write landed; head sha is the reviewed commit).
+
+PR https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/36
+Base 4d1df7e26aac0c53e2967a6b690f4c922f08486b.
+
+- theme-leakage-r1 — head d58c529f36457d3e4ce792b8ab46594cce117feb, run #496.
+  Findings at the failure threshold:
+  - medium: overlapping `loadTheme` calls could commit out of order and leave
+    the older pack active (`web/src/theme.js`). Fixed with a request
+    generation guard plus a regression test (`web/src/theme.test.js`).
+  - low: the boot-copy test asserted the Arkham literal, so a hardcoded string
+    would still pass (`web/src/main.test.jsx`). Fixed by mocking
+    `defaultCopy` with a `BOOT_SENTINEL`.
+- theme-leakage-r2 — head f5382378bb24707b76d0cc86cb6e689be0a20e48, run #498.
+  Both r1 findings recorded resolved. One new finding at the threshold:
+  - medium: a superseded load could still return its own pack's copy when no
+    newer theme had committed (`web/src/theme.js`). Fixed by chaining loads:
+    a superseded call resolves with the winning load's copy, and a test
+    asserts it stays pending until the winner lands.
+- theme-leakage-r3 — head 567b82dbdf9febb91bfa0cad7d4ec83d93284d15, run #500.
+  CLEAN — "Review completed; no findings at the failure threshold."
+  Quality / Fast quality gate (pull_request): success in 2m12s.
+
+Local gate before each dispatch: `bash scripts/check-quality.sh` (web suite
+13 files / 127 tests, production build). `web/e2e/resize-text.spec.js` also
+passed against the built app with the theme chunk fetched and applied.
+
+## Summary
+
+Landed in PR #36 on `t3code/theme-leakage`, merged at the reviewed head.
+
+`web/src/theme.js` no longer leans on Vite's CSS-import side effect. It
+imports each pack's CSS as text with `?inline`, injects its own
+`<style data-theme="<resolved>">`, and removes the previous pack's node once
+the new one lands, so a switch leaves exactly one pack in the document. A
+request generation guard plus a chained `latestLoad` keeps overlapping
+refreshes honest: only the newest request commits, and a superseded call
+resolves with the winning load's copy. The default pack's copy stays eager
+behind `defaultCopy()` for the boot screen, and `DEFAULT_THEME` replaces the
+scattered `'arkham'` literals.
+
+The remaining hardcoded game copy moved into `web/src/themes/arkham/copy.js`
+and is read through `copy`: the boot line, the join code label and device
+placeholder, the invite loading and unavailable lines, the closed-standings
+loading and no-winner fallback, and the roster last-seen wording (a
+`lastSeen(mins)` pack function; the component keeps the clock math). Conduct,
+connection-error, moderator, and host-console surfaces stay un-themed by rule
+and are named in `docs/impl/ui.md`.
+
+Tests: `theme.test.js` pins the stylesheet lifecycle and both overlapping-load
+orders; `web/src/screens/theme-copy.test.jsx` renders Join, TeamJoin,
+Standings, and Team against a sentinel copy fixture; `main.test.jsx` asserts
+the boot line from a mocked `defaultCopy`. `bash scripts/check-quality.sh`
+passes (13 files / 127 tests) and `resize-text.spec.js` passes against the
+built app. Terva review r3 is clean; Quality gate success in 2m12s. Recorded
+in `docs/adr/0024-theme-stylesheet-lifecycle.md` and `docs/progress.md`.
+
+One deliberate deviation from the plan: a rejected stylesheet load leaves the
+previous pack in place rather than clearing the document, so a load failure
+never renders the app unstyled.
