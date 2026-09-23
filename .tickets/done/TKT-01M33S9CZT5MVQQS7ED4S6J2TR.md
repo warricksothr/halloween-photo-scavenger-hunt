@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CZT5MVQQS7ED4S6J2TR
 title: Build admin riddle management
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ dependencies:
   - TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: null
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 6d87fbe7ea67122399ab176aacac627d1124657e
-  session: null
-  claimed_at: 2026-09-23T04:41:24Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T04:52:02Z
+updated_at: 2026-09-23T04:55:52Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,9 +36,9 @@ Riddles are managed only through the API today. Build the riddles view for an ev
 
 ## Acceptance criteria
 
-- [ ] The admin can list, add, edit, and delete riddles for an event.
-- [ ] A delete the API refuses (submissions reference it) shows the reason.
-- [ ] Sort order is editable and reflected after save.
+- [x] The admin can list, add, edit, and delete riddles for an event.
+- [x] A delete the API refuses (submissions reference it) shows the reason.
+- [x] Sort order is editable and reflected after save.
 
 ## Implementation plan
 
@@ -153,3 +146,31 @@ recorded as resolved.
 
 The scope note about `docs/design.md` and the server implementation is the
 same as round 1 and needs no change.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T04:55:52Z
+
+### Review round 3 — clean
+
+Reviewed head `4e27d48b29d15491923f90a8bb49ca61e90f67a3`, request
+`admin-riddle-management`, run `1c2a97bd-a001-4425-a9fd-c5680b907b84`,
+[PR #25](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/25).
+Review completed with no findings at the failure threshold. Merged as
+`00663aef7dd810dd33f989a9325cce4ae62b40a9` (base `6d87fbe`).
+
+## Summary
+
+### Outcome
+
+Shipped in PR #25, merged as
+`00663aef7dd810dd33f989a9325cce4ae62b40a9`. The console's Riddles tab picks
+an event and lists its riddles in order, with Edit, ↑/↓, and Delete per row
+and an add box that appends past the last sort order; a refused delete shows
+the API's reason. Files: `web/src/screens/AdminRiddles.jsx` and its test,
+`web/src/screens/Admin.jsx` wiring, `web/src/api.js` (four riddle calls),
+`web/src/admin.css`, `docs/progress.md`.
+
+Three review rounds: round 1 found a partially failed reorder leaving the
+screen stale (high), a live event selector during a mutation (medium), and an
+event-load failure masked as an empty list (medium); round 2 found a load
+error outliving a selection change (medium); round 3 was clean. All four were
+accepted and fixed, each with a regression test.
