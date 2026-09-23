@@ -46,6 +46,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — The console manages events, with codes and QR.**
+  TKT-01M33S9CYNR73WKND2707WKEAY. The Events tab lists events and drives the
+  lifecycle with the one action each status allows — lobby → Open, open →
+  Close, closed → Purge, where purge needs the event name typed — and surfaces
+  the API message when a transition or a purge conflicts. Creating an event
+  shows the join (`/j/<code>`) and moderator (`/m/<code>`) URLs, each with a
+  scannable QR; the codes exist only in the create response by design, so that
+  panel is the one chance to copy them. QRs render client-side with the
+  bundled `uqr` library, black on white with a quiet border (ADR 0019),
+  because the party LAN may have no route out.
+
 - **2026-09-22 — The admin console shell exists at `/admin`.** TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0.
   The SPA routes `/admin` to a self-contained `AdminScreen` before the player
   store boots, so the console never loads the theme pack and never inherits

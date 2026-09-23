@@ -191,4 +191,21 @@ export const api = {
       reportUnauthorized: true,
     }),
   adminLogout: () => request('/api/admin/logout', { method: 'POST' }),
+  // ── Admin event management (S9CY) ──
+  // These keep the default 401 handling on purpose: they are only called
+  // from behind the console, so a 401 means the admin session died and
+  // the shell should fall back to login, not paint a form error.
+  adminCreateEvent: (event) =>
+    request('/api/admin/events', { method: 'POST', body: event }),
+  adminOpenEvent: (eventId) =>
+    request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
+  adminCloseEvent: (eventId) =>
+    request(`/api/admin/events/${eventId}/close`, { method: 'POST' }),
+  // The server wants the event NAME re-typed as the confirmation
+  // (events.py), so the caller passes it through rather than an id.
+  adminPurgeEvent: (eventId, confirm) =>
+    request(`/api/admin/events/${eventId}/purge`, {
+      method: 'POST',
+      body: { confirm },
+    }),
 };

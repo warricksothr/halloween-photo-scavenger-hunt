@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { AdminEvents } from './AdminEvents';
 import '../admin.css';
 
 const NAV = [
@@ -83,7 +84,7 @@ export function AdminScreen() {
           </button>
         ))}
       </nav>
-      {tab === 'events' && <EventsPanel events={events} />}
+      {tab === 'events' && <AdminEvents initialEvents={events} />}
       {tab === 'riddles' && (
         <div class="admin-panel">
           <p>Riddle management arrives with the riddle editor.</p>
@@ -199,32 +200,5 @@ function AdminLogin({ onSignedIn }) {
         </form>
       </div>
     </Shell>
-  );
-}
-
-function EventsPanel({ events }) {
-  if (events.length === 0) {
-    return (
-      <div class="admin-panel">
-        <p>No events yet.</p>
-        <p class="admin-note">
-          Creating one, with its join and moderator codes, arrives with the
-          event management screen.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div class="admin-panel">
-      {events.map((event) => (
-        <div key={event.id} class="admin-row">
-          <span style={{ flex: 1 }}>{event.name}</span>
-          <span class="admin-status">{event.status}</span>
-        </div>
-      ))}
-      <p class="admin-note">
-        Event management — create, open, close, purge — arrives next.
-      </p>
-    </div>
   );
 }
