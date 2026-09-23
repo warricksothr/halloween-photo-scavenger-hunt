@@ -17,7 +17,7 @@ function when(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleString();
 }
 
-export function AdminHost() {
+export function AdminHost({ onSessionExpired }) {
   const [events, setEvents] = useState([]);
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [eventId, setEventId] = useState(null);
@@ -28,23 +28,41 @@ export function AdminHost() {
   const [confirming, setConfirming] = useState(null); // strike id awaiting confirm
   const [reason, setReason] = useState('');
 
+  // The admin session can expire between a load and the next request. The
+  // panel cannot read the httpOnly cookie, so a 401 is the only signal —
+  // hand it to the shell, which drops the stale console. Clearing here too
+  // keeps the strike history from lingering behind the login form.
+  function expired() {
+    setEvents([]);
+    setPlayers([]);
+    setPlayerId(null);
+    setConfirming(null);
+    setError(null);
+    onSessionExpired?.();
+  }
+
   useEffect(() => {
     let live = true;
     (async () => {
       const result = await api.adminEvents();
       if (!live) return;
+      if (result?.unauthenticated) {
+        expired();
+        return;
+      }
       setEventsLoaded(true);
       if (result?.error) {
         setError(result.message);
         return;
       }
-      if (result?.unauthenticated) return;
       setEvents(result);
       setEventId((current) => current ?? result[0]?.id ?? null);
     })();
     return () => {
       live = false;
     };
+    // `expired` reads only setters and the prop; it never changes identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -52,7 +70,11 @@ export function AdminHost() {
     let live = true;
     (async () => {
       const result = await api.adminPlayers(eventId);
-      if (!live || result?.unauthenticated) return;
+      if (!live) return;
+      if (result?.unauthenticated) {
+        expired();
+        return;
+      }
       if (result?.error) {
         setError(result.message);
         return;
@@ -70,13 +92,20 @@ export function AdminHost() {
     return () => {
       live = false;
     };
+    // The shell unmounts this panel on a 401, so the prop's identity is
+    // irrelevant to the fetch; re-running on it would refetch the same list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   // Takes the event explicitly so a response can never be applied to a
   // different selection than the one it was fetched for.
   async function fetchPlayers(targetId) {
     const result = await api.adminPlayers(targetId);
-    if (result?.unauthenticated || result?.error) return result;
+    if (result?.unauthenticated) {
+      expired();
+      return result;
+    }
+    if (result?.error) return result;
     setError(null);
     setPlayers(result);
     return result;

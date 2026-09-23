@@ -32,6 +32,17 @@ export function AdminScreen() {
   const [probeError, setProbeError] = useState(null);
   const [tab, setTab] = useState('events');
 
+  // Any panel's request can discover the admin session has expired mid-use.
+  // The cookie is httpOnly, so the panel cannot read it — it reports the 401
+  // it saw, and the shell drops the stale console for the sign-in view. A
+  // panel that kept its data would show strike history as though the host
+  // could still act on it.
+  function onSessionExpired() {
+    setEvents([]);
+    setTab('events');
+    setPhase('login');
+  }
+
   async function probe() {
     setPhase('probing');
     setProbeError(null);
@@ -86,9 +97,11 @@ export function AdminScreen() {
           </button>
         ))}
       </nav>
-      {tab === 'events' && <AdminEvents initialEvents={events} />}
-      {tab === 'riddles' && <AdminRiddles />}
-      {tab === 'host' && <AdminHost />}
+      {tab === 'events' && (
+        <AdminEvents initialEvents={events} onSessionExpired={onSessionExpired} />
+      )}
+      {tab === 'riddles' && <AdminRiddles onSessionExpired={onSessionExpired} />}
+      {tab === 'host' && <AdminHost onSessionExpired={onSessionExpired} />}
     </Shell>
   );
 }

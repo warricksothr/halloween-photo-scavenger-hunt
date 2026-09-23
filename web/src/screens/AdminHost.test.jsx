@@ -122,10 +122,50 @@ describe('admin host actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm reversal' }));
     expect(mocks.api.adminReverseStrike).toHaveBeenCalledTimes(1);
 
+    // A second click during the pending request must not fire again; the
+    // button is disabled and `busy` blocks the handler.
+    fireEvent.click(screen.getByRole('button', { name: 'Reversing…' }));
+    expect(mocks.api.adminReverseStrike).toHaveBeenCalledTimes(1);
+
     finish({ ok: true });
     await waitFor(() => {
       expect(mocks.api.adminPlayers).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('hands an expired session to the shell instead of showing stale history', async () => {
+    const onSessionExpired = vi.fn();
+    mocks.api.adminPlayers.mockResolvedValue({ unauthenticated: true });
+
+    render(<AdminHost onSessionExpired={onSessionExpired} />);
+
+    await waitFor(() => {
+      expect(onSessionExpired).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/not a party photo/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reverse' })).toBeNull();
+  });
+
+  it('hands a session that expired after load to the shell', async () => {
+    const onSessionExpired = vi.fn();
+    mocks.api.adminPlayers
+      .mockResolvedValueOnce([player()])
+      .mockResolvedValue({ unauthenticated: true });
+    mocks.api.adminReverseStrike.mockResolvedValue({
+      error: 'unauthenticated',
+      message: '',
+      status: 401,
+    });
+
+    render(<AdminHost onSessionExpired={onSessionExpired} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reverse' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reversal' }));
+
+    await waitFor(() => {
+      expect(onSessionExpired).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/not a party photo/)).toBeNull();
   });
 
   it('says a player has no strikes rather than showing an empty list', async () => {
