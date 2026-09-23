@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M388EAYCH2J50GQ0WRZM11BB
 title: Support ordered hint levels on riddles
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: null
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: c358cdec9d1e4e2ec621258221fd0557342b18a2
-  session: null
-  claimed_at: 2026-09-23T23:19:09Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T23:08:34Z
-updated_at: 2026-09-23T23:46:47Z
+updated_at: 2026-09-23T23:49:20Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -82,16 +75,16 @@ The demo seeder's fixture needs the multi-level shape.
 
 ## Acceptance criteria
 
-- [ ] A riddle created without hints behaves exactly as today; the
+- [x] A riddle created without hints behaves exactly as today; the
       payload carries `hints: []`.
-- [ ] Create accepts an ordered set of hints and returns them in order.
-- [ ] Patch replaces the whole set, and an empty list clears it.
-- [ ] The player state payload carries each riddle's hints in order.
-- [ ] The player screen reveals hints one level at a time, none before
+- [x] Create accepts an ordered set of hints and returns them in order.
+- [x] Patch replaces the whole set, and an empty list clears it.
+- [x] The player state payload carries each riddle's hints in order.
+- [x] The player screen reveals hints one level at a time, none before
       the player asks.
-- [ ] An over-long hint and an over-long set are rejected with the
+- [x] An over-long hint and an over-long set are rejected with the
       existing validation shape.
-- [ ] `bash scripts/check-quality.sh` passes.
+- [x] `bash scripts/check-quality.sh` passes.
 
 ## Implementation plan
 
@@ -175,3 +168,32 @@ Terva r1 (request riddle-hint-levels-r1, run 36ffd645) raised two medium finding
 **agent:opencode/t3code-0691bbb1** at 2026-09-23T23:46:47Z
 
 Terva r2 (request riddle-hint-levels-r2, run d10ba545): finding-2 resolved, finding-1 remained open because the passive reset still allowed one stale frame. Replaced the effect with a riddleId-tagged count derived at render time; the rerender test fails on the plain-count version and passes now. Re-dispatching as riddle-hint-levels-r3.
+
+## Summary
+
+Riddles now carry an ordered hint ladder, vaguest first. A riddle_hint
+child table (migration 0003, unique on riddle and level, cascade on
+delete) holds up to five hints of at most 500 characters each. The admin
+create and patch bodies take hints as a list: omitting it on create makes
+a riddle with none, omitting it on patch leaves the ladder alone, an
+empty list clears it, and a list replaces the set whole, all inside one
+transaction and one audit row. Riddle edits log the old and new hint
+lists, not just their lengths.
+
+The player snapshot carries each riddle's hints in order, and the detail
+screen shows nothing until the player presses the nudge button, then
+reveals one level per press. The revealed count is tagged with the riddle
+id and derived at render time, so a reused screen cannot open the next
+ladder from a stale count.
+
+Design.md's no-per-riddle-hints line is superseded: hints are a nudge,
+not a gate, and carry no score. docs/impl/api.md covers the route bodies
+and the snapshot shape; docs/impl/audit-actions.md lists the hint fields
+on riddle.created and riddle.edited.
+
+Three Terva rounds: r1 raised two medium findings (reveal state carried
+across riddles, hint audit logged only counts); r2 confirmed the audit
+fix and kept the reveal finding open because a passive effect still let
+one stale frame commit; r3 was clean. Merged as 205a30ea. The gate ended
+at 488 server tests, 95.89 percent coverage, 23 deploy checks, and 151
+web tests.
