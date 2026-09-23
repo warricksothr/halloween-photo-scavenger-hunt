@@ -165,7 +165,7 @@ Configuration is env-driven (`ARKHAM_OIDC_ISSUER`,
 `arkham-admin`, `ARKHAM_OIDC_MODERATOR_GROUP` default `arkham-moderator`,
 `ARKHAM_OIDC_SCOPES` default `openid profile email`); all three of issuer,
 client id, and client secret are required to enable it. The Authentik
-side and the deploy runbook are S9D2.
+side and the deploy runbook are `deploy/RUNBOOK.md` §6.
 
 ### Player join & sessions (increment 3)
 

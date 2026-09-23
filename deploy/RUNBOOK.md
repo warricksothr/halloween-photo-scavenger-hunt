@@ -3,7 +3,8 @@
 One page. Run it **once, start to finish, on the real host** before the
 event (build-plan.md §10: the night itself is not the time to discover
 the deploy recipe missed a step). Everything below assumes the checkout
-is at `~/arkham` and the service is `arkham-hunt`.
+is at `~/arkham` and the service is `arkham-hunt`; §6 needs an Authentik
+application, which you set up once.
 
 ## 0. Deploy (first time, or after pulling changes)
 
@@ -59,8 +60,9 @@ directory (an unmounted mount point).
 
 ## 2. Set up the night's event
 
-1. Open `https://<host>/` in a browser — the admin console is behind
-   the login (credentials from `~/.config/arkham-hunt.env`).
+1. Open `https://<host>/admin` in a browser — the admin console is behind
+   the login: SSO if §6 is configured, or the local break-glass password
+   from `~/.config/arkham-hunt.env`.
 2. Create the event; choose `live` or `final-reveal` standings.
 3. Add the 12–15 riddles in `sort_order` order.
 4. Print two QR codes — the **join link** (`https://<host>/j/<code>`)
@@ -120,6 +122,94 @@ If all eight pass, the night is ready.
   quarantined originals — per the conduct rules (retained only until
   the event ends).
 
+## 6. Single sign-on (OIDC via Authentik)
+
+Hosts and moderators sign in through Authentik; players never do. The app
+reads the issuer and client from the environment only, and the local
+admin password (§2) stays as break-glass so an Authentik outage cannot
+lock you out of your own party.
+
+### Authentik side
+
+Create these once in the Authentik admin UI:
+
+1. **Groups → Create.** Two groups whose names match the app's
+   defaults: `arkham-admin` and `arkham-moderator`. Put your host account
+   in the first and any moderator accounts in the second.
+2. **Applications → Create with Provider → OAuth2/OpenID Provider.**
+   - Client type: **Confidential**.
+   - Redirect URI (exact, both entries): `https://<host>/api/auth/oidc/callback`.
+   - Scopes: `openid profile email` (the app's defaults).
+3. **Property Mappings → Create → OAuth2 Provider scope mapping**
+   (type: Scope mapping) that emits the caller's group names, and add it
+   to the provider's **Advanced protocol settings → Scopes**. The app
+   reads a `groups` claim, so the mapping's expression must be:
+
+   ```python
+   return {"groups": [group.name for group in request.user.ak_groups.all()]}
+   ```
+
+   Verify the name is exactly `groups`: without it every sign-in is
+   refused as `not_authorized`, because no role can be read from the
+   token.
+4. Copy the provider's **Client ID** and **Client secret**, and note the
+   issuer URL — the application's `OpenID Configuration Issuer`, of the
+   form `https://<authentik-host>/application/o/<slug>/` (keep the
+   trailing slash).
+
+Raise the signing key's rotation period if Authentik warns: the app
+caches JWKS for five minutes, so a rotation is picked up within that
+window.
+
+### App side
+
+Put these in `~/.config/arkham-hunt.env` (mode 0600, never committed —
+repo policy), then `systemctl --user restart arkham-hunt`:
+
+```sh
+export ARKHAM_OIDC_ISSUER=https://<authentik-host>/application/o/<slug>/
+export ARKHAM_OIDC_CLIENT_ID=<client id>
+export ARKHAM_OIDC_CLIENT_SECRET=<client secret>
+# Optional — these are the defaults:
+# export ARKHAM_OIDC_ADMIN_GROUP=arkham-admin
+# export ARKHAM_OIDC_MODERATOR_GROUP=arkham-moderator
+# export ARKHAM_OIDC_SCOPES="openid profile email"
+# Only if the callback URL cannot be derived from the request:
+# export ARKHAM_OIDC_REDIRECT_URI=https://<host>/api/auth/oidc/callback
+```
+
+`ARKHAM_OIDC_REDIRECT_URI` is usually unnecessary: behind nginx,
+uvicorn's `--proxy-headers` makes `request.base_url` the public URL, and
+the app derives `https://<host>/api/auth/oidc/callback` from it. Set the
+variable only when the derived URL differs from the one registered in
+Authentik — they must match exactly, or the token exchange fails.
+
+All three of issuer, client id, and client secret must be present or SSO
+is off (`create_app` treats half-configured SSO as none). The app
+starts with SSO off, so a missing or typo'd variable never stops the
+party — it just disables the SSO button.
+
+### Sign in, and break glass
+
+- Admin console: open `https://<host>/admin` → **Sign in with SSO**
+  (or start at `https://<host>/api/auth/oidc/login`). A host account
+  lands on `/admin`; a moderator account following the `/m/<code>` mod
+  link lands on the moderator console.
+- The local password from §2 still works: the console's password form is
+  the break-glass path and stays independent of Authentik. Use it if
+  Authentik is unreachable.
+
+### Troubleshooting OIDC
+
+| Symptom | Check |
+| --- | --- |
+| SSO button absent; `GET /api/auth/oidc/login` answers `503 oidc_disabled` | Issuer, client id, and secret are all set in `~/.config/arkham-hunt.env`, and the service was restarted after editing it |
+| `401 not_authorized` after a successful Authentik login | The account is in `arkham-admin` / `arkham-moderator`, and the `groups` scope mapping is attached to the provider and emits a `groups` claim |
+| `401 oidc_bad_token` in the redirect | Redirect URI in Authentik does not exactly match `https://<host>/api/auth/oidc/callback`; client secret is current; the issuer has its trailing slash |
+| `502 oidc_unavailable` | The app cannot reach Authentik's discovery or token endpoint — check DNS and TLS from the host: `curl -s $ARKHAM_OIDC_ISSUER.well-known/openid-configuration` |
+| `401 oidc_bad_state` | The five-minute sign-in window expired, or the transaction cookie was dropped — retry, and confirm cookies are not blocked |
+| Login loops between the app and Authentik | Cookie `SameSite`/`Secure` mismatch — the TLS path keeps the secure default; a plain-HTTP test needs `ARKHAM_COOKIE_SECURE=false` |
+
 ## Failure cheatsheet
 
 | Symptom | Check |
@@ -130,6 +220,7 @@ If all eight pass, the night is ready.
 | 502 after reboot | `loginctl enable-linger "$USER"`; `systemctl --user status arkham-hunt` |
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |
 | Nothing in GlitchTip | `ARKHAM_ERROR_DSN` / `VITE_ERROR_DSN` are set and the app was restarted/rebuilt; the CSP `connect-src` includes the GlitchTip origin |
+| No SSO button / `503 oidc_disabled` | See §6 — the issuer/client/secret trio is incomplete or the service was not restarted |
 
 ## Error reporting (GlitchTip)
 
