@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WQF2NZ254EHK0M6S8NJ
 title: Add a no-op error-reporting layer with scrubbers
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -19,17 +19,10 @@ dependencies:
   - TKT-01M33S2WJJCKSDJ9T12S5AGFSJ
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/review-next-work
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 794e300ea673ca01c905ba02abde408613aa4eb1
-  session: null
-  claimed_at: 2026-09-22T22:40:03Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T00:05:09Z
+updated_at: 2026-09-23T01:04:56Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -308,3 +301,7 @@ breadcrumb's `data`) and `scrub_breadcrumb`.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 329
 tests, coverage 95.23%, Ruff clean. Re-review requested.
+
+## Summary
+
+Merged as 46b24fe on main (PR #18). `server/app/errors.py` puts the Sentry-compatible SDK behind `init_error_reporting`, called by `create_app` with `ARKHAM_ERROR_DSN`; unset leaves reporting off. A `Scrubber` on `before_send`/`before_breadcrumb` redacts bearer path segments, collapses query strings, drops headers, cookies, body, and server env, strips frame locals, and deep-scrubs the DSN and its key — keys as well as values, through lists, tuples, and sets, in a breadcrumb's `data` and on the crumb itself. The request id rides as a tag; `send_default_pii` stays off. `sentry-sdk>=2.0` added with `uv.lock` and `requirements.lock` regenerated. Clean Terva review at code head ee4d1d13 (run 88d3361f, request malformed-url-fix, actions #301); five findings fixed across rounds: malformed DSN handled inertly, a malformed event URL replaced whole instead of raising in the hook, breadcrumb top-level `url`/`query_string`, mapping keys, one-pass replacement, and set/frozenset normalization. Post-merge gate: 355 tests, coverage 95.33%, `check-quality.sh` green.

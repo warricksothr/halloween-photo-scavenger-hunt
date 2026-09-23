@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWKKHKZW3VT5MHJ7TPHC
 title: Make the SSE broker thread-safe and bound subscriber queues
 type: bug
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -20,12 +20,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-22T05:12:50Z
+updated_at: 2026-09-23T01:04:59Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/t3code-0691bbb1
   name: ""
 extensions: {}
 ---

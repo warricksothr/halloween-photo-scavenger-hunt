@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WKSSFJVSM1NC79NRK1P
 title: Log unhandled exceptions with request correlation
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ dependencies:
   - TKT-01M33S2WJJCKSDJ9T12S5AGFSJ
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/unhandled-exception-handler
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 794e300ea673ca01c905ba02abde408613aa4eb1
-  session: null
-  claimed_at: 2026-09-22T22:53:10Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T00:16:08Z
+updated_at: 2026-09-23T01:04:56Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -44,9 +37,9 @@ An unhandled exception surfaces only as a bare 500; nothing ties it to a request
 
 ## Acceptance criteria
 
-- [ ] An unhandled exception logs one correlated traceback and returns a JSON 500 body carrying the request id.
-- [ ] The handler never logs secrets, cookies, or request bodies.
-- [ ] Covered by a test that raises from a route.
+- [x] An unhandled exception logs one correlated traceback and returns a JSON 500 body carrying the request id.
+- [x] The handler never logs secrets, cookies, or request bodies.
+- [x] Covered by a test that raises from a route.
 
 ## Implementation plan
 
@@ -412,3 +405,7 @@ Docs: the ADR's multipart residual is replaced with the fail-closed rule;
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 338
 tests, coverage 95.35%, Ruff clean. Re-review requested.
+
+## Summary
+
+Merged as 4a28e2f on main (PR #19, merge commit; branch merged main at f3129a3 after a docs/progress.md conflict). The app's `Exception` handler logs one `arkham` line (`event="unhandled_exception"`) with the request id, method, redacted path, and scrubbed traceback, and answers a JSON 500 carrying `request_id` echoed in `X-Request-ID`. Seed values for the traceback scrub set come from `Authorization`, `Cookie`, and a buffered JSON/form body (64 KiB cap); the buffer is consumed only on the failure path and never logged. A body that overflows, does not parse, holds a non-string JSON scalar, or is a media type the scrubber does not read (multipart) fails closed: `message_included` is false and the exception message is dropped. Every candidate is replaced in one pass. Clean Terva review at code head 307eef4c (run d0ffe791, request multipart-fail-closed, actions #306); findings fixed across rounds: duplicate form values, unparsable-body fail-closed, raw percent-encoding, raw escaped JSON literals, no length floor, quoted cookie values, one-pass replacement, and multipart fail-closed. Post-merge gate: 355 tests, coverage 95.33%, `check-quality.sh` green.

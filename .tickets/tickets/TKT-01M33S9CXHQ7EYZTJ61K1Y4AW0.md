@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0
 title: Add the admin console shell with login and session bootstrapping
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: high
 due_on: null
@@ -21,12 +21,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-22T05:26:46Z
+updated_at: 2026-09-23T01:04:56Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/t3code-0691bbb1
   name: ""
 extensions: {}
 ---
