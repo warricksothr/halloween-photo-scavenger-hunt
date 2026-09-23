@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:15:21Z
+updated_at: 2026-09-23T02:18:13Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -233,3 +233,9 @@ Fourteenth Terva review (228, head 8a02009, run d39eb031-7dd4-4bf2-afe4-45caf5da
 - high url user-info: both scrubbers kept the whole authority, so https://key@host/path — the shape of a DSN — retained the key. scrub_url now keeps only host and port (netloc.rpartition('@')[2]); the browser scrubUrl strips user-info from the matched origin. Tests cover a request URL and a free-text message with user:pass@ on both surfaces.
 - medium invalid web trace rate: the browser accepted any finite tracesSampleRate, and a value outside 0-1 could make init throw while started was already true, latching reporting off. The rate now falls back to 0.1 unless it is within 0-1, and started is set only after init succeeds, inside a try that returns false (retryable) on a throw, matching the failed-import path. Tests: an out-of-range rate falls back, and a throwing init leaves a later call able to initialize.
 Quality gate re-run: exit 0 — 342 server tests @ 95.08%, 20 deploy checks, 75 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T02:18:13Z
+
+Fifteenth Terva review (229, head d3870c7, run b863e8e0-9397-4f2c-b01f-6c9023230f55, Actions run #356/id 9195, request review-fixes-14): both prior findings resolved; one new high finding, accepted and fixed:
+- high host-only URL query/fragment: the browser ABSOLUTE_URL matcher used [^/]*, so for https://host?token=SECRET (no path) the query was captured into origin and rest was empty, leaving the query unscrubbed. The authority now ends at the first /, ?, or # ([^/?#]*), so the query/fragment lands in rest and is dropped. Tests on both surfaces: a host-only URL with user-info and a query, and one with a fragment. The server already handled this (urlsplit splits netloc from query); the test locks the parity.
+Quality gate re-run: exit 0 — 343 server tests @ 95.08%, 20 deploy checks, 76 frontend tests, build.
