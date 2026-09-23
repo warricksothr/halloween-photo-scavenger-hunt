@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M35T4X7NSYTE036FN9E159XR
 title: Integrate self-hosted GlitchTip for errors and tracing
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -19,17 +19,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/glitchtip-integration
-  branch: t3code/integrate-glitchtip-error-tracing
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0e2622bb
-  commit: 794e300ea673ca01c905ba02abde408613aa4eb1
-  session: null
-  claimed_at: 2026-09-23T00:20:24Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:43:43Z
+updated_at: 2026-09-23T02:59:30Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -250,3 +243,17 @@ Review 230 (head 4e13a87, request review-fixes-16, run a9bb17bf, Actions id 9207
 **agent:opencode/session** at 2026-09-23T02:43:43Z
 
 Review 231 (head 521aa40, request review-fixes-17, run 25712a4a, Actions id 9215): both prior findings resolved; new high finding — _scrub_data recursed only into dict/list, so tuples/sets in breadcrumb/span data bypassed scrub_text (the DSN pass does not cover application bearer paths). Accepted and fixed in cbe7ba3: recurse into tuples/sets/frozensets server-side and Set/Map browser-side, returning a list, with regression tests on both surfaces. Gate exit 0. Pushed, requested review-fixes-18 (dispatch 204).
+
+**agent:opencode/session** at 2026-09-23T02:49:18Z
+
+Review 233 (head cbe7ba3, request review-fixes-18, run ffc42e36, Actions id 9224): prior tuple/set finding resolved; new medium finding — module-global lastRequestId could mis-tag auto-captured errors under concurrent requests. Accepted and fixed in 5c5bb17: removed the global and its beginRequest/recordRequestId api wiring; an error is tagged only by an explicit caller-supplied id (the api result's own), auto-captured events carry none. Updated web tests, ADR 0018, and the module docs. Gate exit 0. Pushed, requested review-fixes-19 (dispatch 204).
+
+**agent:opencode/session** at 2026-09-23T02:59:30Z
+
+Merged PR #20 into main with the user's authorization (clean review 5c5bb17 as evidence, not authority). Combined commit status on 5c5bb17 was success: Quality / Fast quality gate (run 367) and terva-review/code. Merge commit 3c13182e2dd1cfa5c4397f99d671068763a8e110; PR state closed/merged at 2026-09-23T02:59:19Z. origin/main now at 3c13182.
+
+## Summary
+
+Self-hosted GlitchTip error and trace reporting landed on t3code/integrate-glitchtip-error-tracing and is clean on review. Server (sentry-sdk[fastapi]) and browser (@sentry/browser) report opt-in from ARKHAM_ERROR_DSN / VITE_ERROR_DSN with tracing at 0.1, request-id correlation through ADR 0016, path/credential redaction mirrored across both surfaces (ADR 0018), deployment wiring, and regression coverage.
+
+Review trail (PR #20): reviews 209-229 addressed; merge of origin/main reconciled with main's Scrubber/DSN-secret work per the user-approved policy and renumbered the ADR to 0018. Post-merge reviews 230, 231, 233 each raised one finding, all fixed and confirmed resolved: browser breadcrumb top-level URL/sensitive-key scrub (521aa40), admin-route reporter boot via AdminBoot (521aa40), server tuple/set and browser Set/Map recursion (cbe7ba3), and removal of the browser module-global request id in favour of explicit caller ids (5c5bb17). Final head 5c5bb17 is CLEAN (run 91de41ff, Actions #368/id 9228, request review-fixes-19), recorded on the maintained PR summary comment 10326. Gate exit 0 at every pushed head (384+ server tests at 95%+ coverage, 20 deploy checks, 83 frontend tests, production build).
