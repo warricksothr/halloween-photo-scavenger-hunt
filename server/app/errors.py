@@ -12,24 +12,28 @@ Redaction is not optional. This app puts credentials in the URL —
 request URL, headers, cookies and query string. So ``before_send``,
 ``before_send_transaction`` and ``before_breadcrumb`` run every payload
 through the same path redaction the request log uses
-(``app/logging.py``), and the headers, cookies and query string are dropped
-outright. Stack-frame locals are never captured
+(``app/logging.py``), and the headers, cookies, ``data``, ``env`` and query
+string are dropped outright. Stack-frame locals are never captured
 (``include_local_variables=False``), because a local can hold a credential
-under a name no scrubber can recognise. The request id rides along as a tag
-so a report and its request log line can be matched (ADR 0016).
+under a name no scrubber can recognise. On top of the structural pass, the
+:class:`Scrubber` deep-scrubs the DSN's own key and secret out of any string
+that survives, so a malformed payload the SDK assembles cannot leak the
+ingest credential. The request id rides along as a tag so a report and its
+request log line can be matched (ADR 0016).
 
 An unhandled exception is reported once, by Sentry's ASGI middleware, which
 sees the re-raise from Starlette's ``ServerErrorMiddleware``. The global
 ``Exception`` handler runs first and only *tags* the Sentry scope with the
 request id, because the request log has already reset the contextvar by then
-(ADR 0017).
+(ADR 0018).
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -38,7 +42,12 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
-from app.logging import current_request_id, redact_path
+from app.logging import (
+    LOGGER_NAME,
+    REDACTED,
+    current_request_id,
+    redact_path,
+)
 
 DSN_ENV = "ARKHAM_ERROR_DSN"
 TRACES_SAMPLE_RATE_ENV = "ARKHAM_TRACES_SAMPLE_RATE"
@@ -109,11 +118,18 @@ def scrub_url(url: str | None) -> str | None:
 
     The authority is kept only for its host and port: ``user:password@``
     in front of a host is a credential too, and a DSN is exactly that
-    shape (``https://key@host/project``).
+    shape (``https://key@host/project``). ``urlsplit`` raises on a
+    malformed URL such as ``https://[``, and this runs inside the SDK's
+    ``before_send`` hooks, where a raise would lose the whole event: an
+    unparsable URL cannot be trusted to hold no credential, so the whole
+    value is replaced.
     """
     if not url:
         return url
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return REDACTED
     host = parts.netloc.rpartition("@")[2]
     return urlunsplit((parts.scheme, host, redact_path(parts.path), "", ""))
 
@@ -278,45 +294,155 @@ def scrub_transaction(
     return event
 
 
+def _dsn_secrets(dsn: str) -> list[str]:
+    """The strings a DSN puts on the wire, longest first.
+
+    A Sentry DSN carries the public key (and an optional secret) as URL
+    userinfo: ``https://<key>[:<secret>]@host/<project>``. All of them are
+    redacted, longest first so replacing the full DSN cannot leave a
+    shorter fragment behind.
+    """
+    parts = urlsplit(dsn)
+    secrets = [dsn, parts.netloc]
+    if parts.username:
+        secrets.append(parts.username)
+    if parts.password:
+        secrets.append(parts.password)
+    return sorted({value for value in secrets if value}, key=len, reverse=True)
+
+
+class Scrubber:
+    """Strip credentials from a Sentry event or breadcrumb.
+
+    The structural pass is the module-level :func:`scrub_event` and
+    :func:`scrub_breadcrumb`; on top of it, the DSN's own key and secret
+    are deep-scrubbed out of any string that survives, because a malformed
+    payload can smuggle one under a key no list names. Constructed with the
+    strings to redact so a test needs no DSN and no SDK.
+    """
+
+    def __init__(self, secrets: Iterable[str] = ()) -> None:
+        self._secrets = [secret for secret in secrets if secret]
+        # Longest first so a secret containing another matches whole, and
+        # one compiled alternation so a single pass replaces them: a later
+        # secret must not match the ``<redacted>`` text an earlier
+        # replacement inserted, or a key that is a substring of the marker
+        # would survive verbatim (``<<redacted>>``).
+        ordered = sorted(self._secrets, key=len, reverse=True)
+        self._pattern = (
+            re.compile("|".join(re.escape(secret) for secret in ordered))
+            if ordered
+            else None
+        )
+
+    @classmethod
+    def for_dsn(cls, dsn: str) -> Scrubber:
+        return cls(_dsn_secrets(dsn))
+
+    def scrub_event(
+        self, event: dict[str, Any], hint: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return self._scrub_strings(scrub_event(event, hint))
+
+    def scrub_transaction(
+        self, event: dict[str, Any], hint: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return self._scrub_strings(scrub_transaction(event, hint))
+
+    def scrub_breadcrumb(
+        self, crumb: dict[str, Any], hint: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return self._scrub_strings(scrub_breadcrumb(crumb, hint))
+
+    def _scrub_strings(self, value: Any) -> Any:
+        if isinstance(value, str):
+            if self._pattern is None:
+                return value
+            return self._pattern.sub(REDACTED, value)
+        if isinstance(value, dict):
+            # A mapping's keys serialize too, and app-provided ``extra``
+            # can hold a secret as one. Scrub both; two keys that collapse
+            # onto ``<redacted>`` collide, and the event keeps the first,
+            # because losing a field is better than sending a secret.
+            scrubbed: dict[Any, Any] = {}
+            for key, item in value.items():
+                new_key = self._scrub_strings(key) if isinstance(key, str) else key
+                if new_key in scrubbed:
+                    continue
+                scrubbed[new_key] = self._scrub_strings(item)
+            return scrubbed
+        if isinstance(value, list):
+            return [self._scrub_strings(item) for item in value]
+        if isinstance(value, tuple):
+            # The SDK serializes a tuple as a JSON array, so a secret can
+            # ride one out. A list is the same shape on the wire.
+            return [self._scrub_strings(item) for item in value]
+        if isinstance(value, (set, frozenset)):
+            # A set is not a JSON type either, but the SDK normalizes one to
+            # an array, and app-provided ``extra`` can hold a secret in it.
+            return [self._scrub_strings(item) for item in value]
+        return value
+
+
 def init_error_reporting(
-    config: ErrorConfig | None = None,
+    config: ErrorConfig | str | None = None,
     transport: Any | None = None,
 ) -> bool:
     """Install the reporter; return False when there is no DSN.
 
-    ``transport`` is the test seam: a fake transport receives the envelopes
-    so a test can assert on what would have been sent, with no network.
+    ``config`` is the env reading from :meth:`ErrorConfig.from_env`, a bare
+    DSN string, or ``None`` to read the environment. ``transport`` is the
+    test seam: a fake transport receives the envelopes so a test can assert
+    on what would have been sent, with no network.
+
+    A DSN that is present but malformed is the same as no DSN: it must not
+    reach ``create_app`` and stop the server, and the value is never named
+    in the warning, because a DSN carries a key.
     """
     if config is None:
         config = ErrorConfig.from_env()
-    if config is None:
+    if isinstance(config, str):
+        config = ErrorConfig(dsn=config)
+    if config is None or not config.dsn:
         return False
-    sentry_sdk.init(
-        dsn=config.dsn,
-        traces_sample_rate=config.traces_sample_rate,
-        environment=config.environment,
-        release=config.release,
-        send_default_pii=False,
-        # Release health is not a GlitchTip feature; the sessions a
-        # browser/Python SDK would post are noise here.
-        auto_session_tracking=False,
-        attach_stacktrace=True,
-        # A frame's locals can hold a join code, an invite token or a
-        # password, and the scrubber cannot know which names are sensitive.
-        # Frames without locals still name the code path.
-        include_local_variables=False,
-        before_send=scrub_event,
-        before_send_transaction=scrub_transaction,
-        before_breadcrumb=scrub_breadcrumb,
-        integrations=[
-            # "endpoint" names a transaction for the route, not the path:
-            # the default "url" style would put the join code in the
-            # transaction name, which is a credential in a report title.
-            StarletteIntegration(transaction_style="endpoint"),
-            FastApiIntegration(transaction_style="endpoint"),
-        ],
-        transport=transport,
-    )
+    try:
+        scrubber = Scrubber.for_dsn(config.dsn)
+        sentry_sdk.init(
+            dsn=config.dsn,
+            traces_sample_rate=config.traces_sample_rate,
+            environment=config.environment,
+            release=config.release,
+            send_default_pii=False,
+            # Release health is not a GlitchTip feature; the sessions a
+            # browser/Python SDK would post are noise here.
+            auto_session_tracking=False,
+            attach_stacktrace=True,
+            # A frame's locals can hold a join code, an invite token or a
+            # password, and the scrubber cannot know which names are
+            # sensitive. Frames without locals still name the code path.
+            include_local_variables=False,
+            before_send=scrubber.scrub_event,
+            before_send_transaction=scrubber.scrub_transaction,
+            before_breadcrumb=scrubber.scrub_breadcrumb,
+            integrations=[
+                # "endpoint" names a transaction for the route, not the path:
+                # the default "url" style would put the join code in the
+                # transaction name, which is a credential in a report title.
+                StarletteIntegration(transaction_style="endpoint"),
+                FastApiIntegration(transaction_style="endpoint"),
+            ],
+            transport=transport,
+        )
+    except ValueError:
+        # A bad DSN is a ValueError both ways: ``BadDsn`` subclasses it,
+        # and an unmatched IPv6 bracket raises it inside ``_dsn_secrets``
+        # through ``urlsplit``. The scrubber touches nothing but the DSN
+        # string, so a ValueError here is malformed configuration.
+        logging.getLogger(LOGGER_NAME).warning(
+            "error_reporting_disabled",
+            extra={"event": "error_reporting_disabled", "reason": "malformed DSN"},
+        )
+        return False
     return True
 
 

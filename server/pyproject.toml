@@ -19,7 +19,7 @@ dependencies = [
     # Error and trace reporting (app/errors.py). GlitchTip implements the
     # Sentry ingest protocol, and the `fastapi` extra carries the ASGI
     # integration that opens a transaction per request. Inert unless
-    # ARKHAM_ERROR_DSN is set (ADR 0017).
+    # ARKHAM_ERROR_DSN is set (ADR 0018).
     "sentry-sdk[fastapi]>=2.0,<3.0",
 ]
 

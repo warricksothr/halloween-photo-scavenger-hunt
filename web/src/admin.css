@@ -1,0 +1,187 @@
+/* Host console styles.
+ *
+ * Scoped to `.admin-shell` and `.admin-*`, with its own `--admin-*`
+ * tokens, so the console neither inherits the player theme pack nor
+ * restyles it. No theme class (.frame, .panel, .btn) and no theme token
+ * (--cyan, --font-head, ...) appears here on purpose: the console is a
+ * laptop-first host tool, and a theme swap must not reach it. The one
+ * `body:has(...)` rule only fires on the admin document, where the
+ * theme's `body` rule was never loaded.
+ */
+body:has(.admin-shell) {
+  margin: 0;
+  background: #0f1115;
+}
+
+.admin-shell {
+  --admin-bg: #0f1115;
+  --admin-panel: #171a21;
+  --admin-border: #2b303b;
+  --admin-text: #e8eaf0;
+  --admin-dim: #9aa3b2;
+  --admin-accent: #5b9dd9;
+  --admin-danger: #e0623f;
+  --admin-radius: 6px;
+  min-height: 100vh;
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+}
+
+.admin-shell * {
+  box-sizing: border-box;
+}
+
+.admin-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.admin-header .admin-dim {
+  color: var(--admin-dim);
+  font-size: 0.8rem;
+}
+
+.admin-header .admin-spacer {
+  flex: 1;
+}
+
+.admin-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 20px;
+}
+
+.admin-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--admin-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 8px 14px;
+}
+
+.admin-tab[aria-selected='true'] {
+  border-bottom-color: var(--admin-accent);
+  color: var(--admin-text);
+}
+
+.admin-panel {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 16px 18px;
+}
+
+.admin-panel + .admin-panel {
+  margin-top: 12px;
+}
+
+.admin-note {
+  color: var(--admin-dim);
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
+.admin-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-row:last-child {
+  border-bottom: none;
+}
+
+.admin-status {
+  color: var(--admin-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.admin-field label {
+  font-size: 0.85rem;
+}
+
+.admin-input {
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  color: var(--admin-text);
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.admin-input:focus {
+  border-color: var(--admin-accent);
+  outline: none;
+}
+
+.admin-btn {
+  background: var(--admin-accent);
+  border: 1px solid var(--admin-accent);
+  border-radius: var(--admin-radius);
+  color: #0b0d11;
+  cursor: pointer;
+  display: inline-block;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.admin-btn.secondary {
+  background: none;
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+  font-weight: 400;
+}
+
+.admin-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-error {
+  background: rgba(224, 98, 63, 0.12);
+  border: 1px solid var(--admin-danger);
+  border-radius: var(--admin-radius);
+  color: var(--admin-danger);
+  font-size: 0.85rem;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+}
+
+.admin-login {
+  max-width: 360px;
+  margin: 64px auto 0;
+}

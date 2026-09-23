@@ -31,11 +31,15 @@ function csrfToken() {
 }
 
 async function send(path, options = {}) {
+  // `reportUnauthorized` is client-only: every player route treats a 401
+  // as "not joined", but the admin login form needs the body (a bad
+  // password is a 401 carrying `bad_credentials` and its message).
+  const { reportUnauthorized = false, ...init } = options;
   // FormData bodies (photo upload) must NOT set Content-Type — the
   // browser sets it with the multipart boundary.
-  const isForm = options.body instanceof FormData;
-  const method = (options.method ?? 'GET').toUpperCase();
-  const headers = options.body && !isForm ? { 'Content-Type': 'application/json' } : {};
+  const isForm = init.body instanceof FormData;
+  const method = (init.method ?? 'GET').toUpperCase();
+  const headers = init.body && !isForm ? { 'Content-Type': 'application/json' } : {};
   if (!SAFE_METHODS.has(method)) {
     const token = csrfToken();
     if (token) headers[CSRF_HEADER] = token;
@@ -54,15 +58,15 @@ async function send(path, options = {}) {
   try {
     const resp = await fetch(path, {
       headers,
-      ...options,
-      body: options.body && !isForm ? JSON.stringify(options.body) : options.body,
+      ...init,
+      body: init.body && !isForm ? JSON.stringify(init.body) : init.body,
       signal: controller.signal,
     });
     // The request id is the join key to this request's server log line and
     // error report, so a browser error can name the same request (ADR 0016).
     responseId = resp.headers?.get?.('X-Request-ID') ?? null;
     recordRequestId(responseId);
-    if (resp.status === 401) {
+    if (resp.status === 401 && !reportUnauthorized) {
       // Not joined (or session revoked) — the store routes to the join
       // screen; it is not an error from the player's point of view.
       return { unauthenticated: true };
@@ -180,4 +184,16 @@ export const api = {
       method: 'POST',
       body: { note, cooldown_minutes: cooldownMinutes },
     }),
+  // ── Admin console (S9CX) ──
+  // The events list doubles as the session probe: a 401 is the "not
+  // signed in" signal, a 200 list is both proof of session and the
+  // console's first data.
+  adminEvents: () => request('/api/admin/events'),
+  adminLogin: (username, password) =>
+    request('/api/admin/login', {
+      method: 'POST',
+      body: { username, password },
+      reportUnauthorized: true,
+    }),
+  adminLogout: () => request('/api/admin/logout', { method: 'POST' }),
 };

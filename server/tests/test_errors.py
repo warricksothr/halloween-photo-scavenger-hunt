@@ -1,9 +1,10 @@
 """Error/trace reporting: inert without a DSN; scrubbers keep credentials
-out (TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0017)."""
+out (TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0018)."""
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 from sentry_sdk.transport import Transport
 
 from app import errors
+from app import logging as app_logging
 from app.main import create_app
 from app.security import hash_password
 
@@ -79,11 +81,198 @@ def test_sample_rate_falls_back_when_unusable(raw):
 
 def test_init_is_inert_without_a_dsn():
     assert errors.init_error_reporting(errors.ErrorConfig.from_env({})) is False
+    assert errors.init_error_reporting(None) is False
+    assert errors.init_error_reporting("") is False
+
+
+@pytest.mark.parametrize("dsn", ["not a dsn", "ftp://key@host/1", "https://["])
+def test_init_is_inert_with_a_malformed_dsn(dsn, caplog):
+    """A typo in the DSN is a misconfiguration, not a crash.
+
+    The last case is the one the SDK never sees: an unmatched IPv6
+    bracket makes ``urlsplit`` raise before ``sentry_sdk.init`` runs.
+    """
+    caplog.set_level(logging.WARNING)
+    caplog.clear()
+
+    assert errors.init_error_reporting(dsn) is False
+
+    text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "error_reporting_disabled" in text
+    # The reason is recorded; the DSN, which carries a key, is not.
+    assert dsn not in text
+
+
+@pytest.mark.parametrize("dsn", ["not a dsn", "https://["])
+def test_malformed_dsn_does_not_stop_the_app(tmp_path, monkeypatch, dsn):
+    """A malformed DSN must not raise ``BadDsn`` through ``create_app``."""
+    monkeypatch.setenv(errors.DSN_ENV, dsn)
+
+    app = create_app(
+        tmp_path / "bad-dsn.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/api/health").status_code == 200
 
 
 def test_init_reports_when_configured():
     transport = FakeTransport()
     assert errors.init_error_reporting(_config(), transport=transport) is True
+
+
+def test_dsn_wires_the_scrubbers(monkeypatch):
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(errors.sentry_sdk, "init", lambda **kw: captured.update(kw))
+
+    assert errors.init_error_reporting(_config()) is True
+
+    assert captured["dsn"] == DSN
+    assert captured["send_default_pii"] is False
+    assert captured["before_send"] is not None
+    assert captured["before_breadcrumb"] is not None
+    assert captured["before_send_transaction"] is not None
+
+
+def test_dsn_secret_and_local_variables_never_serialize():
+    """The deep-scrub net removes the DSN's own key and secret anywhere."""
+    dsn = "https://public-key:secret-key@bugsink.example/1"
+    join_code = "JOIN234"
+    event = {
+        "extra": {
+            "dsn": dsn,
+            "key": "public-key",
+            # A tuple serializes as a JSON array, so a secret can ride one.
+            "values": (dsn, ("secret-key", "public-key")),
+        },
+        "exception": {
+            "values": [
+                {
+                    "stacktrace": {
+                        "frames": [{"vars": {"dsn": dsn, "join_code": join_code}}]
+                    }
+                }
+            ]
+        },
+    }
+
+    blob = json.dumps(errors.Scrubber.for_dsn(dsn).scrub_event(event))
+
+    assert dsn not in blob
+    assert "public-key" not in blob
+    assert "secret-key" not in blob
+    assert join_code not in blob
+
+
+def test_secrets_in_mapping_keys_never_serialize():
+    """A mapping's keys serialize too, so a secret used as one must go."""
+    dsn = "https://public-key:secret-key@bugsink.example/1"
+    event = {
+        "extra": {
+            dsn: {"nested": "kept"},
+            "public-key": "kept too",
+        },
+        "contexts": {"secret-key": {"value": f"prefix {dsn}"}},
+    }
+
+    scrubbed = errors.Scrubber.for_dsn(dsn).scrub_event(event)
+    blob = json.dumps(scrubbed)
+
+    assert dsn not in blob
+    assert "public-key" not in blob
+    assert "secret-key" not in blob
+    # Both secret keys in ``extra`` collapse onto the same redaction, so
+    # the first survives and its value is kept.
+    assert scrubbed["extra"][errors.REDACTED]["nested"] == "kept"
+    assert scrubbed["contexts"][errors.REDACTED]["value"] == (
+        f"prefix {errors.REDACTED}"
+    )
+
+
+def test_replacing_a_secret_does_not_rescan_the_marker():
+    """A secret inside ``<redacted>`` must not survive the next pass.
+
+    ``redact`` is a substring of the marker, so a second sequential
+    replace would rewrite the marker and keep the key in the output.
+    """
+    scrubbed = errors.Scrubber(["hunter2", "redact"]).scrub_event(
+        {"extra": {"value": "hunter2 redact"}}
+    )
+
+    assert scrubbed["extra"]["value"] == f"{errors.REDACTED} {errors.REDACTED}"
+
+
+def test_secrets_in_a_set_never_serialize():
+    """A set is not JSON, but the SDK normalizes one to an array."""
+    dsn = "https://public-key:secret-key@bugsink.example/1"
+    event = {"extra": {"tags": {dsn, "public-key"}}}
+
+    scrubbed = errors.Scrubber.for_dsn(dsn).scrub_event(event)
+    blob = json.dumps(scrubbed)
+
+    assert dsn not in blob
+    assert "public-key" not in blob
+    assert scrubbed["extra"]["tags"] == [errors.REDACTED, errors.REDACTED]
+
+
+def test_request_id_becomes_a_tag_on_a_bare_scrubber():
+    token = app_logging._request_id.set("req-abc123")
+    try:
+        scrubbed = errors.Scrubber().scrub_event({"message": "boom"})
+    finally:
+        app_logging._request_id.reset(token)
+
+    assert scrubbed["tags"]["request_id"] == "req-abc123"
+
+
+def test_a_malformed_url_is_replaced_not_raised_on():
+    """``urlsplit`` raises on ``https://[``; the hooks must not."""
+    event = {
+        "request": {"url": "https://["},
+        "breadcrumbs": {"values": [{"data": {"url": "https://["}}]},
+    }
+
+    scrubbed = errors.Scrubber().scrub_event(event)
+
+    assert scrubbed["request"]["url"] == errors.REDACTED
+    assert scrubbed["breadcrumbs"]["values"][0]["data"]["url"] == errors.REDACTED
+
+    crumb = errors.Scrubber().scrub_breadcrumb({"data": {"url": "https://["}})
+
+    assert crumb["data"]["url"] == errors.REDACTED
+
+
+def test_scrubber_breadcrumb_drops_headers_cookies_and_scrubs_url():
+    crumb = {
+        "category": "navigation",
+        "url": "https://hunt.example/m/MODCODE?invite=tok123",
+        "query_string": "invite=tok123",
+        "data": {
+            "url": "https://hunt.example/m/MODCODE",
+            "from": "/",
+            "headers": {"Cookie": "arkham_player=SESSIONVALUE"},
+            "cookies": {"arkham_player": "SESSIONVALUE"},
+        },
+        "headers": {"Cookie": "arkham_player=SESSIONVALUE"},
+        "cookies": {"arkham_player": "SESSIONVALUE"},
+    }
+
+    scrubbed = errors.Scrubber().scrub_breadcrumb(crumb)
+    blob = json.dumps(scrubbed)
+
+    assert "MODCODE" not in blob
+    assert "tok123" not in blob
+    # The session is in no scrub set: only the drop removes it.
+    assert "SESSIONVALUE" not in blob
+    # The crumb keeps its own keys but scrubs the URL and drops the query.
+    assert scrubbed["url"] == "https://hunt.example/m/<redacted>"
+    for dropped in ("headers", "cookies"):
+        assert dropped not in scrubbed
+        assert dropped not in scrubbed["data"]
 
 
 def test_bind_request_id_tags_the_scope():

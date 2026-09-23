@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import shutil
 import sqlite3
@@ -24,7 +25,7 @@ from app import events, mod, players, submissions, teams
 from app import evidence as evidence_module
 from app.audit import Action
 from app.main import create_app
-from app.sse import SseBroker, _stream
+from app.sse import SUBSCRIBER_QUEUE_MAX, SseBroker, _stream
 
 
 def test_concurrent_invite_redemptions_consume_one_token_once(admin, client):
@@ -684,6 +685,73 @@ def test_sse_player_routing_and_stream_cleanup():
     assert owner not in broker._subscribers
     assert teammate.queue.empty()
     assert other_event.queue.empty()
+
+
+def test_sse_overflow_is_counted_and_logged(caplog):
+    """A full subscriber queue drops the delta, counts it, and says so."""
+    loop = asyncio.new_event_loop()
+    broker = SseBroker(loop)
+    sub = broker.subscribe(
+        event_id="event-1", role="player", team_id="team-1", player_id="player-1"
+    )
+    for index in range(SUBSCRIBER_QUEUE_MAX):
+        sub.queue.put_nowait(("filler", {"index": index}))
+
+    async def publish_once():
+        broker.publish("event-1", "strike", {"level": 1})
+        # Let the scheduled loop-side delivery run.
+        await asyncio.sleep(0)
+
+    with caplog.at_level(logging.WARNING, logger="arkham.sse"):
+        try:
+            loop.run_until_complete(publish_once())
+        finally:
+            loop.close()
+
+    assert sub.queue.qsize() == SUBSCRIBER_QUEUE_MAX
+    assert broker.overflow_count == 1
+    overflow = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "sse.overflow"
+    ]
+    assert len(overflow) == 1
+    assert overflow[0].delta == "strike"
+    assert overflow[0].dropped_total == 1
+
+
+def test_sse_subscriber_set_survives_concurrent_publish():
+    """Publishing from one thread while another churns the set is safe."""
+    loop = asyncio.new_event_loop()
+    broker = SseBroker(loop)
+    stop = threading.Event()
+    errors: list[BaseException] = []
+
+    def churn():
+        try:
+            while not stop.is_set():
+                sub = broker.subscribe(
+                    event_id="event-1",
+                    role="player",
+                    team_id="team-1",
+                    player_id="player-1",
+                )
+                broker.unsubscribe(sub)
+        except BaseException as exc:  # noqa: BLE001 - reported to the test
+            errors.append(exc)
+
+    thread = threading.Thread(target=churn)
+    thread.start()
+    try:
+        for _ in range(500):
+            broker.publish("event-1", "strike", {"level": 1})
+    finally:
+        stop.set()
+        thread.join()
+        loop.close()
+
+    assert errors == []
+    assert broker._subscribers == set()
 
 
 def test_migrated_database_preserves_rows_and_constraints(tmp_path):

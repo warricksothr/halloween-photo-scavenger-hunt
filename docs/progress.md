@@ -40,14 +40,78 @@ when the increment runs and its tests pass.
 ## Phase 4 — Observability
 
 - [x] Request-ID structured logging and path redaction (ADR 0016)
-- [x] Error and trace reporting to self-hosted GlitchTip (ADR 0017)
+- [x] Error and trace reporting to self-hosted GlitchTip (ADR 0018)
 - [ ] Readiness/metrics surface
 - [ ] `?debug=1` diagnostics overlay
 
 ## Notes / blockers
 
+- **2026-09-22 — The admin console shell exists at `/admin`.** TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0.
+  The SPA routes `/admin` to a self-contained `AdminScreen` before the player
+  store boots, so the console never loads the theme pack and never inherits
+  the Arkham frame. `GET /api/admin/events` is the session probe (401 = login,
+  200 = console); login offers the Authentik start route plus the argon2
+  password fallback with the server's error surfaced. The shell has events,
+  riddles, and host-actions navigation; the panels themselves arrive with
+  S9CY, S9CZ, and S9D0.
+
+- **2026-09-22 — The SSE broker is thread-safe and its queues are bounded.**
+  TKT-01M33RFWKKHKZW3VT5MHJ7TPHC. Subscriber queues cap at 256 frames, the
+  subscriber set is guarded by a lock because sync endpoints publish from
+  the threadpool, and delivery moved to a loop-side callback so a full queue
+  drops the newest delta, counts it in `overflow_count`, and logs one
+  `arkham` warning (`event="sse.overflow"`). The drop policy and its
+  resync caveat are ADR 0017.
+
+- **2026-09-22 — Unhandled exceptions log one correlated traceback.**
+  TKT-01M33S2WK. The app's `Exception` handler now logs one `arkham` line
+  (`event="unhandled_exception"`) with the request id, method, and redacted
+  path plus the formatted traceback, and answers
+  `{"error": "internal_error", "message": "Something went wrong.",
+  "request_id": …}` with the id echoed in `X-Request-ID`. The id and
+  redacted path ride the scope, because the request middleware resets its
+  contextvars before `ServerErrorMiddleware` reaches the handler. To seed
+  the traceback scrub set the middleware does read the `Authorization`
+  and `Cookie` headers and buffers a JSON or form body; those values are
+  used to redact the log line and are never written to it. A body larger
+  than the buffer, or one that does not parse, loses the exception
+  message rather than risk a value the scrub set never held, and so does
+  any other body format — a multipart upload the scrubber does not parse
+  drops the message, while a body-less request keeps it. A query
+  string or form body also adds its raw, still-encoded text beside the
+  decoded values, because a route can quote the bytes it read, and a JSON
+  body with a number, boolean, or null drops the message too, since no
+  string candidate covers the text that value formats to. A JSON body also
+  contributes its raw, still-escaped string literals beside the decoded
+  values, because a route can quote the escaped form. Every secret is
+  replaced in one pass, so a value that is a substring of `<redacted>`
+  cannot be reintroduced by a later secret. There is no length floor on a
+  candidate, so a four-digit PIN is scrubbed like any token, and a cookie
+  contributes both its raw header and the value the framework unquotes.
+  338 server tests pass; coverage 95.35%.
+
+- **2026-09-22 — Error reporting behind scrubbers, inert without a DSN.**
+  TKT-01M33S2WQ. `app/errors.py` puts the Sentry-compatible SDK behind
+  `init_error_reporting`, which `create_app` calls with `ARKHAM_ERROR_DSN`;
+  unset — the local and test default — leaves reporting off entirely. A
+  `Scrubber` bound to `before_send` and `before_breadcrumb` redacts bearer
+  path segments with the same `redact_path` the request log uses, collapses
+  query strings, drops request headers, cookies, body, and server env, strips
+  exception frame locals, and deep-scrubs the DSN and its key out of any
+  string that survives — keys as well as values, through lists, tuples, and
+  sets (a set is not JSON, but the SDK normalizes one to an array), too, in
+  a breadcrumb's `data` and on the breadcrumb itself, since a
+  navigation crumb carries its own `url` and
+  `query_string`; the replacement runs in one pass, so a key that is a
+  substring of `<redacted>` cannot be reintroduced by a later secret, and
+  a URL that `urlsplit` rejects is replaced whole rather than raised on.
+  The request id rides along as a tag. `send_default_pii`
+  stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
+  `server/requirements.lock` regenerated together. 329 server tests pass;
+  coverage 95.23%.
+
 - **2026-09-22 — Error and trace reporting to self-hosted GlitchTip.**
-  TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0017. Both surfaces report to
+  TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0018. Both surfaces report to
   `https://glitchtip.nulloctet.com`, which speaks the Sentry ingest
   protocol; the planned Bugsink sidecar is dropped (the epic's Bugsink
   shape tickets are superseded). Inert without a DSN: the server installs

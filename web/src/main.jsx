@@ -4,6 +4,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { initErrorReporting } from './errors';
 import { getState, refresh, retry, subscribe } from './store';
 import { Header } from './components/Header';
+import { AdminScreen } from './screens/Admin';
 import { ConnectionErrorScreen } from './screens/ConnectionError';
 import { JoinScreen } from './screens/Join';
 import { ModJoinScreen } from './screens/ModJoin';
@@ -21,6 +22,17 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // the store's phase and, once ready, the event status. This is the
 // snapshot contract made visible — every screen renders FROM the
 // snapshot, and nothing here talks to the API except through store.js.
+//
+// /admin is the one exception, and the path decides before the store
+// exists: the host console is a separate document (a fresh page load, no
+// client-side router), so it must not boot the player store or pull in a
+// theme pack. App stays hook-free — the hooks live in PlayerApp — so the
+// switch cannot break the rules of hooks. The match is by path segment:
+// `/administrator` is a player path, not the console.
+function isAdminPath(pathname) {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
+
 // A failed reporter boot must not block the app or surface as an
 // unhandled rejection, so the whole chain settles into refresh().
 function bootReportThenRefresh() {
@@ -28,6 +40,13 @@ function bootReportThenRefresh() {
 }
 
 function App() {
+  if (isAdminPath(window.location.pathname)) {
+    return <AdminScreen />;
+  }
+  return <PlayerApp />;
+}
+
+function PlayerApp() {
   const [state, setState] = useState(getState());
 
   useEffect(() => {
