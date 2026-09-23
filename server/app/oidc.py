@@ -459,11 +459,12 @@ def _is_mod_surface(target: str) -> bool:
     with a marker so the screen can explain itself, rather than a JSON 401
     the browser lands on as a dead end.
     """
+    path = urlsplit(target).path
     return (
-        target == "/mod"
-        or target.startswith("/mod/")
-        or target == "/m"
-        or target.startswith("/m/")
+        path == "/mod"
+        or path.startswith("/mod/")
+        or path == "/m"
+        or path.startswith("/m/")
     )
 
 

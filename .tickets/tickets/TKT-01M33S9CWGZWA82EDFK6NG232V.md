@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T05:22:44Z
+updated_at: 2026-09-23T05:26:04Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -233,3 +233,28 @@ subsumes the r2 fragment fix. Tests:
   `sso=not_moderator`.
 
 `bash scripts/check-quality.sh` passes: 400 server tests, 95.59% coverage.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T05:26:04Z
+
+Terva review round 4 and the /mod query fix.
+
+### Round 4 (`mod-link-oidc-r4`, run 398, head 55a2bd6)
+
+Review id 241. The r3 stale-marker finding confirmed resolved. One new medium
+finding: `_is_mod_surface` matched the raw target, so a bare `/mod` carrying a
+query string (`/mod?x=1`) was not seen as a moderator surface. Reachable:
+`signInNext()` preserves query parameters other than `sso`, and `_safe_next`
+permits them. A non-moderator then got the dead-end JSON 401; the host was
+redirected with no marker and the form could retry sign-in.
+
+### Fix
+
+`_is_mod_surface` now matches `urlsplit(target).path`, so `/mod?x=1` and
+`/mod?x=1#frag` are recognised. Two callback tests drive `next=/mod?x=1`:
+
+- `test_bare_mod_path_with_a_query_still_counts_as_a_mod_surface` → 303
+  `/mod?x=1&sso=not_authorized`.
+- `test_bare_mod_path_with_a_query_marks_the_host` → 303
+  `/mod?x=1&sso=not_moderator`.
+
+`bash scripts/check-quality.sh` passes: 402 server tests, 95.59% coverage.

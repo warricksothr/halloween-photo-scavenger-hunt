@@ -306,6 +306,27 @@ def test_refusal_for_a_non_mod_target_stays_json(oidc_client, stub):
     assert response.json()["error"] == "not_authorized"
 
 
+def test_bare_mod_path_with_a_query_still_counts_as_a_mod_surface(oidc_client, stub):
+    """``signInNext()`` keeps query parameters, so ``/mod?x=1`` reaches the
+    callback; the surface test has to look at the path, not the raw target,
+    or the refusal becomes a dead-end JSON 401."""
+    _, query = start_login(oidc_client, next_path="/mod?x=1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/mod?x=1&sso=not_authorized"
+
+
+def test_bare_mod_path_with_a_query_marks_the_host(oidc_client, stub):
+    _, query = start_login(oidc_client, next_path="/mod?x=1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/mod?x=1&sso=not_moderator"
+
+
 def test_bad_state_is_rejected(oidc_client, stub):
     _, query = start_login(oidc_client)
     stub.nonce = query["nonce"][0]
