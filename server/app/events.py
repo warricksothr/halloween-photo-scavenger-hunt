@@ -99,6 +99,7 @@ def login(body: LoginBody, request: Request):
         httponly=True,
         secure=request.app.state.cookie_secure,
         samesite="strict",
+        max_age=request.app.state.session_ttl,
     )
     return resp
 

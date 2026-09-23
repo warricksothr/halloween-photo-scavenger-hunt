@@ -25,6 +25,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import (
+    auth,
+    cache,
     csrf,
     errors,
     events,
@@ -128,7 +130,10 @@ def create_app(
         # acquire it again around their transaction blocks.
         app.state.db_lock = threading.RLock()
         app.state.admin_config = admin_config
-        app.state.admin_sessions = set()  # in-memory; auth.py explains why
+        app.state.admin_sessions = {}  # in-memory; auth.py explains why
+        # Session lifetime for every kind of session (auth.py). Read once
+        # here so the env var is a process setting, not a per-request one.
+        app.state.session_ttl = auth.configured_session_ttl()
         app.state.cookie_secure = cookie_secure
         # SSO: the provider caches discovery and JWKS; identities are the
         # in-memory counterpart of admin_sessions (app/oidc.py).
@@ -203,6 +208,12 @@ def create_app(
         if request_id:
             body["request_id"] = request_id
         response = JSONResponse(body, status_code=500)
+        # ServerErrorMiddleware builds this response outside the user
+        # middleware stack, so NoStoreMiddleware never sees it (ADR 0021).
+        # Stamp it here for the same reason the layer exists at all: an
+        # error body is still per-session and must not be cached.
+        if cache.is_api_path(request.url.path):
+            response.headers["Cache-Control"] = "no-store"
         if request_id:
             response.headers[REQUEST_ID_HEADER] = request_id
         return response
@@ -216,6 +227,7 @@ def create_app(
     # reject, and measures the whole request.
     app.add_middleware(csrf.CsrfMiddleware)
     app.add_middleware(limits.BodyLimitMiddleware)
+    app.add_middleware(cache.NoStoreMiddleware)
     app.add_middleware(RequestLogMiddleware)
     app.include_router(events.router)
     app.include_router(oidc.router)

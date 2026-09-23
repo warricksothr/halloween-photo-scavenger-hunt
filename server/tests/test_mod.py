@@ -17,6 +17,8 @@ from fastapi.testclient import TestClient
 from support import arm_csrf, sign_in_moderator
 from test_evidence import make_jpeg
 
+from app import auth
+
 
 def _party(admin, client, riddles=("Find it",)):
     """Open event + one player + one upload. Returns the ids and codes
@@ -80,6 +82,24 @@ class TestModJoin:
         assert resp.status_code == 201
         assert resp.json()["event"]["id"] == p["event_id"]
         assert "arkham_mod" in resp.cookies
+
+    def test_join_cookie_carries_the_ttl(self, admin, client):
+        p = _party(admin, client)
+        mod = arm_csrf(TestClient(client.app))
+        sign_in_moderator(mod, subject="mod-ttl", name="TTL Mod")
+        resp = mod.post(f"/api/mod/join/{p['mod_code']}")
+        assert f"Max-Age={auth.SESSION_TTL_SECONDS}" in resp.headers["set-cookie"]
+
+    def test_expired_mod_session_is_rejected(self, admin, client):
+        p = _party(admin, client)
+        mod = _mod(client, p["mod_code"])
+        conn = client.app.state.db
+        conn.execute(
+            "UPDATE moderator_session SET created_at = ?",
+            (int(time.time()) - auth.SESSION_TTL_SECONDS,),
+        )
+        conn.commit()
+        assert mod.get("/api/mod/state").status_code == 401
 
     def test_label_and_audit_come_from_the_identity(self, admin, client):
         """S9CW: the row and the audit name the person, not the code."""

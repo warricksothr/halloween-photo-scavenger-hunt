@@ -9,7 +9,14 @@ to ``create_app`` (production: from ``ARKHAM_ADMIN_USERNAME`` /
 
 Admin sessions are in-memory on ``app.state``: the ``session`` table
 references players and a table for one row is ceremony. A restart logs
-the admin out, which a party app with one admin tolerates.
+the admin out, which a party app with one admin tolerates. The set is a
+``dict`` from token to expiry: a lost phone must stop working after
+``SESSION_TTL_SECONDS``, not at the next restart.
+
+Every session kind carries the same fixed TTL from when it was issued
+(``created_at`` for DB rows). Fixed, not sliding on ``last_seen_at``: a
+device that keeps talking would otherwise live forever, which is the
+shared-device problem the TTL exists to close.
 
 Player sessions (bottom half of this module) are the opposite: DB-backed
 from day one (the ``session`` table) because moderation must be able to
@@ -21,6 +28,7 @@ SHA-256 hash (schema.md hardening note).
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import sqlite3
 import time
@@ -35,10 +43,33 @@ COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
 MOD_COOKIE_NAME = "arkham_mod"
 
+# How long any session stays live. Twelve hours covers one long party
+# night; a device left behind stops working before the next morning.
+# ARKHAM_SESSION_TTL_SECONDS overrides it (an all-day event, a rehearsal).
+SESSION_TTL_SECONDS = 12 * 60 * 60
+
 # Throttle for session.last_seen_at writes (schema invariant: max one
 # write per minute per session, so the hot read path doesn't generate a
 # write per request).
 LAST_SEEN_THROTTLE_SECONDS = 60
+
+
+def configured_session_ttl() -> int:
+    """The session TTL in seconds, from ``ARKHAM_SESSION_TTL_SECONDS``.
+
+    A malformed or non-positive value falls back to the default rather
+    than refusing to start: the TTL is a hardening knob, not a
+    prerequisite like the admin credential, and a party night must not
+    hinge on parsing it."""
+    try:
+        configured = int(os.environ.get("ARKHAM_SESSION_TTL_SECONDS", ""))
+    except ValueError:
+        configured = 0
+    return configured if configured > 0 else SESSION_TTL_SECONDS
+
+
+def _expired(created_at: int, ttl: int) -> bool:
+    return int(time.time()) - created_at >= ttl
 
 
 def check_admin_password(config: tuple[str, str], username: str, password: str) -> bool:
@@ -55,24 +86,35 @@ def check_admin_password(config: tuple[str, str], username: str, password: str) 
 
 
 def issue_admin_session(request: Request) -> str:
-    """Mint a token and record it. The token is the credential; only the
-    token (never a hash — it never leaves the server except as the
-    cookie itself, and there is no DB row to leak) is kept in memory."""
+    """Mint a token and record it with its expiry. The token is the
+    credential; only the token (never a hash — it never leaves the server
+    except as the cookie itself, and there is no DB row to leak) is kept
+    in memory."""
     token = secrets.token_urlsafe(32)
-    request.app.state.admin_sessions.add(token)
+    expires_at = int(time.time()) + request.app.state.session_ttl
+    request.app.state.admin_sessions[token] = expires_at
     return token
 
 
 def revoke_admin_session(request: Request, token: str) -> None:
-    request.app.state.admin_sessions.discard(token)
+    request.app.state.admin_sessions.pop(token, None)
 
 
 def current_admin(request: Request) -> str | None:
     """Return the admin token if the request carries a live session."""
     token = request.cookies.get(COOKIE_NAME)
-    if token and token in request.app.state.admin_sessions:
-        return token
-    return None
+    if not token:
+        return None
+    sessions: dict[str, int] = request.app.state.admin_sessions
+    expires_at = sessions.get(token)
+    if expires_at is None:
+        return None
+    if expires_at <= int(time.time()):
+        # Drop it on the way out so the dict does not accumulate dead
+        # tokens for the life of the process.
+        sessions.pop(token, None)
+        return None
+    return token
 
 
 def require_admin(request: Request) -> str:
@@ -140,19 +182,26 @@ def issue_player_session(
     return token
 
 
-def _live_session_guard(table: str, session_id: str):
+def _live_session_guard(table: str, session_id: str, ttl: int):
     """Return a check that re-reads ``session_id`` on the writer.
 
     ``current_player``/``current_moderator`` read on the reader, which
     serves the last committed snapshot. A revocation that commits after
     that read but before a handler's write would otherwise go unseen, so
-    ``db.locked_transaction`` re-runs this on the writer first."""
+    ``db.locked_transaction`` re-runs this on the writer first. The TTL is
+    deterministic from ``created_at``, so it is checked here too for the
+    same reason: a handler must not write for a session that has expired
+    since the reader read."""
 
     def guard(conn: sqlite3.Connection) -> None:
         row = conn.execute(
-            f"SELECT revoked_at FROM {table} WHERE id = ?", (session_id,)
+            f"SELECT revoked_at, created_at FROM {table} WHERE id = ?", (session_id,)
         ).fetchone()
-        if row is None or row["revoked_at"] is not None:
+        if (
+            row is None
+            or row["revoked_at"] is not None
+            or _expired(row["created_at"], ttl)
+        ):
             raise HTTPException(
                 status_code=401,
                 detail={
@@ -169,14 +218,15 @@ def current_player(request: Request) -> PlayerContext | None:
 
     Also maintains ``last_seen_at`` — throttled to one write per minute
     (schema invariant) so every authenticated request doesn't generate
-    a write. A revoked or unknown token resolves to None, never an
-    error page — the client routes to the join screen."""
+    a write. A revoked, expired, or unknown token resolves to None, never
+    an error page — the client routes to the join screen."""
     token = request.cookies.get(PLAYER_COOKIE_NAME)
     if not token:
         return None
     conn = reader(request)
+    ttl = request.app.state.session_ttl
     row = conn.execute(
-        "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
+        "SELECT s.id AS session_id, s.created_at, s.last_seen_at, s.revoked_at,"
         "       p.id AS player_id, p.display_name, p.team_id, t.event_id"
         " FROM session s"
         " JOIN player p ON p.id = s.player_id"
@@ -184,12 +234,12 @@ def current_player(request: Request) -> PlayerContext | None:
         " WHERE s.token_hash = ?",
         (_hash_token(token),),
     ).fetchone()
-    if row is None or row["revoked_at"] is not None:
+    if row is None or row["revoked_at"] is not None or _expired(row["created_at"], ttl):
         return None
     # Writes must re-check this on the writer: the reader read above is a
     # committed snapshot, so a revocation can commit before the handler
     # writes (ADR 0013).
-    request.state.session_guard = _live_session_guard("session", row["session_id"])
+    request.state.session_guard = _live_session_guard("session", row["session_id"], ttl)
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:
         # Locked: this write must never commit another request's open
@@ -263,24 +313,25 @@ def issue_moderator_session(
 
 def current_moderator(request: Request) -> ModeratorContext | None:
     """Resolve the mod cookie to a live moderator context, with the
-    same throttled last_seen_at write as player sessions."""
+    same throttled last_seen_at write and TTL as player sessions."""
     token = request.cookies.get(MOD_COOKIE_NAME)
     if not token:
         return None
     conn = reader(request)
+    ttl = request.app.state.session_ttl
     row = conn.execute(
-        "SELECT s.id AS session_id, s.last_seen_at, s.revoked_at,"
+        "SELECT s.id AS session_id, s.created_at, s.last_seen_at, s.revoked_at,"
         "       m.id AS moderator_id, m.event_id, m.label"
         " FROM moderator_session s"
         " JOIN moderator m ON m.id = s.moderator_id"
         " WHERE s.token_hash = ?",
         (_hash_token(token),),
     ).fetchone()
-    if row is None or row["revoked_at"] is not None:
+    if row is None or row["revoked_at"] is not None or _expired(row["created_at"], ttl):
         return None
     # Same writer-side re-check as current_player (ADR 0013).
     request.state.session_guard = _live_session_guard(
-        "moderator_session", row["session_id"]
+        "moderator_session", row["session_id"], ttl
     )
     now = int(time.time())
     if now - row["last_seen_at"] >= LAST_SEEN_THROTTLE_SECONDS:

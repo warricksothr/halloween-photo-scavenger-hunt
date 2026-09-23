@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS session (
     player_id    TEXT NOT NULL REFERENCES player(id) ON DELETE CASCADE,
     device_label TEXT NOT NULL DEFAULT '', -- free text from the player ("Sam's phone")
     user_agent   TEXT NOT NULL DEFAULT '', -- for moderator heuristic matching
-    created_at   INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL,        -- also the session's TTL origin:
+                                          -- rejected once now - created_at
+                                          -- reaches auth.SESSION_TTL_SECONDS
     last_seen_at INTEGER NOT NULL,       -- throttled: max one write/minute
     revoked_at   INTEGER                 -- NULL = active
 );
@@ -119,7 +121,7 @@ CREATE TABLE IF NOT EXISTS moderator_session (
     id           TEXT PRIMARY KEY,
     token_hash   TEXT NOT NULL UNIQUE,
     moderator_id TEXT NOT NULL REFERENCES moderator(id) ON DELETE CASCADE,
-    created_at   INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL,       -- TTL origin, same as session
     last_seen_at INTEGER NOT NULL,
     revoked_at   INTEGER
 );

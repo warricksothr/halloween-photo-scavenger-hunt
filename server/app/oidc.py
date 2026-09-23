@@ -68,10 +68,10 @@ TXN_COOKIE_NAME = "arkham_oidc_txn"
 TXN_MAX_AGE_SECONDS = 600
 
 # The identity session: who signed in, not what they may do. In-memory on
-# ``app.state`` like admin_sessions (auth.py explains why). A party night
-# is well under half a day.
+# ``app.state`` like admin_sessions (auth.py explains why). It lives for
+# the shared session TTL (auth.SESSION_TTL_SECONDS), the same as every
+# other session, so one knob expires them all together.
 OIDC_COOKIE_NAME = "arkham_oidc"
-IDENTITY_MAX_AGE_SECONDS = 12 * 60 * 60
 
 DISCOVERY_PATH = "/.well-known/openid-configuration"
 METADATA_TTL_SECONDS = 3600
@@ -376,7 +376,7 @@ def issue_identity(
         name=name,
         email=email,
         role=role,
-        expires_at=int(time.time()) + IDENTITY_MAX_AGE_SECONDS,
+        expires_at=int(time.time()) + request.app.state.session_ttl,
     )
     return token
 
@@ -713,6 +713,7 @@ async def callback(
             httponly=True,
             secure=request.app.state.cookie_secure,
             samesite="strict",
+            max_age=request.app.state.session_ttl,
         )
     else:
         identity_token = issue_identity(
@@ -728,6 +729,7 @@ async def callback(
             httponly=True,
             secure=request.app.state.cookie_secure,
             samesite="lax",
+            max_age=request.app.state.session_ttl,
         )
     response.delete_cookie(TXN_COOKIE_NAME, path="/")
     return response
