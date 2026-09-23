@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:18:31Z
+updated_at: 2026-09-23T01:23:51Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -158,3 +158,10 @@ Second Terva review (211, head f047122, run c30e3edc-96d6-435d-abd6-0cc5ee5147b4
 - high exception-message leak: scrub_event now scrubs exception.values[*].value/type/module and logentry.message via scrub_text on server, and the browser mirror; tests place a credential in an exception message and a logentry on both surfaces.
 - medium stale request id: errors.js adds beginRequest() (clears id) and recordRequestId now clears on falsy; api.js calls beginRequest() before every fetch, so a request that never got headers reports with no id. HTTP failures still carry the response id (recorded before returning the error result). api.test.js asserts the stale id is cleared on a rejected fetch and on a header-less response.
 Quality gate re-run: exit 0 — 331 server tests @ 95.00%, 20 deploy checks, 60 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:23:51Z
+
+Third Terva review (213, head de6cc5b, run 90a6c3c8-7112-4eee-adbb-99c9d84948f4, Actions run #328/id 9053, request review-fixes-2): both findings from 211 resolved; two new medium findings, both accepted and fixed:
+- medium SDK-import latch: initErrorReporting now imports the chunk in a try/catch, sets started only after the SDK is in hand, and swallows the failure so a later call retries and no rejection escapes; main.jsx wraps the chain as initErrorReporting().then(refresh, refresh) so a reporter-boot failure cannot block boot or surface as an unhandled rejection. Test: a first import that throws, then a second that succeeds, reporting goes live.
+- medium request-id race: the response X-Request-ID is now carried on each failure result (requestId) and reportFailure passes it explicitly to reportError (new third arg); the module-global remains only for the SDK's own auto-capture, which cannot receive a per-call id. Tests: api.test.js asserts the result carries null on network/headerless failures and the explicit id on error results; store.test.js asserts the failing result's own id reaches reportError, not the global.
+Quality gate re-run: exit 0 — 331 server tests @ 95.00%, 20 deploy checks, 63 frontend tests, build.
