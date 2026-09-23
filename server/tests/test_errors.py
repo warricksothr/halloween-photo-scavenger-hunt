@@ -217,6 +217,23 @@ def test_breadcrumb_url_headers_and_cookies_are_scrubbed():
         assert dropped not in scrubbed["data"]
 
 
+def test_a_malformed_url_is_replaced_not_raised_on():
+    """``urlsplit`` raises on ``https://[``; the hooks must not."""
+    event = {
+        "request": {"url": "https://["},
+        "breadcrumbs": {"values": [{"data": {"url": "https://["}}]},
+    }
+
+    scrubbed = Scrubber().scrub_event(event)
+
+    assert scrubbed["request"]["url"] == REDACTED
+    assert scrubbed["breadcrumbs"]["values"][0]["data"]["url"] == REDACTED
+
+    crumb = Scrubber().scrub_breadcrumb({"data": {"url": "https://["}})
+
+    assert crumb["data"]["url"] == REDACTED
+
+
 def test_event_embedded_breadcrumbs_are_scrubbed():
     event = {
         "breadcrumbs": {

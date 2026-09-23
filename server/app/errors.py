@@ -49,10 +49,19 @@ _DROPPED_BREADCRUMB_KEYS = ("headers", "cookies")
 
 
 def _scrub_url(value: Any) -> Any:
-    """Redact a URL's path credential and collapse its query string."""
+    """Redact a URL's path credential and collapse its query string.
+
+    ``urlsplit`` raises on a malformed URL such as ``https://[``, and this
+    runs inside the SDK's `before_send` and `before_breadcrumb` hooks,
+    where a raise would lose the whole event. An unparsable URL cannot be
+    trusted to hold no credential, so the whole value is replaced.
+    """
     if not isinstance(value, str) or not value:
         return value
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return REDACTED
     query = REDACTED if parts.query else ""
     return urlunsplit((parts.scheme, parts.netloc, redact_path(parts.path), query, ""))
 

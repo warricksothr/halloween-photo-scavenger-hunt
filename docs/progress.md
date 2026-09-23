@@ -52,10 +52,11 @@ when the increment runs and its tests pass.
   a breadcrumb's `data` and on the breadcrumb itself, since a
   navigation crumb carries its own `url` and
   `query_string`; the replacement runs in one pass, so a key that is a
-  substring of `<redacted>` cannot be reintroduced by a later secret. The
-  request id rides along as a tag. `send_default_pii`
+  substring of `<redacted>` cannot be reintroduced by a later secret, and
+  a URL that `urlsplit` rejects is replaced whole rather than raised on.
+  The request id rides along as a tag. `send_default_pii`
   stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
-  `server/requirements.lock` regenerated together. 328 server tests pass;
+  `server/requirements.lock` regenerated together. 329 server tests pass;
   coverage 95.23%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
