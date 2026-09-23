@@ -5,50 +5,33 @@
 // this drives the board and the detail screen at 200% and measures.
 import { expect, test } from '@playwright/test';
 
-const ADMIN_USERNAME = 'browser-test-admin';
-const ADMIN_PASSWORD = 'browser-test-only';
-const BASE_URL = 'http://127.0.0.1:4173';
+import { adminApi, loginAdmin } from './support';
 
 let codes;
-let adminApi;
-let csrf;
+let admin;
 
 test.beforeAll(async ({ playwright }) => {
-  adminApi = await playwright.request.newContext({ baseURL: BASE_URL });
+  admin = await adminApi(playwright);
+  await loginAdmin(admin);
 
-  // The API requires a signed CSRF token on every mutation: a safe GET
-  // plants the cookie, then the value rides the X-CSRF-Token header.
-  await adminApi.get('/api/health');
-  const { cookies } = await adminApi.storageState();
-  csrf = cookies.find((cookie) => cookie.name === 'arkham_csrf')?.value;
-  const headers = { 'X-CSRF-Token': csrf };
-
-  const login = await adminApi.post('/api/admin/login', {
-    headers,
-    data: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD },
-  });
-  expect(login.ok()).toBeTruthy();
-
-  const eventResponse = await adminApi.post('/api/admin/events', {
-    headers,
+  const eventResponse = await admin.post('/api/admin/events', {
     data: { name: 'Resize Text Hunt', leaderboard_visibility: 'live' },
   });
   expect(eventResponse.status()).toBe(201);
   const event = await eventResponse.json();
 
-  const riddleResponse = await adminApi.post(`/api/admin/events/${event.id}/riddles`, {
-    headers,
+  const riddleResponse = await admin.post(`/api/admin/events/${event.id}/riddles`, {
     data: { text: 'Find the thing', sort_order: 1 },
   });
   expect(riddleResponse.status()).toBe(201);
 
-  const openResponse = await adminApi.post(`/api/admin/events/${event.id}/open`, { headers });
+  const openResponse = await admin.post(`/api/admin/events/${event.id}/open`);
   expect(openResponse.ok()).toBeTruthy();
   codes = { join: event.join_code };
 });
 
 test.afterAll(async () => {
-  await adminApi?.dispose();
+  await admin?.dispose();
 });
 
 async function horizontalOverflow(page) {
