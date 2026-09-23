@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T00:06:32Z
+updated_at: 2026-09-23T00:16:08Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -380,3 +380,35 @@ Docs: `docs/progress.md` #19 entry follows.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 337
 tests, coverage 95.37%, Ruff clean. Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T00:16:08Z
+
+Supersedes the note at head fe8ee1fa.
+
+### high (review 205, run #306, request raw-json-fix)
+Terva resolved the escaped-JSON finding (`finding-1` resolved at fe8ee1fa) and
+opened a new high.
+
+**high: a multipart body leaked through the exception message.** `_PARSED_MEDIA`
+holds only JSON and urlencoded form, and the middleware buffered nothing else.
+A multipart request left `safe_traceback` false, so a route that read a
+multipart field and quoted it in a `raise` logged the value verbatim. The ADR
+recorded this as a residual, which the ticket does not allow.
+
+Accepted. The middleware now counts every `http.request` body byte in `seen`,
+for every media type. On an exception:
+- a media type `_body_secrets` reads keeps the existing behavior;
+- any other media type with `seen > 0` marks the message unsafe, because the
+  app may have read a field the scrub set never held;
+- a body-less request keeps its message.
+
+`test_a_multipart_body_drops_the_exception_message` posts a `files=` field,
+raises with the field's value, and asserts `message_included is False` and the
+value absent. The route closes the parsed form, so the spooled upload does not
+trip pytest's unraisable check in a later test.
+
+Docs: the ADR's multipart residual is replaced with the fail-closed rule;
+`docs/progress.md` #19 entry follows.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 338
+tests, coverage 95.35%, Ruff clean. Re-review requested.
