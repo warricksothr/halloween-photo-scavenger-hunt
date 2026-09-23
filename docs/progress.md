@@ -46,6 +46,22 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — The theme pack is swappable again.** TKT-01M33RFWWFJJJ7JP9JE7ZRE54K.
+  Two leaks kept the Arkham pack from being a skin over a neutral core.
+  First, `web/src/theme.js` relied on Vite's CSS-import side effect, so a
+  switch only ever added a second `<style>` and the first pack's tokens
+  survived the session; the loader now imports each pack's CSS as text
+  (`?inline`), injects its own `<style data-theme>`, and removes the
+  previous pack's node once the new one lands (ADR 0024). Second, game-facing
+  copy was still hardcoded in the shell and screens — the boot line, the join
+  code label and device placeholder, the invite loading/unavailable lines,
+  the closed-standings loading and no-winner fallback, and the roster
+  last-seen wording — and now lives in `themes/arkham/copy.js`, read through
+  `copy` (the boot screen reads `defaultCopy()` because no event theme exists
+  yet). Conduct, connection-error, moderator and admin surfaces stay
+  un-themed by rule. `theme.test.js` pins the stylesheet lifecycle and
+  `web/src/screens/theme-copy.test.jsx` renders the screens against a
+  sentinel copy fixture. Web suite 126 tests.
 - **2026-09-23 — Riddle tiles and the strike overlay are operable by
   keyboard and screen reader.** TKT-01M33RFWVM9NJ94ENMKXAEB40A. The
   riddle tile (`RiddleList`), the evidence-picker tile (`RiddleDetail`)

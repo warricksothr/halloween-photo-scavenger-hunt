@@ -91,7 +91,7 @@ export function StandingsScreen({ snapshot, copy }) {
     if (recap === null) {
       return (
         <main style={{ flex: 1, padding: 16 }}>
-          <p class="dim">Compiling the night's intel…</p>
+          <p class="dim">{c.loading}</p>
         </main>
       );
     }
@@ -105,7 +105,7 @@ export function StandingsScreen({ snapshot, copy }) {
             <p class="subtext" style={{ marginTop: 6 }}>
               {winner
                 ? c.caseClosedSubtext(winner.team, winner.score, recap.total_riddles)
-                : 'Final standings are in.'}
+                : c.noWinner}
             </p>
           </div>
         </div>

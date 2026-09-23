@@ -16,12 +16,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { api } from '../api';
 import { refresh } from '../store';
 
-function ago(epochSeconds) {
-  if (!epochSeconds) return 'never seen';
-  const mins = Math.max(0, Math.round((Date.now() / 1000 - epochSeconds) / 60));
-  if (mins < 1) return 'active now';
-  if (mins < 60) return `${mins} min ago`;
-  return `${Math.floor(mins / 60)} h ${mins % 60} min ago`;
+// Last-seen in minutes, or null when the member has never been seen. The
+// wording lives in the theme pack (copy.screens.team.lastSeen); this only
+// owns the clock math.
+function seenMinutes(epochSeconds) {
+  if (!epochSeconds) return null;
+  return Math.max(0, Math.round((Date.now() / 1000 - epochSeconds) / 60));
 }
 
 function countdown(expiresAt, now) {
@@ -161,7 +161,7 @@ export function TeamScreen({ snapshot, copy }) {
                       {m.you && <span class="dim" style={{ fontSize: '0.75rem' }}> {c.you}</span>}
                     </div>
                     <div class="dim" style={{ fontSize: '0.75rem' }}>
-                      {m.device_label ? `${m.device_label} · ` : ''}{ago(m.last_seen_at)}
+                      {m.device_label ? `${m.device_label} · ` : ''}{c.lastSeen(seenMinutes(m.last_seen_at))}
                     </div>
                   </div>
                 </div>

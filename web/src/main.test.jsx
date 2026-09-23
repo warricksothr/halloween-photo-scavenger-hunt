@@ -7,9 +7,15 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   retry: vi.fn(),
   subscribe: vi.fn(() => () => {}),
+  defaultCopy: vi.fn(() => ({ screens: { boot: { loading: 'BOOT_SENTINEL' } } })),
 }));
 
 vi.mock('./errors', () => ({ initErrorReporting: mocks.initErrorReporting }));
+vi.mock('./theme', () => ({
+  DEFAULT_THEME: 'arkham',
+  defaultCopy: mocks.defaultCopy,
+  loadTheme: vi.fn(),
+}));
 vi.mock('./store', () => ({
   getState: mocks.getState,
   refresh: mocks.refresh,
@@ -67,5 +73,13 @@ describe('app entry', () => {
 
     await waitFor(() => expect(screen.getByTestId('mod-join')).toBeTruthy());
     expect(screen.queryByTestId('join')).toBeNull();
+  });
+
+  it('renders the boot line from the default theme pack', async () => {
+    mocks.getState.mockReturnValue({ phase: 'booting' });
+
+    await import('./main.jsx');
+
+    await waitFor(() => expect(screen.getByText('BOOT_SENTINEL')).toBeTruthy());
   });
 });
