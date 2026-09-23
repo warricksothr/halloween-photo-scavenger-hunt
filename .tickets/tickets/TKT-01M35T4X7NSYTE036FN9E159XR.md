@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:11:40Z
+updated_at: 2026-09-23T02:15:21Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -226,3 +226,10 @@ Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 71 
 Thirteenth Terva review (226, head 3c384a4, run 71b55b47-0a35-4c4b-9bbc-54be24c05b98, Actions run #352/id 9181, request review-fixes-12): the re-correlation finding resolved; one new medium finding, accepted with a direction the user chose:
 - medium duplicate cross-surface 500: a browser request hitting an unhandled server 500 produced a server event (ASGI auto-capture, real stack) and a synthetic browser event from reportFailure. The ADR's 'one event per 500' was scoped to the server middleware chain, not cross-surface, so it was not literally violated, but both readings were defensible and the user chose to make the browser honour the same rule: report a 5xx only when the result has no request id (a proxy/network-boundary 5xx no server event describes), and always report a dead connection (the server never saw the request). reportFailure now skips a 5xx that carries requestId; tests: a 500 with an id is not reported, a network failure is reported under its own id, a 500 without an id (proxy) still reports. ADR 0017 gains the browser-side rule.
 Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 72 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T02:15:21Z
+
+Fourteenth Terva review (228, head 8a02009, run d39eb031-7dd4-4bf2-afe4-45caf5daffd8, Actions run #354/id 9191, request review-fixes-13): the duplicate-500 finding resolved; two new findings, both accepted and fixed:
+- high url user-info: both scrubbers kept the whole authority, so https://key@host/path — the shape of a DSN — retained the key. scrub_url now keeps only host and port (netloc.rpartition('@')[2]); the browser scrubUrl strips user-info from the matched origin. Tests cover a request URL and a free-text message with user:pass@ on both surfaces.
+- medium invalid web trace rate: the browser accepted any finite tracesSampleRate, and a value outside 0-1 could make init throw while started was already true, latching reporting off. The rate now falls back to 0.1 unless it is within 0-1, and started is set only after init succeeds, inside a try that returns false (retryable) on a throw, matching the failed-import path. Tests: an out-of-range rate falls back, and a throwing init leaves a later call able to initialize.
+Quality gate re-run: exit 0 — 342 server tests @ 95.08%, 20 deploy checks, 75 frontend tests, build.
