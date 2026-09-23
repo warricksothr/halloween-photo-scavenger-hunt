@@ -5,9 +5,8 @@ import zlib from 'node:zlib';
 
 import { expect, test } from '@playwright/test';
 
-const ADMIN_USERNAME = 'browser-test-admin';
-const ADMIN_PASSWORD = 'browser-test-only';
-const BASE_URL = 'http://127.0.0.1:4173';
+import { adminApi, loginAdmin } from './support';
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SCREENSHOT_DIR = process.env.README_SCREENSHOT_DIR ?? path.join(REPO_ROOT, 'docs', 'screenshots');
 function crc32(buffer) {
@@ -63,7 +62,7 @@ function makeEvidencePhoto() {
 const PHOTO = makeEvidencePhoto();
 
 let codes;
-let adminApi;
+let admin;
 
 function screenshotPath(name) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -94,14 +93,10 @@ async function capture(page, name, { frame = false } = {}) {
 }
 
 test.beforeAll(async ({ playwright }) => {
-  adminApi = await playwright.request.newContext({ baseURL: BASE_URL });
+  admin = await adminApi(playwright);
+  await loginAdmin(admin);
 
-  const login = await adminApi.post('/api/admin/login', {
-    data: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD },
-  });
-  expect(login.ok()).toBeTruthy();
-
-  const eventResponse = await adminApi.post('/api/admin/events', {
+  const eventResponse = await admin.post('/api/admin/events', {
     data: { name: 'Arkham Halloween Hunt', leaderboard_visibility: 'live' },
   });
   expect(eventResponse.status()).toBe(201);
@@ -116,19 +111,19 @@ test.beforeAll(async ({ playwright }) => {
     'Spot the silent sentinel',
   ];
   for (const [index, text] of riddles.entries()) {
-    const riddleResponse = await adminApi.post(`/api/admin/events/${event.id}/riddles`, {
+    const riddleResponse = await admin.post(`/api/admin/events/${event.id}/riddles`, {
       data: { text, sort_order: index + 1 },
     });
     expect(riddleResponse.status()).toBe(201);
   }
 
-  const openResponse = await adminApi.post(`/api/admin/events/${event.id}/open`);
+  const openResponse = await admin.post(`/api/admin/events/${event.id}/open`);
   expect(openResponse.ok()).toBeTruthy();
   codes = { join: event.join_code, mod: event.mod_code };
 });
 
 test.afterAll(async () => {
-  await adminApi?.dispose();
+  await admin?.dispose();
 });
 
 test('capture the README product tour', async ({ browser }) => {
@@ -188,11 +183,8 @@ test('capture the README product tour', async ({ browser }) => {
     await player.getByRole('button', { name: 'Submit to the Batcomputer' }).click();
     await expect(player.getByText('SCANNING…')).toBeVisible();
 
+    // The mod link signs in through the stub IdP before the console opens.
     await moderator.goto(`/m/${codes.mod}`);
-    await expect(
-      moderator.getByRole('heading', { name: 'Moderator Console' }),
-    ).toBeVisible();
-    await moderator.getByRole('button', { name: 'Open the console' }).click();
     await expect(
       moderator.getByRole('heading', { name: 'Analysis Queue' }),
     ).toBeVisible();

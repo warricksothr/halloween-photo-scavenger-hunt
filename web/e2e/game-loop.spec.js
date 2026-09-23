@@ -1,42 +1,37 @@
 import { expect, test } from '@playwright/test';
 
-const ADMIN_USERNAME = 'browser-test-admin';
-const ADMIN_PASSWORD = 'browser-test-only';
-const BASE_URL = 'http://127.0.0.1:4173';
+import { adminApi, loginAdmin } from './support';
+
 const PHOTO = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
 
 let codes;
-let adminApi;
+let admin;
 
 test.beforeAll(async ({ playwright }) => {
-  adminApi = await playwright.request.newContext({ baseURL: BASE_URL });
+  admin = await adminApi(playwright);
+  await loginAdmin(admin);
 
-  const login = await adminApi.post('/api/admin/login', {
-    data: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD },
-  });
-  expect(login.ok()).toBeTruthy();
-
-  const eventResponse = await adminApi.post('/api/admin/events', {
+  const eventResponse = await admin.post('/api/admin/events', {
     data: { name: 'Browser Smoke Hunt', leaderboard_visibility: 'live' },
   });
   expect(eventResponse.status()).toBe(201);
   const event = await eventResponse.json();
 
-  const riddleResponse = await adminApi.post(`/api/admin/events/${event.id}/riddles`, {
+  const riddleResponse = await admin.post(`/api/admin/events/${event.id}/riddles`, {
     data: { text: 'Find the thing', sort_order: 1 },
   });
   expect(riddleResponse.status()).toBe(201);
 
-  const openResponse = await adminApi.post(`/api/admin/events/${event.id}/open`);
+  const openResponse = await admin.post(`/api/admin/events/${event.id}/open`);
   expect(openResponse.ok()).toBeTruthy();
   codes = { join: event.join_code, mod: event.mod_code };
 });
 
 test.afterAll(async () => {
-  await adminApi?.dispose();
+  await admin?.dispose();
 });
 
 test('player and moderator complete the built game loop', async ({ browser }) => {
@@ -89,11 +84,10 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     await player.getByRole('button', { name: 'Submit to the Batcomputer' }).click();
     await expect(player.getByText('SCANNING…')).toBeVisible();
 
+    // The mod link auto-attempts, finds no moderator session, and sends the
+    // browser through the stub IdP; the callback returns here and the
+    // console opens. Wait for the queue, not the sign-in screen.
     await moderator.goto(`/m/${codes.mod}`);
-    await expect(
-      moderator.getByRole('heading', { name: 'Moderator Console' }),
-    ).toBeVisible();
-    await moderator.getByRole('button', { name: 'Open the console' }).click();
     await expect(
       moderator.getByRole('heading', { name: 'Analysis Queue' }),
     ).toBeVisible();
