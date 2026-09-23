@@ -345,6 +345,7 @@ def verdict(
     # After the commit: the owning team gets their verdict, and every
     # moderator hears the item left the queue (so a second mod's open
     # view doesn't linger on a resolved photo).
+    request.app.state.metrics.record_verdict(body.verdict)
     sse.publish(
         request,
         ctx.event_id,
@@ -506,6 +507,7 @@ def inappropriate(
     # After the commit (sse.publish's contract). The strike delta goes
     # to the affected player only — conduct stays between player, mods,
     # and host; teammates just see the photo leave the drawer.
+    request.app.state.metrics.record_verdict("inappropriate")
     sse.publish(
         request,
         ctx.event_id,
