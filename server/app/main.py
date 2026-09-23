@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from app import (
     csrf,
+    errors,
     events,
     evidence,
     leaderboard,
@@ -161,6 +162,11 @@ def create_app(
     # One structured line per request, with bearer codes redacted and
     # uvicorn's own raw-path access line dropped (app/logging.py).
     configure_logging()
+
+    # Error reporting is inert unless ARKHAM_ERROR_DSN is set, so local
+    # runs and tests never send an event (app/errors.py). The DSN is
+    # read here, not at import, so a deploy can set it per process.
+    errors.init_error_reporting(os.environ.get("ARKHAM_ERROR_DSN"))
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
 
