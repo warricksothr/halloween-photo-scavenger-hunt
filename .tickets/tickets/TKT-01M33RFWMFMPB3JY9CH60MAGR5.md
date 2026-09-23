@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:01:09Z
+updated_at: 2026-09-23T12:04:43Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -117,3 +117,32 @@ it is left for the session-expiry child (TKT-01M33RFWN).
 - Base: `a54999550b9fdf607d54e654a3d83a884d5659c5`
 - Request ID: `harden-audit-updates-r1`
 - Run: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/405 (id 22906)
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:04:43Z
+
+### Round 2 (`harden-audit-updates-r2`, run 407, head 8e967fc)
+
+Review id 242. One medium finding: the audit decision keyed on whether fields
+were *supplied*, not whether any value *changed*, so a PATCH repeating the
+current values executed an UPDATE and logged an `event.updated` row with
+identical `old` and `new` — contradicting the one-row-per-state-mutation rule
+and the doc's "changed fields" wording.
+
+Fixed: `patch_event` now computes `changes` as the supplied fields whose value
+differs from the re-read row and only updates/logs when that set is non-empty.
+Test added: `test_patch_repeating_current_values_writes_no_row`.
+
+The same run also failed the Quality gate: promoting the epic from `draft` to
+`tickets` left `.tickets/epics.md` stale (`epics_index_stale`, strict).
+`git ticket check --fix` rewrote it; the index now rides this branch.
+
+### Round 1 (`harden-audit-updates-r1`, run 405, head be612d2) — superseded
+
+No findings published. A ticket-bookkeeping commit (the review-request note)
+landed after dispatch and moved the PR head, so the run was superseded. The
+commit is now ordered before dispatch, per the S9CW lesson.
+
+### Review request, round 3
+
+- Head: `8e967fc` + the fix commit (see the commit that carries this note)
+- Request ID: `harden-audit-updates-r3`

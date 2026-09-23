@@ -118,6 +118,15 @@ class TestEvents:
         )
         assert _audit_rows(admin, "event.updated") == []
 
+    def test_patch_repeating_current_values_writes_no_row(self, admin):
+        event = _create_event(admin)
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}",
+            json={"name": "Gotham Halloween", "team_size_limit": 4},
+        )
+        assert resp.status_code == 200
+        assert _audit_rows(admin, "event.updated") == []
+
     def test_patch_404(self, admin):
         resp = admin.patch("/api/admin/events/nope", json={"name": "x"})
         assert resp.status_code == 404

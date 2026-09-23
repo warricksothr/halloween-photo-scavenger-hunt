@@ -202,14 +202,21 @@ def patch_event(
             # transaction (ADR 0013).
             return _err(404, "event_not_found", "No such event.")
         if updates:
-            before = {k: row[k] for k in updates}
-            assignments = ", ".join(f"{k} = ?" for k in updates)
+            # Only a field whose value actually moves is a state mutation
+            # (enum doc): a PATCH that repeats the current value is a
+            # no-op and logs nothing.
+            changes = {k: v for k, v in updates.items() if row[k] != v}
+        else:
+            changes = {}
+        if changes:
+            before = {k: row[k] for k in changes}
+            assignments = ", ".join(f"{k} = ?" for k in changes)
             # A locked transaction, not a bare execute + commit: an
             # unlocked commit here could land mid-mutation in another
             # handler (ADR 0004).
             writer.execute(
                 f"UPDATE event SET {assignments} WHERE id = ?",
-                (*updates.values(), event_id),
+                (*changes.values(), event_id),
             )
             # One row per state mutation (enum doc): the edit was a state
             # mutation like any other, and the row rides the same
@@ -222,7 +229,7 @@ def patch_event(
                 action=Action.EVENT_UPDATED,
                 entity_type="event",
                 entity_id=event_id,
-                details={"old": before, "new": updates},
+                details={"old": before, "new": changes},
             )
         updated = _get_event(writer, event_id)
     return _event_json(updated)
