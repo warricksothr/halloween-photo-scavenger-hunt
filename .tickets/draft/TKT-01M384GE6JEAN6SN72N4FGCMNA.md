@@ -24,7 +24,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-23T23:08:42Z
+updated_at: 2026-09-23T23:18:33Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -51,3 +51,7 @@ Once TKT-01M386AR687DYXFQ7M6VBSAA6V (admin API token) lands, the seeder can auth
 **agent:opencode/t3code-0691bbb1** at 2026-09-23T23:08:42Z
 
 Build decisions (2026-09-23): authenticate with ARKHAM_ADMIN_API_TOKEN as a bearer token (TKT-01M386AR687DYXFQ7M6VBSAA6V, merged 752409f), not the CSRF jar. The fixture's hints require a riddle hint field, filed as TKT-01M388EAYCH2J50GQ0WRZM11BB and now a dependency; build it first. Dropped from the fixture only if the hint work is abandoned.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T23:18:33Z
+
+Riddle content, review round 1 (2026-09-23, user): solid start. Two changes. (1) Many riddles are too descriptive — the text gives away too much; push the clue toward indirection and let the player work. (2) Hints should come in multiple levels, vague to specific, not one. That is a schema change, so TKT-01M388EAYCH2J50GQ0WRZM11BB grows from one hint to an ordered set. Revise the fixture to the multi-level shape after the hint ticket lands.
