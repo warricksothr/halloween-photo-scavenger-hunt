@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T05:12:01Z
+updated_at: 2026-09-23T05:19:14Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -167,3 +167,40 @@ Ready for review, dispatch recorded.
 
 `git ticket ac` ticks all four criteria on this head and the note above
 records the green `check-quality.sh` run.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T05:19:14Z
+
+Terva review round 1 and the fragment fix.
+
+### Round 1 was superseded
+
+- Request `mod-link-oidc`, run [#392](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/392), head f5ad9f0.
+- The run reported `Review superseded: the pull request moved during the run`
+  because the ticket-store commit c76d4e8 landed while it ran. No findings were
+  published. Re-requested as `mod-link-oidc-r2` against the stable head.
+
+### Round 2 found one medium issue
+
+- Request `mod-link-oidc-r2`, run [#394](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/394),
+  head c76d4e8, base 455f763. Review id 239, state below threshold.
+- Finding: `_with_marker` appends `sso=` to the raw target, so a target with a
+  `#` fragment would place the marker after the fragment, where
+  `URLSearchParams(location.search)` cannot see it.
+
+### Accepted, with a reachability note
+
+The scenario cannot occur through the HTTP flow: `_safe_next` matches
+`^/[A-Za-z0-9._~%/?&=+@-]*$`, which excludes `#`, so a fragment-bearing `next`
+is dropped before it reaches the helper. The screen's `signInNext()` also sends
+`pathname + search` and never the hash. The helper was still wrong for a
+fragment-bearing input, so the fix is defensive:
+
+- `_with_marker` now splits on `#` and inserts the marker into the query,
+  before the fragment.
+- `test_refusal_marker_lands_in_the_query_not_the_fragment` covers four targets
+  including an existing query and fragment.
+- `test_fragment_bearing_next_is_dropped_before_it_can_carry_a_marker` pins the
+  reachability claim: a raw `#` in `next` is dropped, so the target falls back
+  to `/admin`.
+
+`bash scripts/check-quality.sh` passes on the fix.

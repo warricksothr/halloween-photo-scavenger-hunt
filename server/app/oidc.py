@@ -467,8 +467,12 @@ def _is_mod_surface(target: str) -> bool:
 
 
 def _with_marker(target: str, marker: str) -> str:
-    separator = "&" if "?" in target else "?"
-    return f"{target}{separator}sso={marker}"
+    # Append to the query, and never after a ``#``: a parameter placed in
+    # the fragment is invisible to ``URLSearchParams(location.search)``.
+    path, sep, fragment = target.partition("#")
+    separator = "&" if "?" in path else "?"
+    marked = f"{path}{separator}sso={marker}"
+    return f"{marked}#{fragment}" if sep else marked
 
 
 def _refusal_redirect(target: str, marker: str) -> RedirectResponse:

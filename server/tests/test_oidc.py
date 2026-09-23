@@ -581,6 +581,33 @@ def test_next_is_confined_to_a_same_origin_path(oidc_client, stub, requested, ex
     assert response.headers["location"] == expected
 
 
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("/m/MODCODE1", "/m/MODCODE1?sso=not_authorized"),
+        ("/m/MODCODE1?x=1", "/m/MODCODE1?x=1&sso=not_authorized"),
+        ("/m/MODCODE1#help", "/m/MODCODE1?sso=not_authorized#help"),
+        ("/m/MODCODE1?x=1#help", "/m/MODCODE1?x=1&sso=not_authorized#help"),
+    ],
+)
+def test_refusal_marker_lands_in_the_query_not_the_fragment(target, expected):
+    """A marker placed after ``#`` would be a fragment, which the screen's
+    ``URLSearchParams(location.search)`` cannot see (Terva, PR #26)."""
+    assert oidc._with_marker(target, "not_authorized") == expected
+
+
+def test_fragment_bearing_next_is_dropped_before_it_can_carry_a_marker(
+    oidc_client, stub
+):
+    """``_safe_next`` rejects a raw ``#``, so the login flow cannot build a
+    fragment-bearing target in the first place."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1#help")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.headers["location"] == "/admin"
+
+
 def test_tokens_codes_and_secret_never_reach_logs_or_audit(oidc_client, stub, caplog):
     with caplog.at_level(logging.INFO, logger="arkham"):
         _, query = start_login(oidc_client)
