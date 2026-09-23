@@ -55,12 +55,14 @@ when the increment runs and its tests pass.
   string or form body also adds its raw, still-encoded text beside the
   decoded values, because a route can quote the bytes it read, and a JSON
   body with a number, boolean, or null drops the message too, since no
-  string candidate covers the text that value formats to. Every secret is
+  string candidate covers the text that value formats to. A JSON body also
+  contributes its raw, still-escaped string literals beside the decoded
+  values, because a route can quote the escaped form. Every secret is
   replaced in one pass, so a value that is a substring of `<redacted>`
   cannot be reintroduced by a later secret. There is no length floor on a
   candidate, so a four-digit PIN is scrubbed like any token, and a cookie
   contributes both its raw header and the value the framework unquotes.
-  336 server tests pass; coverage 95.43%.
+  337 server tests pass; coverage 95.37%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

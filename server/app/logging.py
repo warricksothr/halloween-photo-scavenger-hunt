@@ -215,7 +215,11 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
             parsed: Any = json.loads(body)
             if _unrepresentable(parsed):
                 return None
-            strings = _strings_in(parsed)
+            # ``json.loads`` unescapes, so a route that reads the raw bytes
+            # can quote a string this set does not hold. The raw literals
+            # ride along, the same way the form branch carries its raw text.
+            text = body.decode("utf-8", "replace")
+            strings = chain(_strings_in(parsed), _raw_json_tokens(text))
         else:
             # Pairs, not a dict: a form can repeat a field name, and the
             # app reads every value while a dict keeps only the last. The
@@ -227,6 +231,19 @@ def _body_secrets(media: str, body: bytes) -> tuple[str, ...] | None:
     except ValueError:
         return None
     return tuple(value for value in strings if value)
+
+
+def _raw_json_tokens(text: str) -> Iterator[str]:
+    """The raw, still-escaped string literals of a JSON body.
+
+    ``json.loads`` turns ``\\u002f`` into ``/`` and drops the escapes, but a
+    route that reads the raw bytes quotes the body exactly as it arrived.
+    The whole text and every quoted literal cover those forms.
+    """
+    if not text:
+        return
+    yield text
+    yield from re.findall(r'"((?:[^"\\]|\\.)*)"', text)
 
 
 def _unrepresentable(value: Any) -> bool:

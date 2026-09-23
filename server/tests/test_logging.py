@@ -217,7 +217,15 @@ def test_body_secrets_reads_json_and_form_values():
             "application/json",
             b'{"display_name": "Bruce Wayne", "password": "hunter2"}',
         )
-    ) == {"display_name", "Bruce Wayne", "password", "hunter2"}
+    ) >= {"display_name", "Bruce Wayne", "password", "hunter2"}
+
+    # The raw, escaped JSON rides along: ``json.loads`` decodes the escape,
+    # and a route that read the body quotes the escaped form.
+    assert set(
+        app_logging._body_secrets(
+            "application/json", b'{"password": "top\\u002fsecret"}'
+        )
+    ) >= {"top/secret", "top\\u002fsecret"}
 
     assert set(
         app_logging._body_secrets(
@@ -632,6 +640,38 @@ def test_a_raw_encoded_form_body_is_scrubbed(tmp_path, caplog):
     text = _rendered(caplog)
     assert "top%2Fsecret" not in text
     assert "top/secret" not in text
+
+
+def test_a_raw_escaped_json_body_is_scrubbed(tmp_path, caplog):
+    """A valid JSON escape a route reads raw is scrubbed beside the decode."""
+    app = create_app(
+        tmp_path / "escaped-json.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/boom")
+    async def boom(request: Request):
+        raw = (await request.body()).decode("utf-8", "replace")
+        raise RuntimeError(f"kaboom body={raw}")
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/boom",
+            content=b'{"password": "top\\u002fsecret"}',
+            headers={"content-type": "application/json"},
+        )
+
+    assert resp.status_code == 500
+    text = _rendered(caplog)
+    assert "top\\u002fsecret" not in text
+    assert "top/secret" not in text
+    assert "RuntimeError: kaboom" in text
 
 
 def test_query_string_is_redacted(client, caplog):
