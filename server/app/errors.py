@@ -105,11 +105,17 @@ def _sample_rate(raw: str | None) -> float:
 
 
 def scrub_url(url: str | None) -> str | None:
-    """Redact the bearer path segment and drop the query and fragment."""
+    """Redact the bearer path segment and drop the query and fragment.
+
+    The authority is kept only for its host and port: ``user:password@``
+    in front of a host is a credential too, and a DSN is exactly that
+    shape (``https://key@host/project``).
+    """
     if not url:
         return url
     parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc, redact_path(parts.path), "", ""))
+    host = parts.netloc.rpartition("@")[2]
+    return urlunsplit((parts.scheme, host, redact_path(parts.path), "", ""))
 
 
 def scrub_text(text: str) -> str:

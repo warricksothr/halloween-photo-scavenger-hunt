@@ -61,8 +61,10 @@ function scrubUrl(value) {
   let origin = '';
   const scheme = rest.match(ABSOLUTE_URL);
   if (scheme) {
-    origin = scheme[0];
-    rest = rest.slice(origin.length);
+    // Keep only host and port: `user:password@` in front of a host is a
+    // credential too, and a DSN is that shape (https://key@host/project).
+    origin = scheme[0].replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/]*@/, '$1');
+    rest = rest.slice(scheme[0].length);
   }
   const query = rest.indexOf('?');
   const hash = rest.indexOf('#');
@@ -228,23 +230,34 @@ export async function initErrorReporting() {
   } catch {
     return false;
   }
+  try {
+    Sentry.init({
+      dsn: DSN,
+      environment: ENVIRONMENT,
+      release: RELEASE,
+      // The SDK rejects a rate outside 0–1, so fall back rather than hand
+      // it one and let initialization fail.
+      tracesSampleRate:
+        Number.isFinite(TRACES_SAMPLE_RATE) &&
+        TRACES_SAMPLE_RATE >= 0 &&
+        TRACES_SAMPLE_RATE <= 1
+          ? TRACES_SAMPLE_RATE
+          : 0.1,
+      // tracesSampleRate only gates transactions that exist; this
+      // integration is what creates them for page loads and fetch calls.
+      integrations: [Sentry.browserTracingIntegration()],
+      autoSessionTracking: false,
+      sendDefaultPii: false,
+      beforeSend: (event) => scrubEvent(event),
+      beforeSendTransaction: (event) => scrubTransaction(event),
+      beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
+    });
+  } catch {
+    // A throw here must not latch reporting off; started stays false so a
+    // later call retries, matching a failed import above.
+    return false;
+  }
   started = true;
-  Sentry.init({
-    dsn: DSN,
-    environment: ENVIRONMENT,
-    release: RELEASE,
-    tracesSampleRate: Number.isFinite(TRACES_SAMPLE_RATE)
-      ? TRACES_SAMPLE_RATE
-      : 0.1,
-    // tracesSampleRate only gates transactions that exist; this
-    // integration is what creates them for page loads and fetch calls.
-    integrations: [Sentry.browserTracingIntegration()],
-    autoSessionTracking: false,
-    sendDefaultPii: false,
-    beforeSend: (event) => scrubEvent(event),
-    beforeSendTransaction: (event) => scrubTransaction(event),
-    beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
-  });
   sentry = Sentry;
   return true;
 }

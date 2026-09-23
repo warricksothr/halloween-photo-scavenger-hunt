@@ -102,6 +102,26 @@ def test_scrub_url_redacts_the_bearer_and_drops_the_query():
     assert scrubbed == "https://hunt.example/api/join/<redacted>"
 
 
+def test_scrub_url_drops_url_user_info():
+    # A DSN is a URL with the key in the user-info, so the authority cannot
+    # be kept whole.
+    assert (
+        errors.scrub_url("https://key@hunt.example/api/state")
+        == "https://hunt.example/api/state"
+    )
+    assert (
+        errors.scrub_url("https://user:pass@hunt.example:8443/api/state")
+        == "https://hunt.example:8443/api/state"
+    )
+
+
+def test_scrub_text_drops_user_info_in_an_absolute_url():
+    assert (
+        errors.scrub_text("post to https://key@hunt.example/api/state failed")
+        == "post to https://hunt.example/api/state failed"
+    )
+
+
 def test_scrub_text_redacts_path_like_tokens():
     assert errors.scrub_text("GET /api/join/SECRET") == "GET /api/join/<redacted>"
     assert errors.scrub_text("GET /api/state") == "GET /api/state"

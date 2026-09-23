@@ -10,10 +10,13 @@ const sentryMock = {
 };
 vi.mock('@sentry/browser', () => sentryMock);
 
-async function loadErrors({ dsn } = {}) {
+async function loadErrors({ dsn, tracesSampleRate } = {}) {
   vi.resetModules();
   if (dsn) vi.stubEnv('VITE_ERROR_DSN', dsn);
   else vi.stubEnv('VITE_ERROR_DSN', '');
+  if (tracesSampleRate !== undefined) {
+    vi.stubEnv('VITE_TRACES_SAMPLE_RATE', tracesSampleRate);
+  }
   return import('./errors');
 }
 
@@ -55,6 +58,29 @@ describe('error reporting', () => {
     expect(sentryMock.browserTracingIntegration).toHaveBeenCalled();
     const config = sentryMock.init.mock.calls[0][0];
     expect(config.integrations).toContainEqual({ name: 'BrowserTracing' });
+  });
+
+  it('falls back when the trace rate is outside 0-1', async () => {
+    const errors = await loadErrors({
+      dsn: 'https://key@glitchtip.example/1',
+      tracesSampleRate: '2',
+    });
+
+    await errors.initErrorReporting();
+
+    expect(sentryMock.init.mock.calls[0][0].tracesSampleRate).toBe(0.1);
+  });
+
+  it('stays retryable when initialization throws', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    sentryMock.init.mockImplementationOnce(() => {
+      throw new Error('bad rate');
+    });
+
+    await expect(errors.initErrorReporting()).resolves.toBe(false);
+
+    await expect(errors.initErrorReporting()).resolves.toBe(true);
+    expect(sentryMock.init).toHaveBeenCalledTimes(2);
   });
 
   it('retries a failed SDK import instead of latching reporting off', async () => {
@@ -131,6 +157,18 @@ describe('error reporting', () => {
     });
 
     expect(event.request.url).toBe('https://hunt.example/api/join/<redacted>');
+  });
+
+  it('drops url user-info from a request URL and from prose', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: { url: 'https://key@hunt.example/api/state' },
+      message: 'post to https://user:pass@hunt.example/api/state failed',
+    });
+
+    expect(event.request.url).toBe('https://hunt.example/api/state');
+    expect(event.message).toBe('post to https://hunt.example/api/state failed');
   });
 
   it('drops headers, cookies and query string from the request', async () => {
