@@ -420,6 +420,30 @@ describe('error reporting', () => {
     expect(crumb.data.to).toBe('/j/<redacted>');
   });
 
+  it('redacts a bearer path inside a Set or Map in breadcrumb data', async () => {
+    // A Set or Map is neither an Array nor a plain object: Object.entries
+    // on one yields nothing, so the values must be walked explicitly or
+    // the credential rides out unscrubbed.
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            data: {
+              attempts: new Set(['/api/join/SECRET']),
+              tokens: new Map([['t', '/t/TOKEN']]),
+            },
+          },
+        ],
+      },
+    });
+
+    const data = event.breadcrumbs.values[0].data;
+    expect(data.attempts).toEqual(['/api/join/<redacted>']);
+    expect(data.tokens).toEqual([['t', '/t/<redacted>']]);
+  });
+
   it('redacts a credential inside an absolute URL in a breadcrumb message', async () => {
     const errors = await loadErrors();
 

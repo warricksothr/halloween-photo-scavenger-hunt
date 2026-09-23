@@ -116,9 +116,13 @@ function scrubSpan(span) {
 
 // Recursively drop credential-bearing keys and scrub every string in
 // arbitrary data. A breadcrumb or span data mapping can nest the request
-// under request/response, so a top-level pass is not enough.
+// under request/response, so a top-level pass is not enough. A Set or Map
+// is not an Array or plain object, so it is normalized to an array rather
+// than handed to Object.entries, which would silently yield nothing.
 function scrubData(value) {
   if (Array.isArray(value)) return value.map(scrubData);
+  if (value instanceof Set) return [...value].map(scrubData);
+  if (value instanceof Map) return [...value].map((pair) => scrubData(pair));
   if (value && typeof value === 'object') {
     const out = {};
     for (const [key, item] of Object.entries(value)) {

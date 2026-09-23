@@ -165,6 +165,11 @@ def _scrub_data(value: Any) -> Any:
     ``request``/``response``, so a top-level pass is not enough. A string
     can be a bare URL, a bare path, or prose that embeds one, so it goes
     through ``scrub_text``, which finds the path wherever it sits.
+
+    A container is not only a ``dict`` or a ``list``: a tuple or a set
+    serializes as a JSON array, so a bearer path inside one would slip
+    past a check that names only lists. Every container is recursed into
+    and returned as a list, which is what the SDK sends.
     """
     if isinstance(value, dict):
         out: dict[str, Any] = {}
@@ -173,7 +178,7 @@ def _scrub_data(value: Any) -> Any:
                 continue
             out[key] = _scrub_data(item)
         return out
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return [_scrub_data(item) for item in value]
     return scrub_text(value) if isinstance(value, str) else value
 

@@ -496,6 +496,32 @@ def test_scrub_span_and_breadcrumb_data_scrub_bearer_paths_in_prose():
     )
 
 
+def test_scrub_data_reaches_bearer_paths_inside_tuples_and_sets():
+    # A tuple or a set serializes as a JSON array, so a bearer path inside
+    # one must be scrubbed like any list element — not skipped because the
+    # container is neither a dict nor a list.
+    event = {
+        "breadcrumbs": {
+            "values": [
+                {
+                    "data": {
+                        "attempts": ("/api/join/SECRET",),
+                        "tokens": {"/t/TOKEN"},
+                        "nested": {"more": ["/j/CODE"]},
+                    }
+                }
+            ]
+        }
+    }
+
+    cleaned = errors.scrub_event(event)
+    data = cleaned["breadcrumbs"]["values"][0]["data"]
+
+    assert data["attempts"] == ["/api/join/<redacted>"]
+    assert data["tokens"] == ["/t/<redacted>"]
+    assert data["nested"]["more"] == ["/j/<redacted>"]
+
+
 def test_scrub_event_scrubs_top_level_message():
     event = {"message": "GET /api/join/SECRET failed"}
     cleaned = errors.scrub_event(event)
