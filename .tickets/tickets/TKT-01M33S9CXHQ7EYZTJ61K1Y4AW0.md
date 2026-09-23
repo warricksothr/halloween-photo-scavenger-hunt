@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T01:17:30Z
+updated_at: 2026-09-23T01:19:15Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -159,3 +159,24 @@ login form.
 deploy checks, frontend 44 tests, production build. The RUNBOOK's console
 claim is left as written — the shell now exists, but create/open/purge arrive
 with S9CY/S9D0, and tightening the runbook here would overclaim.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T01:19:15Z
+
+### Review round 1 — accepted both
+
+Request `admin-console-shell`, run `6fa735fa-0d60-4685-97df-3f5fe2e3d6df`;
+findings-level status "Review completed with findings at the failure
+threshold". Both findings assessed and accepted.
+
+- **medium — admin route prefix captures `/administrator`-style paths.**
+  Accepted. `main.jsx` grew `isAdminPath()`, matching `/admin` exactly or
+  `/admin/` as a segment boundary, so `/administrator` stays a player path.
+  The old raw `startsWith('/admin')` would have hijacked it.
+- **low — the failed-login test bypasses the 401 transport it guards.**
+  Accepted. `api.test.js` now mocks a real 401 `fetch` and asserts
+  `api.adminLogin()` returns the server's `bad_credentials` body while
+  `api.snapshot()` still folds its 401 into `{unauthenticated: true}`, so
+  dropping `reportUnauthorized` breaks a test rather than passing silently.
+
+Fresh review requested on the fixed head; the earlier status belongs to the
+superseded commit.
