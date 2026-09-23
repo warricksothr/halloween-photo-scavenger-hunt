@@ -1,6 +1,8 @@
-// Resize-text guard (WCAG 1.4.4): the app must stay usable when a player
-// zooms to 200%. That needs the viewport to allow scaling and the type
-// scale to be relative, not pinned to pixels on the root element.
+// Resize-text configuration guard. Text zoom needs the viewport to allow
+// scaling and the type scale to be relative, not pinned to pixels on the
+// root element; both are cheap to assert without a browser. The behaviour
+// at 200% — reflow and operability — is checked against the built app in
+// e2e/resize-text.spec.js, which this does not replace.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +12,7 @@ function read(relative) {
   return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
 }
 
-describe('resize text', () => {
+describe('resize-text configuration', () => {
   it('lets the viewport scale', () => {
     const html = read('../index.html');
     const viewport = html.match(/<meta[^>]+name="viewport"[^>]*>/i)?.[0] ?? '';
