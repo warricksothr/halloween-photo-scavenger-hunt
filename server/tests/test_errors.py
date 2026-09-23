@@ -3,6 +3,7 @@ out (TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0017)."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -253,6 +254,63 @@ def test_internal_error_is_reported_once_with_the_request_id(tmp_path):
     assert len(events) == 1
     assert events[0]["exception"]["values"][0]["type"] == "RuntimeError"
     assert events[0]["tags"]["request_id"] == request_id
+
+
+def test_internal_error_does_not_carry_credential_locals(tmp_path):
+    transport = FakeTransport()
+    errors.init_error_reporting(_config(), transport=transport)
+
+    app = create_app(
+        tmp_path / "locals.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.get("/api/boom-locals")
+    def boom_locals() -> None:  # pragma: no cover - reached via the test client
+        # Built at runtime so the credential is not a literal on the source
+        # line Sentry shows as frame context; only the frame local holds it.
+        join_code = "".join(["SUPERSECRET", "JOINCODE"])  # noqa: F841
+        raise RuntimeError("explode")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        client.get("/api/boom-locals")
+
+    envelopes = _send(errors.sentry_sdk.get_client(), transport)
+    serialized = json.dumps([e.get_event() for e in envelopes], default=str)
+    # The credential is held in a frame local, and locals are not captured,
+    # so it must appear nowhere in what would be sent.
+    assert "SUPERSECRETJOINCODE" not in serialized
+    assert "explode" in serialized
+
+
+def test_scrub_event_drops_stack_frame_locals():
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "type": "RuntimeError",
+                    "value": "explode",
+                    "stacktrace": {
+                        "frames": [
+                            {
+                                "filename": "app/main.py",
+                                "vars": {"invite_token": "SUPERSECRETTOKEN"},
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    }
+
+    cleaned = errors.scrub_event(event)
+
+    frame = cleaned["exception"]["values"][0]["stacktrace"]["frames"][0]
+    assert "vars" not in frame
+    assert frame["filename"] == "app/main.py"
 
 
 def test_create_app_is_inert_without_a_dsn(tmp_path, monkeypatch):

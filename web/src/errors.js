@@ -235,9 +235,13 @@ export function reportError(error, context = {}, requestId = undefined) {
   const id = requestId === undefined ? lastRequestId : requestId;
   sentry.withScope((scope) => {
     if (id) scope.setTag('request_id', id);
-    for (const [key, value] of Object.entries(context)) {
-      if (value !== undefined) scope.setContext(key, value);
-    }
+    // setContext takes a named object, so the scalar fields go in as one
+    // "app" context rather than as a context per field — primitives do not
+    // match the context schema and can be dropped on ingest.
+    const fields = Object.fromEntries(
+      Object.entries(context).filter(([, value]) => value !== undefined),
+    );
+    if (Object.keys(fields).length) scope.setContext('app', fields);
     sentry.captureException(error);
   });
 }

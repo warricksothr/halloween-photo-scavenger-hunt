@@ -259,7 +259,7 @@ describe('error reporting', () => {
     errors.reportError(new Error('boom'), { op: 'boot' });
 
     expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-123');
-    expect(scope.setContext).toHaveBeenCalledWith('op', 'boot');
+    expect(scope.setContext).toHaveBeenCalledWith('app', { op: 'boot' });
     expect(sentryMock.captureException).toHaveBeenCalled();
   });
 });

@@ -13,8 +13,10 @@ request URL, headers, cookies and query string. So ``before_send``,
 ``before_send_transaction`` and ``before_breadcrumb`` run every payload
 through the same path redaction the request log uses
 (``app/logging.py``), and the headers, cookies and query string are dropped
-outright. The request id rides along as a tag so a report and its request
-log line can be matched (ADR 0016).
+outright. Stack-frame locals are never captured
+(``include_local_variables=False``), because a local can hold a credential
+under a name no scrubber can recognise. The request id rides along as a tag
+so a report and its request log line can be matched (ADR 0016).
 
 An unhandled exception is reported once, by Sentry's ASGI middleware, which
 sees the re-raise from Starlette's ``ServerErrorMiddleware``. The global
@@ -176,7 +178,25 @@ def _scrub_exception_value(value: Any) -> Any:
     for key in ("value", "type", "module"):
         if isinstance(value.get(key), str):
             value[key] = scrub_text(value[key])
+    # Belt and braces beside ``include_local_variables=False``: an SDK
+    # version or a hand-built event may still carry frame locals, and one
+    # of them may be a credential. The scrubber cannot judge a local by
+    # name, so they are dropped whole.
+    stacktrace = value.get("stacktrace")
+    if isinstance(stacktrace, dict) and isinstance(stacktrace.get("frames"), list):
+        value["stacktrace"] = {
+            **stacktrace,
+            "frames": [_drop_frame_vars(frame) for frame in stacktrace["frames"]],
+        }
     return value
+
+
+def _drop_frame_vars(frame: Any) -> Any:
+    if not isinstance(frame, dict) or "vars" not in frame:
+        return frame
+    frame = dict(frame)
+    frame.pop("vars", None)
+    return frame
 
 
 def scrub_event(
@@ -266,6 +286,10 @@ def init_error_reporting(
         # browser/Python SDK would post are noise here.
         auto_session_tracking=False,
         attach_stacktrace=True,
+        # A frame's locals can hold a join code, an invite token or a
+        # password, and the scrubber cannot know which names are sensitive.
+        # Frames without locals still name the code path.
+        include_local_variables=False,
         before_send=scrub_event,
         before_send_transaction=scrub_transaction,
         before_breadcrumb=scrub_breadcrumb,
