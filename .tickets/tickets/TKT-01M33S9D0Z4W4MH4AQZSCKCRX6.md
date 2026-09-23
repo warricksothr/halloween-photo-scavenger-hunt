@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T18:47:36Z
+updated_at: 2026-09-23T18:54:31Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -45,8 +45,8 @@ The RUNBOOK's host step is to reverse a strike, but there is no UI for it. Build
 
 ## Acceptance criteria
 
-- [ ] The admin can see a player's strike history and reverse a strike, matching the RUNBOOK host step.
-- [ ] Reversal confirms before applying and reflects the result.
+- [x] The admin can see a player's strike history and reverse a strike, matching the RUNBOOK host step.
+- [x] Reversal confirms before applying and reflects the result.
 
 ## Implementation plan
 
