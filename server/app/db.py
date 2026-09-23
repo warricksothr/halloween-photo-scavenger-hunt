@@ -3,9 +3,12 @@
 Conventions from docs/impl/schema.md:
 
 - Migrations are plain versioned SQL files in ``app/migrations/``, applied
-  in filename order. ``schema_migrations`` records what has run; the files
-  themselves are idempotent (``IF NOT EXISTS``) so a partial record during
-  development is recoverable.
+  in filename order. ``schema_migrations`` records what has run. Each file
+  is applied and recorded in one transaction, so a crash mid-file leaves
+  the version unrecorded and the file is simply retried on next boot —
+  never a schema change without its version row. Migration files must not
+  contain their own transaction control (``BEGIN``/``COMMIT``); the runner
+  owns the transaction (ADR 0022).
 - ``PRAGMA foreign_keys = ON`` and ``PRAGMA journal_mode = WAL`` are
   per-connection settings, not schema — they are set here on every
   connection at open time, not in the SQL files.
@@ -138,11 +141,11 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 def apply_migrations(conn: sqlite3.Connection) -> list[int]:
     """Apply any unapplied migrations in filename order.
 
-    Returns the versions applied by this call. A migration file is
-    applied as one transaction, and its ``schema_migrations`` row is
-    written inside that same transaction — a crash mid-file leaves the
-    version unrecorded, so the file is retried on next boot (safe
-    because every statement is IF NOT EXISTS).
+    Returns the versions applied by this call. Each migration file and its
+    ``schema_migrations`` row are written in a single transaction, so a
+    crash mid-file leaves the version unrecorded and the file is retried
+    on next boot. See ``_apply_one`` for why the transaction has to live
+    inside the script rather than in a ``with conn:`` here.
     """
     applied: list[int] = []
     for path in sorted(MIGRATIONS_DIR.iterdir()):
@@ -160,12 +163,36 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         )
         if already:
             continue
-        sql = path.read_text(encoding="utf-8")
-        with conn:  # executescript + version row commit or roll back together
-            conn.executescript(sql)
-            conn.execute(
-                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
-                (version, int(time.time())),
-            )
+        _apply_one(conn, version, path.read_text(encoding="utf-8"))
         applied.append(version)
     return applied
+
+
+def _apply_one(conn: sqlite3.Connection, version: int, sql: str) -> None:
+    """Apply one migration and record its version in one transaction.
+
+    ``executescript`` commits any open transaction before it runs, so a
+    ``with conn:`` around it would not cover the schema change: the version
+    row would commit in a second transaction, and a crash between the two
+    commits would leave the schema applied but unrecorded. Recovery would
+    then depend on every migration being idempotent, an invariant nothing
+    enforced. An explicit ``BEGIN``/``COMMIT`` inside the script is the
+    only way to hold both in one transaction, because ``executescript``
+    controls transaction handling itself and ignores an outer one. That is
+    why migration files must not contain their own transaction control.
+    """
+    applied_at = int(time.time())
+    script = (
+        "BEGIN;\n"
+        f"{sql}\n"
+        "INSERT INTO schema_migrations (version, applied_at) "
+        f"VALUES ({version}, {applied_at});\n"
+        "COMMIT;"
+    )
+    try:
+        conn.executescript(script)
+    except Exception:
+        # The BEGIN is still open when a statement fails; close it so the
+        # caller's connection is usable and nothing partial is visible.
+        conn.rollback()
+        raise

@@ -15,6 +15,64 @@ def test_migrations_are_idempotent(conn):
     assert db_module.apply_migrations(conn) == []
 
 
+def test_failed_migration_leaves_no_partial_state(tmp_path, monkeypatch):
+    """A migration and its version row are one transaction, so a crash
+    mid-file leaves neither the schema change nor the record. The next
+    boot retries the file and succeeds — the recoverable state the ticket
+    asks for, without relying on the file being idempotent."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    bad = migrations / "0001_init.sql"
+    bad.write_text(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+        "    version INTEGER PRIMARY KEY,\n"
+        "    applied_at INTEGER NOT NULL\n"
+        ");\n"
+        "CREATE TABLE canary (id INTEGER PRIMARY KEY);\n"
+        "INSERT INTO no_such_table VALUES (1);\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "partial.db")
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            db_module.apply_migrations(conn)
+        # The rollback took the CREATE with it: no table, no version row.
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='canary'"
+            ).fetchone()
+            is None
+        )
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table'"
+                " AND name='schema_migrations'"
+            ).fetchone()
+            is None
+        )
+
+        # Next boot: the file is corrected and applies cleanly on the same
+        # connection, because the failed attempt left no trace.
+        bad.write_text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+            "    version INTEGER PRIMARY KEY,\n"
+            "    applied_at INTEGER NOT NULL\n"
+            ");\n"
+            "CREATE TABLE canary (id INTEGER PRIMARY KEY);\n",
+            encoding="utf-8",
+        )
+        assert db_module.apply_migrations(conn) == [1]
+        assert conn.execute("SELECT COUNT(*) AS n FROM canary").fetchone()["n"] == 0
+        assert (
+            conn.execute("SELECT version FROM schema_migrations").fetchone()["version"]
+            == 1
+        )
+    finally:
+        conn.close()
+
+
 def test_foreign_keys_enabled(seeded, conn):
     """FK pragma is on per-connection: a dangling insert is refused."""
     with pytest.raises(sqlite3.IntegrityError):
