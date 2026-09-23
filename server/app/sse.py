@@ -25,6 +25,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app import auth
 
@@ -169,14 +170,22 @@ async def _stream(broker: SseBroker, sub: _Subscriber) -> AsyncIterator[bytes]:
         broker.unsubscribe(sub)
 
 
+def _resolve_sessions(
+    request: Request,
+) -> tuple[auth.ModeratorContext | None, auth.PlayerContext | None]:
+    """Resolve whichever session cookies the request carries. Both lookups
+    read SQLite and may write ``last_seen_at``, so this runs in the
+    threadpool — a reconnect storm must not stall the event loop."""
+    return auth.current_moderator(request), auth.current_player(request)
+
+
 @router.get("/events/stream")
 async def events_stream(request: Request):
     """The one SSE endpoint, role-scoped by whichever session cookie the
     request carries (api.md: one stream per role-scoped session). A
     moderator cookie wins if both are present — the mod console and a
     player tab on the same phone must not confuse the stream."""
-    mod = auth.current_moderator(request)
-    player = auth.current_player(request)
+    mod, player = await run_in_threadpool(_resolve_sessions, request)
     if mod is not None:
         role, event_id, team_id = "moderator", mod.event_id, None
     elif player is not None:
