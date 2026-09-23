@@ -46,6 +46,23 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — Riddle tiles and the strike overlay are operable by
+  keyboard and screen reader.** TKT-01M33RFWVM9NJ94ENMKXAEB40A. The
+  riddle tile (`RiddleList`), the evidence-picker tile (`RiddleDetail`)
+  and the moderator queue row (`ModConsole`) were `<div onClick>`, so
+  they were unreachable by Tab and invisible to assistive tech; they are
+  now `<button type="button">` with accessible names — the tile's name
+  carries the riddle and its state (`copy.screens.riddles.tile`), the
+  evidence option is named by position and exposes `aria-pressed`, and
+  `theme.css` resets the native button chrome so the mock look survives.
+  The strike notice is the app's one modal: it now carries
+  `role="alertdialog"`, `aria-modal`, and a label/description from its
+  own heading and body, moves focus to the acknowledge button on mount,
+  keeps Tab on it, and restores the previous focus on unmount. A global
+  `:focus-visible` outline replaces the suppressed input focus ring in
+  both the player theme and the admin sheet. Resize-text is guarded by
+  `web/src/zoom.test.js` (viewport permits scaling, no fixed px root
+  font-size); the type scale was already rem-based.
 - **2026-09-23 — A dead SSE stream rebuilds, and a terminal phase closes
   it.** TKT-01M33RFWTTQ3P7Y6RRT94BK19P. `store.startStream` handled a
   transient drop (the browser retries, and `onopen` refetches) but did

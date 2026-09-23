@@ -182,10 +182,10 @@ export function ModConsoleScreen({ modEvent, copy }) {
       ) : (
         <div class="panel" style={{ padding: '4px 16px' }}>
           {queue.map((item) => (
-            <div
+            <button
               key={item.id}
+              type="button"
               class="list-row"
-              style={{ cursor: 'pointer' }}
               onClick={() => open(item)}
             >
               <img
@@ -194,12 +194,12 @@ export function ModConsoleScreen({ modEvent, copy }) {
                 loading="lazy"
                 style={{ width: 44, height: 44, flex: 'none', objectFit: 'cover', borderRadius: 'var(--radius)' }}
               />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem' }}>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <span style={{ display: 'block', fontSize: '0.85rem' }}>
                   #{item.riddle.sort_order} — {item.player.display_name}
-                </div>
-                <div class="dim" style={{ fontSize: '0.75rem' }}>{ago(item.created_at)}</div>
-              </div>
+                </span>
+                <span class="dim" style={{ display: 'block', fontSize: '0.75rem' }}>{ago(item.created_at)}</span>
+              </span>
               {item.flag && (
                 <span class="dim" style={{ fontSize: '0.7rem', fontFamily: 'var(--font-head)', letterSpacing: '0.1em', color: 'var(--alert)' }}>
                   ⚠ SHARED?
@@ -210,7 +210,7 @@ export function ModConsoleScreen({ modEvent, copy }) {
                   {item.claimed_by.label.toUpperCase()} IS VIEWING
                 </span>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
