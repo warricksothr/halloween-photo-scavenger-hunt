@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:00:36Z
+updated_at: 2026-09-23T12:01:09Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -107,3 +107,13 @@ floor), 20 deploy checks, 106 web tests, production build.
 route, so `"moderator"` is a permitted value the code never emits. That is a
 latent gap in the moderator session surface, not a drift introduced here, so
 it is left for the session-expiry child (TKT-01M33RFWN).
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:01:09Z
+
+### Review request
+
+- PR: #27 https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/27
+- Head: `be612d226e10b9cef976f797b5b5e513b81f08e1`
+- Base: `a54999550b9fdf607d54e654a3d83a884d5659c5`
+- Request ID: `harden-audit-updates-r1`
+- Run: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/405 (id 22906)
