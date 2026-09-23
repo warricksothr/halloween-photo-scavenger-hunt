@@ -33,6 +33,19 @@ function isAdminPath(pathname) {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+// The moderator surfaces (S9CW): the link (/m/<code>), the bare code
+// form (/mod, where the OIDC callback lands a signed-in moderator), and
+// any deeper path. Matched by segment so a player path like /modify is
+// not swallowed.
+function isModJoinPath(pathname) {
+  return (
+    pathname === '/m' ||
+    pathname.startsWith('/m/') ||
+    pathname === '/mod' ||
+    pathname.startsWith('/mod/')
+  );
+}
+
 // A failed reporter boot must not block the app or surface as an
 // unhandled rejection, so the whole chain settles into refresh().
 function bootReportThenRefresh() {
@@ -91,7 +104,7 @@ function PlayerApp() {
   if (state.phase === 'join') {
     // The mod link is the only other unauthenticated surface; its path
     // decides which join screen shows before any session exists.
-    if (window.location.pathname.startsWith('/m/')) {
+    if (isModJoinPath(window.location.pathname)) {
       return <ModJoinScreen />;
     }
     return <JoinScreen />;

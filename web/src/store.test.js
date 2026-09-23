@@ -22,6 +22,7 @@ import {
   getState,
   join,
   logout,
+  modJoin,
   refresh,
   retry,
   subscribe,
@@ -90,6 +91,17 @@ describe('store', () => {
       snapshot: playerSnapshot,
     });
     expect(FakeEventSource.instances[0].url).toBe('/api/events/stream');
+  });
+
+  it('does not refresh when a mod join has no SSO moderator session', async () => {
+    mocks.api.modJoin.mockResolvedValue({ unauthenticated: true });
+
+    await expect(modJoin('MODCODE1')).resolves.toEqual({ unauthenticated: true });
+
+    expect(mocks.api.modJoin).toHaveBeenCalledWith('MODCODE1');
+    // No session means no snapshot to fetch; the screen starts SSO instead.
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
+    expect(mocks.api.modState).not.toHaveBeenCalled();
   });
 
   it('routes player SSE deltas to subscribers and refreshes the snapshot', async () => {

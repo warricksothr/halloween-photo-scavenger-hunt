@@ -41,6 +41,8 @@ class Action(StrEnum):
     VERDICT_ISSUED = "verdict.issued"
     DUPLICATE_FLAG_RAISED = "duplicate_flag.raised"
     DUPLICATE_FLAG_RESOLVED = "duplicate_flag.resolved"
+    # Moderators (S9CW)
+    MODERATOR_JOINED = "moderator.joined"
     # Conduct (increment 8)
     STRIKE_ISSUED = "strike.issued"
     STRIKE_REVERSED = "strike.reversed"

@@ -21,7 +21,7 @@ from test_mod import _party as mod_party
 from test_teams import _invite, _party
 
 from app import db as db_module
-from app import events, mod, players, submissions, teams
+from app import events, mod, oidc, players, submissions, teams
 from app import evidence as evidence_module
 from app.audit import Action
 from app.main import create_app
@@ -758,7 +758,7 @@ def test_migrated_database_preserves_rows_and_constraints(tmp_path):
     """A copied database can rerun migrations without losing its schema."""
     source_path = tmp_path / "source.db"
     source = db_module.connect(source_path)
-    assert db_module.apply_migrations(source) == [1]
+    assert db_module.apply_migrations(source) == [1, 2]
     source.execute(
         "INSERT INTO event (id, name, join_code, mod_code, created_at)"
         " VALUES ('event-1', 'Persisted Party', 'JOIN1', 'MOD1', 1)"
@@ -931,7 +931,9 @@ def test_upload_after_a_strike_commits_is_rejected(admin, client, monkeypatch):
     )
 
 
-def _join_after_the_event_vanishes(client, monkeypatch, path, payload, event_id):
+def _join_after_the_event_vanishes(
+    client, monkeypatch, path, payload, event_id, *, moderator_subject=None
+):
     """Fire a join that reads the event, delete the event before the join's
     writer transaction runs, and return the response.
 
@@ -939,7 +941,8 @@ def _join_after_the_event_vanishes(client, monkeypatch, path, payload, event_id)
     holding that lock from this thread pins the stale snapshot while the
     event row goes away (a purge that committed after the read). Without
     the writer-side re-check the dependent INSERT fails its event foreign
-    key and surfaces as a server error."""
+    key and surfaces as a server error. ``moderator_subject`` plants the
+    OIDC identity the mod link now requires (S9CW)."""
     observed = _ObservedLock(client.app.state.db_lock)
     monkeypatch.setattr(client.app.state, "db_lock", observed)
     observed.__enter__()
@@ -955,6 +958,16 @@ def _join_after_the_event_vanishes(client, monkeypatch, path, payload, event_id)
         transport = ASGITransport(app=client.app)
         async with AsyncClient(transport=transport, base_url="http://test") as joiner:
             arm_csrf(joiner, client.app)
+            if moderator_subject is not None:
+                token = f"test-identity-{moderator_subject}"
+                client.app.state.oidc_identities[token] = oidc.OidcIdentity(
+                    subject=moderator_subject,
+                    name="Moderator",
+                    email=None,
+                    role="moderator",
+                    expires_at=int(time.time()) + 3600,
+                )
+                joiner.cookies.set(oidc.OIDC_COOKIE_NAME, token)
             join = asyncio.create_task(joiner.post(path, json=payload))
             loop = asyncio.get_running_loop()
             deadline = loop.time() + 5
@@ -1001,6 +1014,7 @@ def test_mod_join_after_the_event_is_purged_is_not_a_500(admin, client, monkeypa
         f"/api/mod/join/{party['mod_code']}",
         {},
         party["event_id"],
+        moderator_subject="mod-purge",
     )
     assert response.status_code == 404, response.text
     assert response.json()["error"] == "bad_mod_code"

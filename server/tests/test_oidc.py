@@ -268,6 +268,65 @@ def test_user_in_neither_group_is_refused(oidc_client, stub):
     assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
 
 
+def test_mod_link_refusal_returns_to_the_screen(oidc_client, stub):
+    """S9CW: a refused mod-link sign-in goes back to /m/<code> with a
+    marker, so the screen renders the refusal instead of a dead-end JSON
+    page. No session is minted and the transaction is single-use."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_authorized"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
+
+
+def test_host_following_a_mod_link_is_told_not_a_moderator(oidc_client, stub):
+    """The host is signed in as host; the mod screen needs to say so rather
+    than loop back into a sign-in they already completed."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_moderator"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME)
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+    assert oidc_client.get("/api/admin/events").status_code == 200
+
+
+def test_refusal_for_a_non_mod_target_stays_json(oidc_client, stub):
+    _, query = start_login(oidc_client, next_path="/admin/events")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "not_authorized"
+
+
+def test_bare_mod_path_with_a_query_still_counts_as_a_mod_surface(oidc_client, stub):
+    """``signInNext()`` keeps query parameters, so ``/mod?x=1`` reaches the
+    callback; the surface test has to look at the path, not the raw target,
+    or the refusal becomes a dead-end JSON 401."""
+    _, query = start_login(oidc_client, next_path="/mod?x=1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = ["some-other-group"]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/mod?x=1&sso=not_authorized"
+
+
+def test_bare_mod_path_with_a_query_marks_the_host(oidc_client, stub):
+    _, query = start_login(oidc_client, next_path="/mod?x=1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/mod?x=1&sso=not_moderator"
+
+
 def test_bad_state_is_rejected(oidc_client, stub):
     _, query = start_login(oidc_client)
     stub.nonce = query["nonce"][0]
@@ -527,7 +586,7 @@ def test_uncorrelated_callback_leaves_the_transaction_cookie(oidc_client, stub):
 @pytest.mark.parametrize(
     ("requested", "expected"),
     [
-        ("/m/MODCODE1", "/m/MODCODE1"),
+        ("/m/MODCODE1", "/m/MODCODE1?sso=not_moderator"),
         ("/admin/events?tab=1", "/admin/events?tab=1"),
         ("//evil.example/steal", "/admin"),
         ("https://evil.example/steal", "/admin"),
@@ -541,6 +600,46 @@ def test_next_is_confined_to_a_same_origin_path(oidc_client, stub, requested, ex
     stub.claims["groups"] = [ADMIN_GROUP]
     response = callback(oidc_client, query)
     assert response.headers["location"] == expected
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("/m/MODCODE1", "/m/MODCODE1?sso=not_authorized"),
+        ("/m/MODCODE1?x=1", "/m/MODCODE1?x=1&sso=not_authorized"),
+        ("/m/MODCODE1?sso=stale", "/m/MODCODE1?sso=not_authorized"),
+        ("/m/MODCODE1?sso=stale&x=1", "/m/MODCODE1?x=1&sso=not_authorized"),
+        ("/m/MODCODE1#help", "/m/MODCODE1?sso=not_authorized#help"),
+        ("/m/MODCODE1?x=1#help", "/m/MODCODE1?x=1&sso=not_authorized#help"),
+    ],
+)
+def test_refusal_marker_lands_in_the_query_not_the_fragment(target, expected):
+    """A marker placed after ``#`` would be a fragment, which the screen's
+    ``URLSearchParams(location.search)`` cannot see; a stale ``sso`` left
+    first would shadow the callback's marker (Terva, PR #26)."""
+    assert oidc._with_marker(target, "not_authorized") == expected
+
+
+def test_a_stale_sso_marker_does_not_shadow_the_callback(oidc_client, stub):
+    """The callback's marker replaces one already in ``next``, so the
+    screen explains the refusal instead of retrying sign-in."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1?sso=stale")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_moderator"
+
+
+def test_fragment_bearing_next_is_dropped_before_it_can_carry_a_marker(
+    oidc_client, stub
+):
+    """``_safe_next`` rejects a raw ``#``, so the login flow cannot build a
+    fragment-bearing target in the first place."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1#help")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [ADMIN_GROUP]
+    response = callback(oidc_client, query)
+    assert response.headers["location"] == "/admin"
 
 
 def test_tokens_codes_and_secret_never_reach_logs_or_audit(oidc_client, stub, caplog):

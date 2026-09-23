@@ -5,6 +5,15 @@ the concrete form of the data model in `docs/design.md` — read that for
 the *why*; this file is the *what*. Every decision deferred here becomes
 a rushed one in increment 1.
 
+Later migrations are additive and stay close to their code:
+
+- `0002_moderator_subject.sql` (S9CW) adds `moderator.subject` and a
+  partial unique index on `(event_id, subject)`. The mod link is a
+  selector, not a credential: joining records the OIDC subject so two
+  visits are one person, and a rejoin reuses the row instead of minting
+  a second moderator. The index is partial because identities minted
+  before S9CW (or by a test) have no subject and must not collide.
+
 Conventions used throughout:
 
 - **IDs are TEXT** (ULIDs or `lower(hex(randomblob(16)))` at insert

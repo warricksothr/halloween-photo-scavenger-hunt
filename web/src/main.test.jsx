@@ -1,4 +1,4 @@
-import { waitFor } from '@testing-library/preact';
+import { screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -22,8 +22,10 @@ vi.mock('./store', () => ({
 vi.mock('./components/Header', () => ({ Header: () => null }));
 vi.mock('./screens/Admin', () => ({ AdminScreen: () => null }));
 vi.mock('./screens/ConnectionError', () => ({ ConnectionErrorScreen: () => null }));
-vi.mock('./screens/Join', () => ({ JoinScreen: () => null }));
-vi.mock('./screens/ModJoin', () => ({ ModJoinScreen: () => null }));
+vi.mock('./screens/Join', () => ({ JoinScreen: () => <div data-testid="join" /> }));
+vi.mock('./screens/ModJoin', () => ({
+  ModJoinScreen: () => <div data-testid="mod-join" />,
+}));
 vi.mock('./screens/TeamJoin', () => ({ TeamJoinScreen: () => null }));
 vi.mock('./screens/ModConsole', () => ({ ModConsoleScreen: () => null }));
 vi.mock('./screens/Lobby', () => ({ LobbyScreen: () => null }));
@@ -38,6 +40,7 @@ describe('app entry', () => {
   beforeEach(() => {
     vi.resetModules();
     mocks.initErrorReporting.mockClear();
+    mocks.getState.mockReturnValue({ phase: 'booting' });
     document.body.innerHTML = '<div id="app"></div>';
   });
 
@@ -54,5 +57,15 @@ describe('app entry', () => {
     // The admin console is a separate document; it must not boot the store.
     expect(mocks.subscribe).not.toHaveBeenCalled();
     expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it('routes the bare /mod path to the moderator join screen', async () => {
+    window.history.replaceState({}, '', '/mod');
+    mocks.getState.mockReturnValue({ phase: 'join' });
+
+    await import('./main.jsx');
+
+    await waitFor(() => expect(screen.getByTestId('mod-join')).toBeTruthy());
+    expect(screen.queryByTestId('join')).toBeNull();
   });
 });
