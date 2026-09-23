@@ -16,7 +16,11 @@ dependencies = [
     # 1.x's TestClient uses. Pinning it explicitly avoids authlib's
     # deprecated fallback to the original httpx package.
     "httpx2>=2.0,<3.0",
-    "sentry-sdk>=2.0",
+    # Error and trace reporting (app/errors.py). GlitchTip implements the
+    # Sentry ingest protocol, and the `fastapi` extra carries the ASGI
+    # integration that opens a transaction per request. Inert unless
+    # ARKHAM_ERROR_DSN is set (ADR 0018).
+    "sentry-sdk[fastapi]>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]

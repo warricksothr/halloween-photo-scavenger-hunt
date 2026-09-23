@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
+import { initErrorReporting } from './errors';
 import { getState, refresh, retry, subscribe } from './store';
 import { Header } from './components/Header';
 import { AdminScreen } from './screens/Admin';
@@ -25,16 +26,32 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // /admin is the one exception, and the path decides before the store
 // exists: the host console is a separate document (a fresh page load, no
 // client-side router), so it must not boot the player store or pull in a
-// theme pack. App stays hook-free — the hooks live in PlayerApp — so the
-// switch cannot break the rules of hooks. The match is by path segment:
-// `/administrator` is a player path, not the console.
+// theme pack. App stays hook-free — the hooks live in the two branches —
+// so the switch cannot break the rules of hooks. The match is by path
+// segment: `/administrator` is a player path, not the console.
 function isAdminPath(pathname) {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+// A failed reporter boot must not block the app or surface as an
+// unhandled rejection, so the whole chain settles into refresh().
+function bootReportThenRefresh() {
+  initErrorReporting().then(refresh, refresh);
+}
+
+// The admin console is a separate document, so it does not boot the
+// player store — but it must still report its own errors, and the
+// reporter boot is the same idempotent call the player path makes.
+function AdminBoot() {
+  useEffect(() => {
+    initErrorReporting();
+  }, []);
+  return <AdminScreen />;
+}
+
 function App() {
   if (isAdminPath(window.location.pathname)) {
-    return <AdminScreen />;
+    return <AdminBoot />;
   }
   return <PlayerApp />;
 }
@@ -44,7 +61,12 @@ function PlayerApp() {
 
   useEffect(() => {
     const unsubscribe = subscribe(setState);
-    refresh(); // boot: the snapshot decides everything
+    // Boot the reporter before the first request so a failure on boot is
+    // reported; without a DSN this loads nothing and refresh starts at
+    // once. With a DSN the SDK import is awaited first: a boot failure
+    // that fired before Sentry's global handlers were installed would go
+    // unreported, which is the whole point of starting here.
+    bootReportThenRefresh();
     return unsubscribe;
   }, []);
 

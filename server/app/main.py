@@ -168,10 +168,13 @@ def create_app(
     # uvicorn's own raw-path access line dropped (app/logging.py).
     configure_logging()
 
-    # Error reporting is inert unless ARKHAM_ERROR_DSN is set, so local
-    # runs and tests never send an event (app/errors.py). The DSN is
-    # read here, not at import, so a deploy can set it per process.
-    errors.init_error_reporting(os.environ.get("ARKHAM_ERROR_DSN"))
+    # Install the error/trace reporter before the app and its routes are
+    # built: the FastAPI integration patches the route handler factory, so
+    # it only sees routes created afterwards. Inert unless
+    # ARKHAM_ERROR_DSN is set, so local runs and tests never send an event
+    # (app/errors.py). The env is read here, not at import, so a deploy can
+    # set it per process.
+    errors.init_error_reporting()
 
     app = FastAPI(title="Arkham Hunt", lifespan=lifespan)
 
@@ -189,6 +192,10 @@ def create_app(
             include_message=not getattr(request.state, "safe_traceback", False),
         )
         request_id = getattr(request.state, "request_id", None)
+        # Tag the scope rather than report here: ServerErrorMiddleware
+        # re-raises after this handler returns, and Sentry's ASGI
+        # middleware captures exactly one event from that re-raise.
+        errors.bind_request_id(request_id)
         body: dict[str, str] = {
             "error": "internal_error",
             "message": "Something went wrong.",

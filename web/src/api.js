@@ -47,6 +47,10 @@ async function send(path, options = {}) {
     () => controller.abort(),
     isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
   );
+  // The id of THIS response, carried on the result so a caller reports
+  // under its own request. There is no shared global to overwrite, so
+  // concurrent requests cannot cross-tag.
+  let responseId = null;
   try {
     const resp = await fetch(path, {
       headers,
@@ -54,6 +58,9 @@ async function send(path, options = {}) {
       body: init.body && !isForm ? JSON.stringify(init.body) : init.body,
       signal: controller.signal,
     });
+    // The request id is the join key to this request's server log line and
+    // error report, so a browser error can name the same request (ADR 0016).
+    responseId = resp.headers?.get?.('X-Request-ID') ?? null;
     if (resp.status === 401 && !reportUnauthorized) {
       // Not joined (or session revoked) — the store routes to the join
       // screen; it is not an error from the player's point of view.
@@ -76,10 +83,10 @@ async function send(path, options = {}) {
       bodyMalformed = true;
     }
     if (!resp.ok) {
-      return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status };
+      return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status, requestId: responseId };
     }
     if (bodyMalformed) {
-      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status };
+      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status, requestId: responseId };
     }
     return body;
   } catch {
@@ -87,7 +94,7 @@ async function send(path, options = {}) {
     // dead one never settles until the timeout aborts it. Fold both into
     // the same error shape the rest of the client branches on, so callers
     // never see a rejection and a waiting screen cannot stay busy forever.
-    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true };
+    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true, requestId: null };
   } finally {
     clearTimeout(timer);
   }

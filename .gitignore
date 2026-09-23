@@ -26,3 +26,6 @@ node_modules/
 web/dist/
 web/.playwright-results/
 .deploy-smoke-results/
+# Local error-reporting DSN for a dev build (Vite reads web/.env.local).
+web/.env.local
+web/.env.*.local

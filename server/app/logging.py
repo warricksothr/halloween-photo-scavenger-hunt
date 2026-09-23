@@ -48,17 +48,18 @@ _redacted_path: ContextVar[str | None] = ContextVar(
 _INBOUND_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 # Routes whose bearer segment is a join code, a mod code, or an invite
-# token. The SPA links ``/j/<code>`` and ``/m/<code>`` are here too: a QR
-# link hits uvicorn directly, so they leak in an access log just as the
-# API does. Matched by prefix, not by the exact route: a trailing slash or
-# an unexpected suffix still reaches the middleware, and a malformed
-# request must not leak its credential.
+# token. The SPA links ``/j/<code>``, ``/m/<code>`` and ``/t/<token>``
+# are here too: a QR or invite link hits uvicorn directly, so they leak
+# in an access log just as the API does. Matched by prefix, not by the
+# exact route: a trailing slash or an unexpected suffix still reaches the
+# middleware, and a malformed request must not leak its credential.
 _CODE_PREFIXES = (
     "/api/join",
     "/api/mod/join",
     "/api/team/invites",
     "/j",
     "/m",
+    "/t",
 )
 
 # Media types whose text the exception scrubber reads. A photo upload is

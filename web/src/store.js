@@ -7,6 +7,7 @@
 // server-owned data.
 import { api } from './api';
 import { loadTheme } from './theme';
+import { reportError } from './errors';
 
 const state = {
   phase: 'booting', // booting | join | ready | error
@@ -119,6 +120,29 @@ async function withRetry(request) {
   return result;
 }
 
+// A failure the player cannot act on — a dead connection or a server fault —
+// is a bug worth a report; a 4xx is the game telling the player something and
+// is not. A 5xx the app answered carries a request id and the server already
+// captured its own event for it, with the real stack, so the browser reports
+// only the 5xx that has no id: one a proxy or a network boundary produced,
+// which no server event describes. The result carries its own request id, so
+// concurrent requests cannot cross-tag. Reporting is inert with no DSN
+// (errors.js).
+function reportFailure(result, context) {
+  const serverAlreadyReported = result.status >= 500 && result.requestId != null;
+  if (result.network || (result.status >= 500 && !serverAlreadyReported)) {
+    reportError(
+      new Error(result.message || 'request failed'),
+      {
+        ...context,
+        error_code: result.error ?? 'unknown',
+        http_status: result.status ?? null,
+      },
+      result.requestId ?? null,
+    );
+  }
+}
+
 // The resync point. Called on boot, after every mutation, and on SSE
 // deltas (increment 7). Role detection: the player snapshot 401s for a
 // mod-only cookie, so a 401 means "try the moderator probe" before
@@ -143,6 +167,7 @@ export async function refresh() {
     if (mod.error) {
       // The probe failed too, so this is a connection problem, not an
       // unauthenticated visitor — do not drop them on the join screen.
+      reportFailure(mod, { where: 'refresh.modState' });
       set({ phase: 'error', error: mod.message });
       return;
     }
@@ -163,6 +188,7 @@ export async function refresh() {
     return;
   }
   if (result.error) {
+    reportFailure(result, { where: 'refresh.snapshot' });
     set({ phase: 'error', error: result.message });
     return;
   }
@@ -186,14 +212,20 @@ export function retry() {
 
 export async function modJoin(modCode) {
   const result = await api.modJoin(modCode);
-  if (result.error) return result; // the mod join screen shows the message
+  if (result.error) {
+    reportFailure(result, { where: 'modJoin' });
+    return result; // the mod join screen shows the message
+  }
   await refresh();
   return result;
 }
 
 export async function join(joinCode, displayName, deviceLabel) {
   const result = await api.join(joinCode, displayName, deviceLabel);
-  if (result.error) return result; // the join screen shows the message
+  if (result.error) {
+    reportFailure(result, { where: 'join' });
+    return result; // the join screen shows the message
+  }
   await refresh();
   return result;
 }

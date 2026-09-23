@@ -37,6 +37,13 @@ when the increment runs and its tests pass.
 - [x] Team invites + roster + multi-member drawers
 - [x] Moderator team management
 
+## Phase 4 — Observability
+
+- [x] Request-ID structured logging and path redaction (ADR 0016)
+- [x] Error and trace reporting to self-hosted GlitchTip (ADR 0018)
+- [ ] Readiness/metrics surface
+- [ ] `?debug=1` diagnostics overlay
+
 ## Notes / blockers
 
 - **2026-09-22 — The admin console shell exists at `/admin`.** TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0.
@@ -102,6 +109,24 @@ when the increment runs and its tests pass.
   stays off. `sentry-sdk>=2.0` added, with `uv.lock` and
   `server/requirements.lock` regenerated together. 329 server tests pass;
   coverage 95.23%.
+
+- **2026-09-22 — Error and trace reporting to self-hosted GlitchTip.**
+  TKT-01M35T4X7NSYTE036FN9E159XR, ADR 0018. Both surfaces report to
+  `https://glitchtip.nulloctet.com`, which speaks the Sentry ingest
+  protocol; the planned Bugsink sidecar is dropped (the epic's Bugsink
+  shape tickets are superseded). Inert without a DSN: the server installs
+  no client without `ARKHAM_ERROR_DSN`, and the web only imports
+  `@sentry/browser` when `VITE_ERROR_DSN` is set, so the SDK stays out of
+  the entry bundle. An unhandled 500 is captured once by Sentry's ASGI
+  middleware — the global `Exception` handler runs first and only tags the
+  scope with the request id (`bind_request_id`), because reporting from the
+  handler as well produced two events per 500. Scrubbers reuse the ADR
+  0016 `redact_path` list (now including `/t`, the invite surface) and drop
+  headers, cookies, `data`, `env` and query string; `transaction_style`
+  is `endpoint` so a join code never becomes a transaction name. nginx CSP
+  `connect-src` gains the GlitchTip origin, and the deployment CSP guard
+  test moves with it. Deploy wiring: systemd/compose env, Containerfile
+  build args. 330 server tests, 51 frontend tests, 95% branch coverage.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

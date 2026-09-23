@@ -19,6 +19,20 @@
 # `podman images --digests` after a pull prints the index digest.
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS web
 WORKDIR /build/web
+# The browser SDK's DSN is baked into the bundle at build time (Vite
+# inlines VITE_* env), not read at run time. Empty means the web app is
+# inert (web/src/errors.js). Pass it with
+# `--build-arg VITE_ERROR_DSN=...`; compose.yml forwards it. This is a
+# public ingest key, not a secret, but an image is shared, so the
+# operator sets the real one at build.
+ARG VITE_ERROR_DSN=""
+ARG VITE_TRACES_SAMPLE_RATE="0.1"
+ARG VITE_ERROR_ENVIRONMENT=""
+ARG VITE_ERROR_RELEASE=""
+ENV VITE_ERROR_DSN=$VITE_ERROR_DSN \
+    VITE_TRACES_SAMPLE_RATE=$VITE_TRACES_SAMPLE_RATE \
+    VITE_ERROR_ENVIRONMENT=$VITE_ERROR_ENVIRONMENT \
+    VITE_ERROR_RELEASE=$VITE_ERROR_RELEASE
 # Lockfile first so dependency layers cache across source-only changes.
 COPY web/package.json web/package-lock.json ./
 RUN npm ci

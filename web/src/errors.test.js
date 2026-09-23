@@ -1,0 +1,496 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// @sentry/browser is only imported when a DSN is set; the mock stands in
+// for the real SDK so nothing reaches the network.
+const sentryMock = {
+  init: vi.fn(),
+  withScope: vi.fn(),
+  captureException: vi.fn(),
+  browserTracingIntegration: vi.fn(() => ({ name: 'BrowserTracing' })),
+};
+vi.mock('@sentry/browser', () => sentryMock);
+
+async function loadErrors({ dsn, tracesSampleRate } = {}) {
+  vi.resetModules();
+  if (dsn) vi.stubEnv('VITE_ERROR_DSN', dsn);
+  else vi.stubEnv('VITE_ERROR_DSN', '');
+  if (tracesSampleRate !== undefined) {
+    vi.stubEnv('VITE_TRACES_SAMPLE_RATE', tracesSampleRate);
+  }
+  return import('./errors');
+}
+
+describe('error reporting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sentryMock.withScope.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('stays inert without a DSN', async () => {
+    const errors = await loadErrors();
+
+    await expect(errors.initErrorReporting()).resolves.toBe(false);
+    expect(sentryMock.init).not.toHaveBeenCalled();
+  });
+
+  it('initializes the SDK, with sessions off, when a DSN is set', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+
+    await expect(errors.initErrorReporting()).resolves.toBe(true);
+    expect(sentryMock.init).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dsn: 'https://key@glitchtip.example/1',
+        autoSessionTracking: false,
+        sendDefaultPii: false,
+      }),
+    );
+  });
+
+  it('installs browser tracing so transactions are created', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+
+    await errors.initErrorReporting();
+
+    expect(sentryMock.browserTracingIntegration).toHaveBeenCalled();
+    const config = sentryMock.init.mock.calls[0][0];
+    expect(config.integrations).toContainEqual({ name: 'BrowserTracing' });
+  });
+
+  it('falls back when the trace rate is outside 0-1', async () => {
+    const errors = await loadErrors({
+      dsn: 'https://key@glitchtip.example/1',
+      tracesSampleRate: '2',
+    });
+
+    await errors.initErrorReporting();
+
+    expect(sentryMock.init.mock.calls[0][0].tracesSampleRate).toBe(0.1);
+  });
+
+  it('stays retryable when initialization throws', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    sentryMock.init.mockImplementationOnce(() => {
+      throw new Error('bad rate');
+    });
+
+    await expect(errors.initErrorReporting()).resolves.toBe(false);
+
+    await expect(errors.initErrorReporting()).resolves.toBe(true);
+    expect(sentryMock.init).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a failed SDK import instead of latching reporting off', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_ERROR_DSN', 'https://key@glitchtip.example/1');
+    let attempts = 0;
+    vi.doMock('@sentry/browser', () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('chunk failed to load');
+      return sentryMock;
+    });
+    const errors = await import('./errors');
+
+    await expect(errors.initErrorReporting()).resolves.toBe(false);
+    expect(sentryMock.init).not.toHaveBeenCalled();
+
+    await expect(errors.initErrorReporting()).resolves.toBe(true);
+    expect(sentryMock.init).toHaveBeenCalledTimes(1);
+    vi.doMock('@sentry/browser', () => sentryMock);
+  });
+
+  it('reports under an explicit request id', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    await errors.initErrorReporting();
+
+    const scope = { setTag: vi.fn(), setContext: vi.fn() };
+    sentryMock.withScope.mockImplementation((fn) => fn(scope));
+
+    errors.reportError(new Error('boom'), { where: 'join' }, 'req-own');
+
+    expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-own');
+  });
+
+  it('never tags an auto-captured event with a request id', async () => {
+    // Concurrent requests make any shared id ambiguous, so an event the
+    // SDK captured on its own (no explicit report) carries no request_id
+    // rather than the id of whichever response settled last.
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({ tags: {} });
+
+    expect(event.tags.request_id).toBeUndefined();
+  });
+
+  it('leaves an event untagged when no request id is passed', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    await errors.initErrorReporting();
+
+    const scope = { setTag: vi.fn(), setContext: vi.fn() };
+    sentryMock.withScope.mockImplementation((fn) => fn(scope));
+
+    errors.reportError(new Error('network'), { op: 'state' }, null);
+
+    expect(scope.setTag).not.toHaveBeenCalled();
+  });
+
+  it('scrubs a credential path out of a request URL', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: { url: 'https://hunt.example/api/join/SECRET?t=1' },
+    });
+
+    expect(event.request.url).toBe('https://hunt.example/api/join/<redacted>');
+  });
+
+  it('drops url user-info from a request URL and from prose', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: { url: 'https://key@hunt.example/api/state' },
+      message: 'post to https://user:pass@hunt.example/api/state failed',
+    });
+
+    expect(event.request.url).toBe('https://hunt.example/api/state');
+    expect(event.message).toBe('post to https://hunt.example/api/state failed');
+  });
+
+  it('drops a query or fragment on a host-only URL', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: { url: 'https://key@hunt.example?token=SECRET' },
+      message: 'see https://hunt.example#SECRET',
+    });
+
+    expect(event.request.url).toBe('https://hunt.example');
+    expect(event.message).toBe('see https://hunt.example');
+  });
+
+  it('drops headers, cookies and query string from the request', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      request: {
+        url: 'https://hunt.example/api/state',
+        headers: { Cookie: 'session=leak' },
+        cookies: 'session=leak',
+        query_string: 'token=leak',
+        env: { SECRET: 'leak' },
+        data: 'leak',
+      },
+    });
+
+    expect(event.request.headers).toBeUndefined();
+    expect(event.request.cookies).toBeUndefined();
+    expect(event.request.query_string).toBeUndefined();
+    expect(event.request.env).toBeUndefined();
+    expect(event.request.data).toBeUndefined();
+  });
+
+  it('redacts the credential in a transaction name', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      transaction: 'GET /api/team/invites/SECRET',
+    });
+
+    expect(event.transaction).toBe('GET /api/team/invites/<redacted>');
+  });
+
+  it('redacts a credential inside an absolute URL in a transaction name', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      transaction: 'GET https://hunt.example/api/join/SECRET',
+    });
+
+    expect(event.transaction).toBe(
+      'GET https://hunt.example/api/join/<redacted>',
+    );
+  });
+
+  it('reaches a path wrapped in prose, quoting, or a newline', async () => {
+    const errors = await loadErrors();
+
+    expect(
+      errors.scrubEvent({ message: "request to '/api/join/SECRET' failed" })
+        .message,
+    ).toBe("request to '/api/join/<redacted>' failed");
+    expect(errors.scrubEvent({ message: 'url=/api/join/SECRET,' }).message).toBe(
+      'url=/api/join/<redacted>,',
+    );
+    expect(
+      errors.scrubEvent({ message: 'GET\n/api/join/SECRET\nfailed' }).message,
+    ).toBe('GET\n/api/join/<redacted>\nfailed');
+  });
+
+  it('drops a query or fragment on an ordinary path', async () => {
+    const errors = await loadErrors();
+
+    expect(
+      errors.scrubEvent({ message: 'request failed at /api/state?token=SECRET' })
+        .message,
+    ).toBe('request failed at /api/state');
+    expect(
+      errors.scrubEvent({ message: 'see /some/path#credential for detail' })
+        .message,
+    ).toBe('see /some/path for detail');
+    expect(
+      errors.scrubEvent({
+        message: 'GET https://hunt.example/api/state?token=SECRET',
+      }).message,
+    ).toBe('GET https://hunt.example/api/state');
+  });
+
+  it('redacts span descriptions and URL-shaped span data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      spans: [
+        {
+          description: 'GET /m/SECRET',
+          data: { url: 'https://hunt.example/j/SECRET' },
+        },
+      ],
+    });
+
+    expect(event.spans[0].description).toBe('GET /m/<redacted>');
+    expect(event.spans[0].data.url).toBe('https://hunt.example/j/<redacted>');
+  });
+
+  it('drops a query or fragment in span data under any key', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      spans: [
+        {
+          data: {
+            path: '/api/state?token=SECRET',
+            'http.url': 'https://hunt.example/api/state?x=1',
+            note: 'see /some/path#credential',
+          },
+        },
+      ],
+    });
+
+    expect(event.spans[0].data.path).toBe('/api/state');
+    expect(event.spans[0].data['http.url']).toBe('https://hunt.example/api/state');
+    expect(event.spans[0].data.note).toBe('see /some/path');
+  });
+
+  it('drops nested credential-bearing keys from span data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      spans: [
+        {
+          data: {
+            response: {
+              headers: { 'Set-Cookie': 'session=abc' },
+              url: 'https://hunt.example/api/state?token=SECRET',
+            },
+            request: { cookies: { session: 'abc' }, env: { SECRET: 'x' } },
+            query_string: 'token=SECRET',
+          },
+        },
+      ],
+    });
+
+    const data = event.spans[0].data;
+    expect(data.response.headers).toBeUndefined();
+    expect(data.response.url).toBe('https://hunt.example/api/state');
+    expect(data.request.cookies).toBeUndefined();
+    expect(data.request.env).toBeUndefined();
+    expect(data.query_string).toBeUndefined();
+  });
+
+  it('scrubs a bearer path embedded in prose in span and breadcrumb data', async () => {
+    const errors = await loadErrors();
+
+    const transaction = errors.scrubTransaction({
+      spans: [{ data: { note: 'request to /api/join/SECRET failed' } }],
+    });
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [{ message: 'x', data: { note: 'see /t/TOKEN now' } }],
+      },
+    });
+
+    expect(transaction.spans[0].data.note).toBe(
+      'request to /api/join/<redacted> failed',
+    );
+    expect(event.breadcrumbs.values[0].data.note).toBe('see /t/<redacted> now');
+  });
+
+  it('redacts the credential in breadcrumb messages and data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            message: 'navigated to /t/SECRET',
+            data: { from: '/j/SECRET' },
+          },
+        ],
+      },
+    });
+
+    expect(event.breadcrumbs.values[0].message).toBe('navigated to /t/<redacted>');
+    expect(event.breadcrumbs.values[0].data.from).toBe('/j/<redacted>');
+  });
+
+  it('drops credential-bearing keys from breadcrumb data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            message: 'http',
+            data: {
+              url: 'https://hunt.example/api/join/SECRET',
+              headers: { Cookie: 'session=abc' },
+              cookies: { session: 'abc' },
+              data: { password: 'hunter2' },
+              env: { SECRET: 'leak' },
+              query_string: 'token=SECRET',
+              response: { headers: { 'Set-Cookie': 'session=abc' } },
+              keep: 'fine',
+            },
+          },
+        ],
+      },
+    });
+
+    const data = event.breadcrumbs.values[0].data;
+    expect(data.url).toBe('https://hunt.example/api/join/<redacted>');
+    for (const key of ['headers', 'cookies', 'data', 'env', 'query_string']) {
+      expect(data[key]).toBeUndefined();
+    }
+    expect(data.response.headers).toBeUndefined();
+    expect(data.keep).toBe('fine');
+  });
+
+  it('redacts a top-level breadcrumb URL and drops its sensitive keys', async () => {
+    // A navigation breadcrumb carries the URL it navigated to at the top
+    // level, not only inside `data`, and its own headers/cookies — the
+    // same fields scrubRequest drops. Only the `data` payload is recursed
+    // into rather than deleted.
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            category: 'navigation',
+            url: 'https://hunt.example/m/MODCODE?invite=tok123',
+            query_string: 'invite=tok123',
+            headers: { Cookie: 'arkham_player=SESSIONVALUE' },
+            cookies: { arkham_player: 'SESSIONVALUE' },
+            env: { SECRET: 'leak' },
+            data: { to: '/j/JOINCODE' },
+          },
+        ],
+      },
+    });
+
+    const crumb = event.breadcrumbs.values[0];
+    expect(crumb.url).toBe('https://hunt.example/m/<redacted>');
+    for (const key of ['headers', 'cookies', 'env', 'query_string']) {
+      expect(crumb[key]).toBeUndefined();
+    }
+    expect(crumb.data.to).toBe('/j/<redacted>');
+  });
+
+  it('redacts a bearer path inside a Set or Map in breadcrumb data', async () => {
+    // A Set or Map is neither an Array nor a plain object: Object.entries
+    // on one yields nothing, so the values must be walked explicitly or
+    // the credential rides out unscrubbed.
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            data: {
+              attempts: new Set(['/api/join/SECRET']),
+              tokens: new Map([['t', '/t/TOKEN']]),
+            },
+          },
+        ],
+      },
+    });
+
+    const data = event.breadcrumbs.values[0].data;
+    expect(data.attempts).toEqual(['/api/join/<redacted>']);
+    expect(data.tokens).toEqual([['t', '/t/<redacted>']]);
+  });
+
+  it('redacts a credential inside an absolute URL in a breadcrumb message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [{ message: 'GET https://hunt.example/j/SECRET' }],
+      },
+    });
+
+    expect(event.breadcrumbs.values[0].message).toBe(
+      'GET https://hunt.example/j/<redacted>',
+    );
+  });
+
+  it('redacts a credential in a top-level event message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({ message: 'GET /api/join/SECRET failed' });
+
+    expect(event.message).toBe('GET /api/join/<redacted> failed');
+  });
+
+  it('redacts a credential inside an exception message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      exception: {
+        values: [
+          { type: 'TypeError', value: 'GET /api/join/SECRET failed' },
+        ],
+      },
+      logentry: { message: 'GET https://hunt.example/t/SECRET failed' },
+    });
+
+    expect(event.exception.values[0].value).toBe('GET /api/join/<redacted> failed');
+    expect(event.logentry.message).toBe(
+      'GET https://hunt.example/t/<redacted> failed',
+    );
+  });
+
+  it('drops the user IP from an event', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({ user: { ip_address: '1.2.3.4' } });
+
+    expect(event.user.ip_address).toBeUndefined();
+  });
+
+  it('reports a caught error with the app context and the caller id', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    await errors.initErrorReporting();
+
+    const scope = { setTag: vi.fn(), setContext: vi.fn() };
+    sentryMock.withScope.mockImplementation((fn) => fn(scope));
+
+    errors.reportError(new Error('boom'), { op: 'boot' }, 'req-123');
+
+    expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-123');
+    expect(scope.setContext).toHaveBeenCalledWith('app', { op: 'boot' });
+    expect(sentryMock.captureException).toHaveBeenCalled();
+  });
+});

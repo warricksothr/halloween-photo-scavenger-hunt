@@ -23,12 +23,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T05:23:13Z
+updated_at: 2026-09-23T00:20:31Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/glitchtip-integration
   name: ""
 extensions: {}
 ---
@@ -43,3 +43,9 @@ Run Bugsink on the same VPS as a loopback-bound compose service behind nginx wit
 - [ ] Server and PWA errors both arrive, grouped, with request ids, and carry no bearer codes or cookies.
 - [ ] Retention and ingestion limits are set for a one-night event.
 - [ ] The app still starts and serves when Bugsink is down.
+
+## Notes
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T00:20:31Z
+
+Obsolete as written: GlitchTip is hosted, not a sidecar. TKT-01M35T4X7NSYTE036FN9E159XR wires the DSNs instead of deploying Bugsink.

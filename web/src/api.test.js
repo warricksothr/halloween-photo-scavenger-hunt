@@ -2,10 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from './api';
 
-function response({ status = 200, body = {}, json = true } = {}) {
+function response({ status = 200, body = {}, json = true, requestId } = {}) {
   return {
     status,
     ok: status >= 200 && status < 300,
+    headers: {
+      get: vi.fn((name) =>
+        name === 'X-Request-ID' ? requestId ?? null : null,
+      ),
+    },
     json: json
       ? vi.fn().mockResolvedValue(body)
       : vi.fn().mockRejectedValue(new SyntaxError('not JSON')),
@@ -40,6 +45,7 @@ describe('api client', () => {
       error: 'request_failed',
       message: 'Something went wrong.',
       status: 502,
+      requestId: null,
     });
   });
 
@@ -55,6 +61,7 @@ describe('api client', () => {
       error: 'submission_pending',
       message: 'Already scanning.',
       status: 409,
+      requestId: null,
     });
   });
 
@@ -73,6 +80,7 @@ describe('api client', () => {
       error: 'bad_credentials',
       message: 'Wrong username or password.',
       status: 401,
+      requestId: null,
     });
 
     fetchMock.mockResolvedValueOnce(response({ status: 401, body: {} }));
@@ -86,6 +94,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -105,6 +114,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
     vi.useRealTimers();
   });
@@ -129,6 +139,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
     vi.useRealTimers();
   });
@@ -144,6 +155,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -158,6 +170,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -213,6 +226,32 @@ describe('api client', () => {
     );
   });
 
+  it('carries the response X-Request-ID on an error result', async () => {
+    // The error result owns the id; the store hands it to reportError, so
+    // a browser error correlates without any shared module state.
+    globalThis.fetch.mockResolvedValue(
+      response({
+        status: 502,
+        body: { error: 'upstream', message: 'Bad gateway.' },
+        requestId: 'req-123',
+      }),
+    );
+
+    await expect(api.snapshot()).resolves.toMatchObject({
+      status: 502,
+      requestId: 'req-123',
+    });
+  });
+
+  it('reports a network failure with a null request id', async () => {
+    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(api.snapshot()).resolves.toMatchObject({
+      network: true,
+      requestId: null,
+    });
+  });
+
   it('returns the second csrf_failed rather than retrying forever', async () => {
     const fetchMock = globalThis.fetch;
     fetchMock.mockResolvedValue(
@@ -223,6 +262,7 @@ describe('api client', () => {
       error: 'csrf_failed',
       message: 'stale',
       status: 403,
+      requestId: null,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

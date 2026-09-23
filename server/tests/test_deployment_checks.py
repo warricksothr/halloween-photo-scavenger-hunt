@@ -157,7 +157,8 @@ def test_nginx_https_block_sends_security_headers():
         "default-src 'self'; script-src 'self' 'unsafe-inline';"
         " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
         " font-src 'self' https://fonts.gstatic.com; img-src 'self';"
-        " connect-src 'self'; worker-src 'self'; manifest-src 'self';"
+        " connect-src 'self' https://glitchtip.nulloctet.com;"
+        " worker-src 'self'; manifest-src 'self';"
         " object-src 'none'; base-uri 'self'; form-action 'self';"
         " frame-ancestors 'none'"
     )
