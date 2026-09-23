@@ -63,7 +63,7 @@ lever, and it is needed before the demo seeder's fixture can validate.
 - Tests: create with and without a hint, patch sets and clears it,
   player state carries it, and an over-long hint is rejected.
 
-### Acceptance criteria
+## Acceptance criteria
 
 - [ ] A riddle created without a hint behaves exactly as today; the
         payload carries `hint: null`.
