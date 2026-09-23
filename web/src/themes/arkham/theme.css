@@ -46,6 +46,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Keyboard focus must stay visible. The tiles and queue rows are real
+ * buttons now; the theme's dark palette swallows the native ring, so
+ * every focusable control gets the bright cyan cue. */
+:focus-visible {
+  outline: 2px solid var(--cyan-bright);
+  outline-offset: 2px;
+}
+
 body {
   background: var(--bg-deep);
   color: var(--text);
@@ -264,6 +272,15 @@ body {
   cursor: pointer;
 }
 
+/* The tile is a <button> for keyboard and screen readers; keep the mock's
+ * look and drop the native chrome. Border and background stay from .tile. */
+button.tile {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  appearance: none;
+}
+
 .tile .glyph-q {
   font-family: var(--font-num);
   font-size: 2rem;
@@ -341,7 +358,8 @@ body {
   font-size: 1rem;
 }
 
-.field input:focus { outline: none; border-color: var(--cyan); }
+.field input:focus { border-color: var(--cyan); }
+.field input:focus:not(:focus-visible) { outline: none; }
 
 /* ── Lists / panels ──────────────────────────────────────────────── */
 
@@ -350,6 +368,20 @@ body {
   border: var(--rule);
   border-radius: var(--radius);
   padding: 14px 16px;
+}
+
+/* The queue row is a <button> for keyboard and screen readers; the reset
+ * keeps the flex layout and the rule between rows. */
+button.list-row {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: var(--rule);
+  appearance: none;
+  cursor: pointer;
 }
 
 .list-row {

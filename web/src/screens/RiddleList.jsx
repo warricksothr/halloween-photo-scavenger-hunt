@@ -17,7 +17,8 @@ export function RiddleListScreen({ snapshot, copy, onOpenRiddle }) {
         </span>
       </h1>
 
-      <div class="progress-strip" style={{ marginBottom: 8 }}>
+      {/* The solved count is already in the heading; the strip is decoration. */}
+      <div class="progress-strip" aria-hidden="true" style={{ marginBottom: 8 }}>
         {riddles.map((r) => (
           <span
             key={r.id}
@@ -31,14 +32,16 @@ export function RiddleListScreen({ snapshot, copy, onOpenRiddle }) {
       ) : (
         <div class="tile-grid">
           {riddles.map((r) => (
-            <div
+            <button
               key={r.id}
+              type="button"
               class={`tile ${r.state === 'verified' ? 'solved' : r.state === 'pending' ? 'scanning' : ''}`}
               title={r.text}
+              aria-label={copy.screens.riddles.tile(r.state, r.text)}
               onClick={() => onOpenRiddle(r.id)}
             >
-              <span class="glyph-q">{copy.tiles.unsolvedGlyph}</span>
-            </div>
+              <span class="glyph-q" aria-hidden="true">{copy.tiles.unsolvedGlyph}</span>
+            </button>
           ))}
         </div>
       )}

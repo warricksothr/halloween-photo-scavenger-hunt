@@ -139,10 +139,13 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
           ) : (
             <>
               <div class="tile-grid" style={{ padding: 0, marginBottom: 12 }}>
-                {drawer.map((item) => (
-                  <div
+                {drawer.map((item, index) => (
+                  <button
                     key={item.id}
+                    type="button"
                     class="tile"
+                    aria-label={c.evidenceOption(index + 1)}
+                    aria-pressed={selected === item.id}
                     style={{
                       aspectRatio: '1',
                       borderColor: selected === item.id ? 'var(--cyan-bright)' : undefined,
@@ -156,7 +159,7 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
                       style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
                       loading="lazy"
                     />
-                  </div>
+                  </button>
                 ))}
               </div>
               <button class="btn" disabled={!selected || busy} onClick={onSubmit}>

@@ -8,13 +8,37 @@
 // - acknowledging POSTs /api/me/notice-ack (logs notice.acknowledged)
 // - uploads stay enabled after a strike-1 warning; level 2/3 surface
 //   in the drawer's suspended variant instead
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
 import { refresh } from '../store';
 
 export function StrikeNoticeScreen() {
   const [busy, setBusy] = useState(false);
+  const acknowledgeButton = useRef(null);
+
+  // This overlay is a modal alert dialog. Move focus to the one control
+  // on mount so a keyboard or screen-reader user lands inside it, keep
+  // Tab on that control so focus cannot walk into the dimmed app behind
+  // it, and hand focus back to whatever had it when the notice clears.
+  // The button stays focusable while the ack is in flight (aria-disabled,
+  // not the disabled attribute) so the trap never has a dead target;
+  // `busy` guards a duplicate activation instead.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    acknowledgeButton.current?.focus();
+    function onKeyDown(event) {
+      if (event.key !== 'Tab') return;
+      if (!acknowledgeButton.current) return;
+      event.preventDefault();
+      acknowledgeButton.current.focus();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   async function acknowledge() {
     if (busy) return;
@@ -28,6 +52,10 @@ export function StrikeNoticeScreen() {
 
   return (
     <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="strike-notice-title"
+      aria-describedby="strike-notice-body"
       style={{
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'grid', placeItems: 'center', padding: 24,
@@ -36,12 +64,12 @@ export function StrikeNoticeScreen() {
     >
       <div class="panel" style={{ border: '1px solid var(--alert)', maxWidth: 340 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <div class="verdict-chip" style={{ background: 'var(--alert)', color: 'var(--text)' }}>!</div>
+          <div class="verdict-chip" aria-hidden="true" style={{ background: 'var(--alert)', color: 'var(--text)' }}>!</div>
           <div>
-            <h1 class="verdict-headline" style={{ color: 'var(--alert)' }}>
+            <h1 id="strike-notice-title" class="verdict-headline" style={{ color: 'var(--alert)' }}>
               A submission was removed
             </h1>
-            <p class="subtext" style={{ marginTop: 10 }}>
+            <p id="strike-notice-body" class="subtext" style={{ marginTop: 10 }}>
               One of your photos violated the event rules and was removed by a
               moderator. Repeated violations will restrict your ability to
               participate in this event.
@@ -52,9 +80,11 @@ export function StrikeNoticeScreen() {
           </div>
         </div>
         <button
+          ref={acknowledgeButton}
           class="btn"
           style={{ marginTop: 16, background: 'var(--alert)', color: 'var(--text)' }}
-          disabled={busy}
+          aria-disabled={busy}
+          aria-busy={busy}
           onClick={acknowledge}
         >
           I understand

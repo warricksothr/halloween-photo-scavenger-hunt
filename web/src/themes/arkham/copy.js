@@ -61,6 +61,14 @@ export default {
     riddles: {
       headline: 'Riddle Board',
       empty: 'No riddles on the board yet.',
+      // A tile's only visible content is a glyph, so its accessible name
+      // has to carry the riddle and its state for screen readers.
+      tile: (state, text) =>
+        state === 'verified'
+          ? `Riddle solved: ${text}`
+          : state === 'pending'
+            ? `Riddle scanning: ${text}`
+            : `Open riddle: ${text}`,
     },
     detail: {
       back: '← Back to the board',
@@ -69,6 +77,9 @@ export default {
       submitting: 'Transmitting…',
       loading: 'Opening the drawer…',
       emptyDrawer: 'The drawer is empty — take a photo first',
+      // The evidence picker's thumbnails carry no text, so each option
+      // is named by position.
+      evidenceOption: (position) => `Evidence photo ${position}`,
       // Shown when the double-tap race 409s: the submission the player
       // wanted already exists, so this is reassurance, not an error.
       alreadyScanning: 'Already scanning this one — no need to resubmit.',

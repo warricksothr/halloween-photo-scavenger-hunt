@@ -15,11 +15,13 @@ vi.mock('../api', () => ({ api: mocks.api }));
 vi.mock('../store', () => ({ refresh: mocks.refresh }));
 
 import { RiddleDetailScreen } from './RiddleDetail';
+import { RiddleListScreen } from './RiddleList';
 import { StrikeNoticeScreen } from './StrikeNotice';
 import { ConnectionErrorScreen } from './ConnectionError';
 import { TeamJoinScreen } from './TeamJoin';
 
 const copy = {
+  tiles: { unsolvedGlyph: '?' },
   verdicts: {
     pending: { headline: 'SCANNING', subtext: 'Checking the evidence.' },
   },
@@ -28,10 +30,21 @@ const copy = {
       alreadyScanning: 'Already scanning.',
       back: 'Back',
       emptyDrawer: 'Drawer empty',
+      evidenceOption: (position) => `Evidence photo ${position}`,
       loading: 'Loading drawer',
       pickEvidence: 'Submit evidence',
       submit: 'Submit evidence',
       submitting: 'Submitting',
+    },
+    riddles: {
+      headline: 'Riddle Board',
+      empty: 'No riddles on the board yet.',
+      tile: (state, text) =>
+        state === 'verified'
+          ? `Riddle solved: ${text}`
+          : state === 'pending'
+            ? `Riddle scanning: ${text}`
+            : `Open riddle: ${text}`,
     },
     teamJoin: {
       headline: 'You Have Been Recruited',
@@ -194,5 +207,106 @@ describe('player screens', () => {
       true,
     );
     expect(window.location.pathname).toBe('/');
+  });
+});
+
+describe('keyboard and screen-reader access', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.api.drawer.mockResolvedValue([]);
+    mocks.refresh.mockResolvedValue(undefined);
+  });
+
+  it('exposes each riddle tile as a button that opens the riddle', () => {
+    const onOpenRiddle = vi.fn();
+    render(
+      <RiddleListScreen snapshot={snapshot()} copy={copy} onOpenRiddle={onOpenRiddle} />,
+    );
+
+    const tile = screen.getByRole('button', { name: 'Open riddle: Find the signal' });
+    fireEvent.click(tile);
+    expect(onOpenRiddle).toHaveBeenCalledWith('riddle-1');
+  });
+
+  it('names a solved riddle tile by its state', () => {
+    render(
+      <RiddleListScreen
+        snapshot={snapshot({ riddleState: 'verified' })}
+        copy={copy}
+        onOpenRiddle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Riddle solved: Find the signal' })).toBeTruthy();
+  });
+
+  it('marks the selected evidence and enables submission', async () => {
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
+      { id: 'ev-2', photo_url: '/api/evidence/ev-2/photo' },
+    ]);
+    render(
+      <RiddleDetailScreen
+        snapshot={snapshot()}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    const first = await screen.findByRole('button', { name: 'Evidence photo 1' });
+    const second = screen.getByRole('button', { name: 'Evidence photo 2' });
+    expect(first.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(second);
+    expect(second.getAttribute('aria-pressed')).toBe('true');
+    expect(first.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Submit evidence' }).disabled).toBe(false);
+  });
+
+  it('exposes the strike notice as a labelled alert dialog that holds focus', () => {
+    render(<StrikeNoticeScreen />);
+
+    const dialog = screen.getByRole('alertdialog', { name: 'A submission was removed' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+
+    const acknowledge = screen.getByRole('button', { name: 'I understand' });
+    expect(document.activeElement).toBe(acknowledge);
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(acknowledge);
+  });
+
+  it('keeps the acknowledge button focusable while the ack is pending', async () => {
+    let resolveAck;
+    mocks.api.noticeAck.mockReturnValue(new Promise((resolve) => { resolveAck = resolve; }));
+    render(<StrikeNoticeScreen />);
+
+    const acknowledge = screen.getByRole('button', { name: 'I understand' });
+    fireEvent.click(acknowledge);
+    await waitFor(() => expect(mocks.api.noticeAck).toHaveBeenCalledTimes(1));
+
+    expect(acknowledge.getAttribute('aria-disabled')).toBe('true');
+    expect(acknowledge.disabled).toBe(false);
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(acknowledge);
+
+    resolveAck({ ok: true });
+    await waitFor(() => expect(acknowledge.getAttribute('aria-disabled')).toBe('false'));
+  });
+
+  it('restores focus when the strike notice clears', () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+
+    const { unmount } = render(<StrikeNoticeScreen />);
+    expect(document.activeElement).not.toBe(outside);
+
+    unmount();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
   });
 });
