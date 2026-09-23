@@ -86,10 +86,14 @@ POST   /api/admin/events/{id}/close     open → closed; single transaction:
                                         log event.closed (ADR 0002/0004)
 POST   /api/admin/events/{id}/purge     delete event + photos (confirm param)
 GET    /api/admin/events/{id}/riddles
-POST   /api/admin/events/{id}/riddles   { text, sort_order }
-PATCH  /api/admin/events/{id}/riddles/{rid}   { text?, sort_order? }
+POST   /api/admin/events/{id}/riddles   { text, sort_order, hints? }
+PATCH  /api/admin/events/{id}/riddles/{rid}   { text?, sort_order?, hints? }
 DELETE /api/admin/events/{id}/riddles/{rid}   (409 if submissions reference it)
 ```
+
+`hints` is an ordered ladder, vaguest first: at most five, each ≤ 500
+characters. `POST` omitting it makes a riddle with none; on `PATCH`, omitting
+it leaves the ladder alone, `[]` clears it, and a list replaces it whole.
 
 Lifecycle transitions log `event.opened` / `event.closed`; event edits log
 `event.updated` and riddle edits log `riddle.edited`, both with before/after
@@ -284,6 +288,7 @@ GET    /api/mod/audit                   full forensic timeline, moderator+
   },
   "riddles": [
     { "id": "…", "text": "…", "sort_order": 1,
+      "hints": ["…", "…"],       // vague → specific; empty when none
       "state": "unsolved" }      // unsolved | pending | verified
   ],
   "submissions": [

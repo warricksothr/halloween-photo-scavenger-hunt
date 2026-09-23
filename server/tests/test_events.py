@@ -212,7 +212,11 @@ class TestRiddles:
         actions = [(r["action"], json.loads(r["details"])) for r in _audit_rows(admin)]
         created = dict(actions)["riddle.created"]
         edited = dict(actions)["riddle.edited"]
-        assert created == {"text": "Speak the password", "sort_order": 1}
+        assert created == {
+            "text": "Speak the password",
+            "sort_order": 1,
+            "hint_count": 0,
+        }
         # Before/after, per the enum doc — the audit log is the history.
         assert edited["old_text"] == "Speak the password"
         assert edited["new_text"] == "Answer the riddle"
@@ -241,3 +245,101 @@ class TestRiddles:
             "/api/admin/events/other-event/riddles", json={"text": "x", "sort_order": 1}
         )
         assert resp.status_code == 404
+
+
+class TestRiddleHints:
+    def _event(self, admin):
+        return _create_event(admin)
+
+    def test_create_preserves_hint_order(self, admin):
+        event = self._event(admin)
+        resp = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={
+                "text": "Look up.",
+                "sort_order": 1,
+                "hints": ["Higher.", "Cables or scaffold.", "The leaning sign."],
+            },
+        )
+        assert resp.status_code == 201
+        assert resp.json()["hints"] == [
+            "Higher.",
+            "Cables or scaffold.",
+            "The leaning sign.",
+        ]
+        listed = admin.get(f"/api/admin/events/{event['id']}/riddles").json()
+        assert listed[0]["hints"] == resp.json()["hints"]
+
+    def test_create_without_hints_is_empty(self, admin):
+        event = self._event(admin)
+        resp = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "No nudge.", "sort_order": 1},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["hints"] == []
+
+    def test_patch_replaces_and_clears_hints(self, admin):
+        event = self._event(admin)
+        riddle = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Start.", "sort_order": 1, "hints": ["One.", "Two."]},
+        ).json()
+        # A fresh list replaces the whole ladder.
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"hints": ["One.", "Two.", "Three."]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["hints"] == ["One.", "Two.", "Three."]
+        # An empty list clears it.
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"hints": []},
+        )
+        assert resp.json()["hints"] == []
+        # Omitted entirely leaves the ladder alone.
+        admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"hints": ["Back."]},
+        )
+        resp = admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"text": "Renamed."},
+        )
+        assert resp.json()["text"] == "Renamed."
+        assert resp.json()["hints"] == ["Back."]
+
+    def test_over_long_hint_rejected(self, admin):
+        event = self._event(admin)
+        resp = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Long.", "sort_order": 1, "hints": ["x" * 501]},
+        )
+        assert resp.status_code == 422
+
+    def test_too_many_hints_rejected(self, admin):
+        event = self._event(admin)
+        resp = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Many.", "sort_order": 1, "hints": ["a"] * 6},
+        )
+        assert resp.status_code == 422
+
+    def test_delete_cascades_hints(self, admin):
+        event = self._event(admin)
+        riddle = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Doomed.", "sort_order": 1, "hints": ["A.", "B."]},
+        ).json()
+        assert (
+            admin.delete(
+                f"/api/admin/events/{event['id']}/riddles/{riddle['id']}"
+            ).status_code
+            == 200
+        )
+        conn = admin.app.state.db
+        left = conn.execute(
+            "SELECT COUNT(*) FROM riddle_hint WHERE riddle_id = ?", (riddle["id"],)
+        ).fetchone()[0]
+        assert left == 0

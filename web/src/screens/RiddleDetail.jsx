@@ -29,6 +29,7 @@ const SEVERITY = {
 
 export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDrawer }) {
   const riddle = snapshot.riddles.find((r) => r.id === riddleId);
+  const hints = riddle?.hints ?? [];
   // Snapshot submissions are newest-first (state.py ORDER BY created_at DESC).
   const history = snapshot.submissions.filter((s) => s.riddle_id === riddleId);
   const latest = history[0] ?? null;
@@ -38,6 +39,10 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // How many hint levels this player has asked to see. Nothing shows
+  // until they ask: a hint the player did not want is a spoiler, and
+  // the ladder is their escape hatch, not part of the riddle text.
+  const [revealed, setRevealed] = useState(0);
 
   useEffect(() => {
     api.drawer().then((result) => {
@@ -127,6 +132,28 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
           <div class="verdict-chip">!</div>
           <div><p class="subtext">{error}</p></div>
         </div>
+      )}
+
+      {hints.length > 0 && (
+        <section>
+          {revealed > 0 && (
+            <ul class="hint-list">
+              {hints.slice(0, revealed).map((hint, level) => (
+                <li key={level} class="hint-item">
+                  <span class="hint-level">L{level + 1}</span>
+                  <span>{hint}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {revealed < hints.length ? (
+            <button class="btn secondary" onClick={() => setRevealed(revealed + 1)}>
+              {c.needNudge}
+            </button>
+          ) : (
+            <p class="dim">{c.noMoreHints}</p>
+          )}
+        </section>
       )}
 
       {canSubmit && (

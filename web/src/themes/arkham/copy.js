@@ -91,6 +91,10 @@ export default {
       // Shown when the double-tap race 409s: the submission the player
       // wanted already exists, so this is reassurance, not an error.
       alreadyScanning: 'Already scanning this one — no need to resubmit.',
+      // The hint ladder. Nothing shows until the player asks, and each
+      // press costs them one more level of the reveal.
+      needNudge: 'Need a nudge?',
+      noMoreHints: 'That is every hint for this one.',
     },
     drawer: {
       headline: 'Evidence Drawer',

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -471,23 +472,44 @@ def list_event_players(
 
 # ── Riddles ───────────────────────────────────────────────────────────
 
+# A riddle's hints are a ladder, vague to specific. The cap keeps one
+# riddle from becoming its own essay and bounds the reveal control's
+# length; five is enough for a nudge, a push, and a near-answer.
+MAX_HINTS = 5
+# Each level is bounded like the riddle text it nudges toward.
+HintText = Annotated[str, Field(min_length=1, max_length=500)]
+
 
 class RiddleCreate(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     sort_order: int = Field(ge=0)
+    # Position is the level: hints[0] is the vaguest. An empty list is a
+    # riddle with no hints, the same as the field's default.
+    hints: list[HintText] = Field(default_factory=list, max_length=MAX_HINTS)
 
 
 class RiddlePatch(BaseModel):
     text: str | None = Field(default=None, min_length=1, max_length=500)
     sort_order: int | None = Field(default=None, ge=0)
+    # None leaves the set alone, [] clears it, a list replaces it whole.
+    hints: list[HintText] | None = Field(default=None, max_length=MAX_HINTS)
 
 
-def _riddle_json(row: sqlite3.Row) -> dict:
+def _load_hints(conn: sqlite3.Connection, riddle_id: str) -> list[str]:
+    rows = conn.execute(
+        "SELECT text FROM riddle_hint WHERE riddle_id = ? ORDER BY level",
+        (riddle_id,),
+    ).fetchall()
+    return [r["text"] for r in rows]
+
+
+def _riddle_json(row: sqlite3.Row, hints: list[str]) -> dict:
     return {
         "id": row["id"],
         "event_id": row["event_id"],
         "text": row["text"],
         "sort_order": row["sort_order"],
+        "hints": hints,
         "created_at": row["created_at"],
     }
 
@@ -501,6 +523,25 @@ def _get_riddle(
     ).fetchone()
 
 
+def _replace_hints(conn: sqlite3.Connection, riddle_id: str, hints: list[str]) -> None:
+    """Set a riddle's hints to exactly ``hints``, in list order.
+
+    Delete-then-insert inside the caller's transaction, so a failed write
+    leaves the old ladder rather than a half of the new one. Level is the
+    list position; the unique index makes a duplicate level impossible.
+    """
+    conn.execute("DELETE FROM riddle_hint WHERE riddle_id = ?", (riddle_id,))
+    now = int(time.time())
+    conn.executemany(
+        "INSERT INTO riddle_hint (id, riddle_id, level, text, created_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        [
+            (ids.new_id(), riddle_id, level, text, now)
+            for level, text in enumerate(hints)
+        ],
+    )
+
+
 @router.get("/events/{event_id}/riddles")
 def list_riddles(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
     conn: sqlite3.Connection = reader(request)
@@ -510,7 +551,18 @@ def list_riddles(event_id: str, request: Request, _: str = Depends(auth.require_
         "SELECT * FROM riddle WHERE event_id = ? ORDER BY sort_order, created_at",
         (event_id,),
     ).fetchall()
-    return [_riddle_json(r) for r in rows]
+    # One query for the whole event's hints, then group in Python: the
+    # list is small, and per-riddle queries would be N+1.
+    hint_rows = conn.execute(
+        "SELECT riddle_id, text FROM riddle_hint"
+        " WHERE riddle_id IN (SELECT id FROM riddle WHERE event_id = ?)"
+        " ORDER BY riddle_id, level",
+        (event_id,),
+    ).fetchall()
+    by_riddle: dict[str, list[str]] = {}
+    for h in hint_rows:
+        by_riddle.setdefault(h["riddle_id"], []).append(h["text"])
+    return [_riddle_json(r, by_riddle.get(r["id"], [])) for r in rows]
 
 
 @router.post("/events/{event_id}/riddles", status_code=201)
@@ -536,6 +588,7 @@ def create_riddle(
             " VALUES (?, ?, ?, ?, ?)",
             (riddle_id, event_id, body.text, body.sort_order, int(time.time())),
         )
+        _replace_hints(writer, riddle_id, body.hints)
         log_action(
             writer,
             event_id=event_id,
@@ -544,10 +597,14 @@ def create_riddle(
             action=Action.RIDDLE_CREATED,
             entity_type="riddle",
             entity_id=riddle_id,
-            details={"text": body.text, "sort_order": body.sort_order},
+            details={
+                "text": body.text,
+                "sort_order": body.sort_order,
+                "hint_count": len(body.hints),
+            },
         )
         created = _get_riddle(writer, event_id, riddle_id)
-    return _riddle_json(created)
+    return _riddle_json(created, body.hints)
 
 
 @router.patch("/events/{event_id}/riddles/{riddle_id}")
@@ -563,6 +620,9 @@ def patch_riddle(
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
     updates = body.model_dump(exclude_none=True)
+    # hints is a child table, not a riddle column; exclude_none keeps a
+    # None (leave alone) out, and an empty list survives to clear the set.
+    hints = updates.pop("hints", None)
     with locked_transaction(request) as writer:
         row = _get_riddle(writer, event_id, riddle_id)
         if row is None:
@@ -576,6 +636,10 @@ def patch_riddle(
                 f"UPDATE riddle SET {assignments} WHERE id = ?",
                 (*updates.values(), riddle_id),
             )
+        old_hint_count = len(_load_hints(writer, riddle_id))
+        if hints is not None:
+            _replace_hints(writer, riddle_id, hints)
+        if updates or hints is not None:
             # Before/after in details: riddle rows carry no updated_at,
             # because the audit log *is* the history (schema.md).
             log_action(
@@ -593,10 +657,15 @@ def patch_riddle(
                     "new_sort": body.sort_order
                     if body.sort_order is not None
                     else row["sort_order"],
+                    "old_hint_count": old_hint_count,
+                    "new_hint_count": len(hints)
+                    if hints is not None
+                    else old_hint_count,
                 },
             )
         updated = _get_riddle(writer, event_id, riddle_id)
-    return _riddle_json(updated)
+        final_hints = _load_hints(writer, riddle_id)
+    return _riddle_json(updated, final_hints)
 
 
 @router.delete("/events/{event_id}/riddles/{riddle_id}")

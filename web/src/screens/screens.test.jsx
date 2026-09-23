@@ -42,6 +42,8 @@ const copy = {
       emptyDrawer: 'Drawer empty',
       evidenceOption: (position) => `Evidence photo ${position}`,
       loading: 'Loading drawer',
+      needNudge: 'Need a nudge?',
+      noMoreHints: 'That is every hint.',
       pickEvidence: 'Submit evidence',
       submit: 'Submit evidence',
       submitting: 'Submitting',
@@ -72,9 +74,11 @@ const copy = {
   },
 };
 
-function snapshot({ riddleState = 'unsolved', restrictionLevel = 0 } = {}) {
+function snapshot({ riddleState = 'unsolved', restrictionLevel = 0, hints = [] } = {}) {
   return {
-    riddles: [{ id: 'riddle-1', state: riddleState, text: 'Find the signal' }],
+    riddles: [
+      { id: 'riddle-1', state: riddleState, text: 'Find the signal', hints },
+    ],
     submissions: [],
     me: { restriction: { level: restrictionLevel } },
   };
@@ -105,8 +109,47 @@ describe('player screens', () => {
     expect(screen.queryByRole('button', { name: 'Submit evidence' })).toBeNull();
   });
 
-  it('does not offer submission when the player is submission-banned', async () => {
+  it('reveals hints one level per press, and none before asking', async () => {
     render(
+      <RiddleDetailScreen
+        snapshot={snapshot({ hints: ['Higher.', 'Braced or cabled.'] })}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    // Nothing is shown until the player asks.
+    expect(screen.queryByText('Higher.')).toBeNull();
+    expect(screen.queryByText('Braced or cabled.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Need a nudge?' }));
+    expect(screen.getByText('Higher.')).toBeTruthy();
+    expect(screen.queryByText('Braced or cabled.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Need a nudge?' }));
+    expect(screen.getByText('Braced or cabled.')).toBeTruthy();
+    // The last level is out: no more button, just the end note.
+    expect(screen.queryByRole('button', { name: 'Need a nudge?' })).toBeNull();
+    expect(screen.getByText('That is every hint.')).toBeTruthy();
+  });
+
+  it('shows no hint control when the riddle has none', async () => {
+    render(
+      <RiddleDetailScreen
+        snapshot={snapshot()}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Need a nudge?' })).toBeNull();
+  });
+
+  it('does not offer submission when the player is submission-banned', async () => {    render(
       <RiddleDetailScreen
         snapshot={snapshot({ restrictionLevel: 3 })}
         copy={copy}
