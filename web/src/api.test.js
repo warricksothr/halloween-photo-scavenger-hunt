@@ -58,6 +58,27 @@ describe('api client', () => {
     });
   });
 
+  it('keeps the 401 body for admin login while player calls stay unauthenticated', async () => {
+    const fetchMock = globalThis.fetch;
+    fetchMock.mockResolvedValueOnce(
+      response({
+        status: 401,
+        body: {
+          error: 'bad_credentials',
+          message: 'Wrong username or password.',
+        },
+      }),
+    );
+    await expect(api.adminLogin('admin', 'nope')).resolves.toEqual({
+      error: 'bad_credentials',
+      message: 'Wrong username or password.',
+      status: 401,
+    });
+
+    fetchMock.mockResolvedValueOnce(response({ status: 401, body: {} }));
+    await expect(api.snapshot()).resolves.toEqual({ unauthenticated: true });
+  });
+
   it('folds a rejected fetch into the network error shape', async () => {
     globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
 

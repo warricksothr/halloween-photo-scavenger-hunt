@@ -26,9 +26,14 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // exists: the host console is a separate document (a fresh page load, no
 // client-side router), so it must not boot the player store or pull in a
 // theme pack. App stays hook-free — the hooks live in PlayerApp — so the
-// switch cannot break the rules of hooks.
+// switch cannot break the rules of hooks. The match is by path segment:
+// `/administrator` is a player path, not the console.
+function isAdminPath(pathname) {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
+
 function App() {
-  if (window.location.pathname.startsWith('/admin')) {
+  if (isAdminPath(window.location.pathname)) {
     return <AdminScreen />;
   }
   return <PlayerApp />;
