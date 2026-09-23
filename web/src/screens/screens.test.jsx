@@ -214,6 +214,7 @@ describe('keyboard and screen-reader access', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.api.drawer.mockResolvedValue([]);
+    mocks.refresh.mockResolvedValue(undefined);
   });
 
   it('exposes each riddle tile as a button that opens the riddle', () => {
@@ -275,6 +276,25 @@ describe('keyboard and screen-reader access', () => {
 
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(document.activeElement).toBe(acknowledge);
+  });
+
+  it('keeps the acknowledge button focusable while the ack is pending', async () => {
+    let resolveAck;
+    mocks.api.noticeAck.mockReturnValue(new Promise((resolve) => { resolveAck = resolve; }));
+    render(<StrikeNoticeScreen />);
+
+    const acknowledge = screen.getByRole('button', { name: 'I understand' });
+    fireEvent.click(acknowledge);
+    await waitFor(() => expect(mocks.api.noticeAck).toHaveBeenCalledTimes(1));
+
+    expect(acknowledge.getAttribute('aria-disabled')).toBe('true');
+    expect(acknowledge.disabled).toBe(false);
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(acknowledge);
+
+    resolveAck({ ok: true });
+    await waitFor(() => expect(acknowledge.getAttribute('aria-disabled')).toBe('false'));
   });
 
   it('restores focus when the strike notice clears', () => {

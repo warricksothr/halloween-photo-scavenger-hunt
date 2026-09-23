@@ -21,13 +21,17 @@ export function StrikeNoticeScreen() {
   // on mount so a keyboard or screen-reader user lands inside it, keep
   // Tab on that control so focus cannot walk into the dimmed app behind
   // it, and hand focus back to whatever had it when the notice clears.
+  // The button stays focusable while the ack is in flight (aria-disabled,
+  // not the disabled attribute) so the trap never has a dead target;
+  // `busy` guards a duplicate activation instead.
   useEffect(() => {
     const previouslyFocused = document.activeElement;
     acknowledgeButton.current?.focus();
     function onKeyDown(event) {
       if (event.key !== 'Tab') return;
+      if (!acknowledgeButton.current) return;
       event.preventDefault();
-      acknowledgeButton.current?.focus();
+      acknowledgeButton.current.focus();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -79,7 +83,8 @@ export function StrikeNoticeScreen() {
           ref={acknowledgeButton}
           class="btn"
           style={{ marginTop: 16, background: 'var(--alert)', color: 'var(--text)' }}
-          disabled={busy}
+          aria-disabled={busy}
+          aria-busy={busy}
           onClick={acknowledge}
         >
           I understand
