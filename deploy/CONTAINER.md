@@ -94,6 +94,16 @@ The environment variables, and why:
 - `ARKHAM_MIN_FREE_BYTES` — optional. The free-space floor below which
   uploads answer 507 `storage_full`; defaults to 256 MiB. Set it on a
   small volume, and size the `arkham-data` volume above it (ADR 0023).
+- `ARKHAM_OIDC_ISSUER` / `ARKHAM_OIDC_CLIENT_ID` /
+  `ARKHAM_OIDC_CLIENT_SECRET` — optional, all three together. Turn on
+  Authentik single sign-on for hosts and moderators; with any one missing
+  the app starts with SSO off. On this plain-HTTP path the callback URI is
+  `http://<host>:8080/api/auth/oidc/callback` — register exactly that in
+  Authentik, or set `ARKHAM_OIDC_REDIRECT_URI`. If your groups scope
+  mapping has its own scope name, list it too, e.g.
+  `ARKHAM_OIDC_SCOPES="openid profile email groups"` — an unrequested
+  scope emits no claim. `deploy/RUNBOOK.md` §6 covers the Authentik side
+  and troubleshooting.
 
 `-p 127.0.0.1:8080:8000` binds loopback only. For a LAN party (players
 on phones on the same network), publish on all interfaces and give the

@@ -178,6 +178,40 @@ def test_systemd_unit_hardens_the_data_dir():
     assert "ReadWritePaths=%h/arkham/data" in unit
 
 
+def test_oidc_environment_file_examples_use_bare_assignments():
+    """`~/.config/arkham-hunt.env` is a systemd EnvironmentFile, not a shell.
+
+    systemd drops a line it cannot read as `NAME=value`, so an
+    `export NAME=value` example silently leaves SSO off — the operator sees
+    no error and the issue is invisible until a login is refused. The fenced
+    block under §6 that fills that file must therefore show bare
+    assignments. (The shell blocks elsewhere in the runbook export into the
+    running shell, which is a different reader.)
+    """
+    section = RUNBOOK.read_text().split("## 6. Single sign-on", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    for match in re.finditer(r"```sh\n(.*?)```", section, re.DOTALL):
+        for line in match.group(1).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or not stripped:
+                continue
+            assert not stripped.startswith("export "), (
+                "EnvironmentFile example must not export: " + stripped
+            )
+
+
+def test_runbook_requests_the_groups_scope():
+    """The Authentik groups mapping is emitted only when its scope is asked for.
+
+    The app defaults `ARKHAM_OIDC_SCOPES` to `openid profile email`; a scope
+    mapping with its own name (the documented `groups`) reaches the token
+    only if the scope list includes it. If the runbook creates the mapping
+    but never requests the scope, every login is refused.
+    """
+    runbook = RUNBOOK.read_text()
+    assert "ARKHAM_OIDC_SCOPES=openid profile email groups" in runbook
+
+
 def _write_stub(path: Path, body: str) -> None:
     path.write_text(f"#!/bin/sh\n{body}")
     path.chmod(0o755)

@@ -20,10 +20,22 @@
 #     ARKHAM_ADMIN_USERNAME=you
 #     ARKHAM_ADMIN_PASSWORD_HASH=<output of `python -m app.security 'pw'`
 #                                 run from the repo's server/ venv>
+#     ARKHAM_OIDC_ISSUER=https://<authentik-host>/application/o/<slug>/
+#     ARKHAM_OIDC_CLIENT_ID=<client id>
+#     ARKHAM_OIDC_CLIENT_SECRET=<client secret>
 #     ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/1
 #     ARKHAM_TRACES_SAMPLE_RATE=0.1
 #     ARKHAM_ENVIRONMENT=production
 #     ARKHAM_RELEASE=<git revision>
+#
+# The ARKHAM_OIDC_* trio turns on Authentik single sign-on for hosts and
+# moderators (app/oidc.py). All three are required together; with any one
+# missing the app starts with SSO off and the local password below stays
+# the only way in. The local password is break-glass even with SSO on, so
+# an Authentik outage never locks the host out. Set ARKHAM_OIDC_SCOPES if
+# the groups mapping has its own scope name (the default does not request
+# it). This file is an EnvironmentFile: bare NAME=value, never `export`.
+# See deploy/RUNBOOK.md §6.
 #
 # ARKHAM_ERROR_DSN turns on server error/trace reporting to GlitchTip
 # (app/errors.py, ADR 0017). Unset means reporting is off, which is the
