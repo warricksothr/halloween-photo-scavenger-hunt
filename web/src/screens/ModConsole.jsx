@@ -50,6 +50,11 @@ export function ModConsoleScreen({ modEvent, copy }) {
   const [showTeams, setShowTeams] = useState(false);
   const [teams, setTeams] = useState(null);
   const [confirmRemove, setConfirmRemove] = useState(null); // {team, member}
+  // Conduct inputs for the INAPPROPRIATE action. The backend accepts a
+  // note and a strike-2 cooldown window, so the moderator sets them here
+  // instead of sending an empty default. Labels stay plain by rule.
+  const [note, setNote] = useState('');
+  const [cooldown, setCooldown] = useState('15');
 
   async function reload() {
     const result = await api.modQueue();
@@ -79,6 +84,8 @@ export function ModConsoleScreen({ modEvent, copy }) {
     setError(null);
     setConfirming(false);
     setHistory(null);
+    setNote('');
+    setCooldown('15');
     api.modPlayerHistory(item.player.id).then((result) => {
       if (!result.error) setHistory(result);
     });
@@ -106,16 +113,27 @@ export function ModConsoleScreen({ modEvent, copy }) {
 
   async function sendInappropriate(item) {
     if (busy) return;
+    // The server takes cooldown_minutes only for strike 2 (default 15) and
+    // 422s outside 1–1440, so an out-of-range entry is caught here rather
+    // than sent. An empty field means "use the default".
+    const minutes = cooldown.trim() === '' ? null : Number(cooldown);
+    if (minutes !== null
+        && (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440)) {
+      setError('Cooldown must be a whole number of minutes between 1 and 1440.');
+      return;
+    }
     setBusy(true);
     setError(null);
     // Conduct copy is plain and hardcoded here by rule (design.md):
     // nothing themed ever touches a conduct surface.
-    const result = await api.modInappropriate(item.id, '', null);
+    const result = await api.modInappropriate(item.id, note.trim(), minutes);
     if (result?.error) {
       if (result.error !== 'already_resolved') setError(result.message);
     } else {
       setConfirming(false);
       setOpenId(null);
+      setNote('');
+      setCooldown('15');
     }
     await reload();
     setBusy(false);
@@ -364,6 +382,33 @@ export function ModConsoleScreen({ modEvent, copy }) {
               (mocks/moderator.html). Issues verdict + strike in one
               action; copy stays plain by rule. */}
           <section style={{ borderTop: '1px dashed var(--border-dim)', marginTop: 14, paddingTop: 14 }}>
+            <div class="field">
+              <label for="strike-note">
+                Note <span class="dim">(optional — recorded on the player's history)</span>
+              </label>
+              <input
+                type="text"
+                id="strike-note"
+                value={note}
+                onInput={(e) => setNote(e.target.value)}
+                maxLength={280}
+                placeholder="Why this photo was removed"
+              />
+            </div>
+            <div class="field">
+              <label for="strike-cooldown">
+                Cooldown minutes <span class="dim">(strike 2 only — default 15)</span>
+              </label>
+              <input
+                type="number"
+                id="strike-cooldown"
+                value={cooldown}
+                onInput={(e) => setCooldown(e.target.value)}
+                min={1}
+                max={1440}
+                inputMode="numeric"
+              />
+            </div>
             {confirming ? (
               <>
                 <button

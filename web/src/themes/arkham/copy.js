@@ -105,6 +105,8 @@ export default {
       sealed: 'Standings are sealed — the host reveals them when the round closes.',
       empty: 'No operatives on the board yet.',
       loading: "Compiling the night's intel…",
+      error: 'The final report could not be retrieved.',
+      retry: 'Try again',
       // Closed, but no team scored — the celebration line needs a fallback.
       noWinner: 'Final standings are in.',
       caseClosed: 'Case Closed',
