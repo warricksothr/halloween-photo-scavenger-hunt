@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CYNR73WKND2707WKEAY
 title: Build admin event management with codes and QR links
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ dependencies:
   - TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/admin-event-management
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 3c13182e2dd1cfa5c4397f99d671068763a8e110
-  session: null
-  claimed_at: 2026-09-23T04:27:58Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T04:36:01Z
+updated_at: 2026-09-23T04:41:10Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -43,9 +36,9 @@ The admin API already supports event lifecycle (server/app/events.py) but nothin
 
 ## Acceptance criteria
 
-- [ ] The admin can list, create, open, close, and purge events, with purge behind an explicit confirm.
-- [ ] A created event shows its join and mod URLs, each with a scannable QR.
-- [ ] Wrong lifecycle transitions and purge conflicts surface the API message.
+- [x] The admin can list, create, open, close, and purge events, with purge behind an explicit confirm.
+- [x] A created event shows its join and mod URLs, each with a scannable QR.
+- [x] Wrong lifecycle transitions and purge conflicts surface the API message.
 
 ## Implementation plan
 
@@ -176,3 +169,44 @@ Outcome: completed with findings at the failure threshold.
   checks the row settles into the closed state with a Purge action.
 
 Re-dispatched under the same request id (same review purpose, substantive fix).
+
+## Summary
+
+### Where it landed
+
+Merged to `main` as `5b5bd2ce54b988f9f90f10c54e2849ea074d0695` (PR #24,
+https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/24),
+base `3c13182e2dd1cfa5c4397f99d671068763a8e110`, final reviewed head
+`62c2d4720f6019497151c27c629d2aec6e174ae7`.
+
+The console's Events tab is now the host's event screen: it lists events and
+drives the lifecycle with the one action each status allows (lobby → Open,
+open → Close, closed → Purge with the name typed), refetches under the same
+busy guard after every mutation, and surfaces the API message when a
+transition or purge conflicts. Creating an event shows the join (`/j/<code>`)
+and moderator (`/m/<code>`) URLs with a scannable QR each, generated
+client-side by the bundled `uqr` library (ADR 0019) so nothing leaves the LAN
+and nothing goes to a third party. All three acceptance criteria ticked.
+
+### Reviews
+
+- Round 1, run `2e3eb50d-8d27-4c1d-926d-74c4da7c54cc`, Actions run #374, head
+  `395d519`: two findings, both accepted and fixed in `62c2d47` — `busy` is
+  now held across the refetch (the lifecycle guard used to release before the
+  list came back, so a stale second click could fire a refused transition),
+  and the lifecycle test now clicks Close and asserts `adminCloseEvent` and
+  the closed state.
+- Round 2, run `dd7f4d35-972d-4b81-aab7-55165731801e`, head `62c2d47`: clean,
+  no findings at the failure threshold.
+
+`bash scripts/check-quality.sh` green throughout: server 385 passed / 95.45%
+coverage, deployment checks 20 passed, frontend 88 passed (was 87 before the
+new guard test), production build clean.
+
+### Follow-ups (not filed as tickets)
+
+- `PATCH /api/admin/events/{id}` (rename, visibility, team size) is still
+  unexposed in the console; visibility and team size are create-time choices
+  today. File a ticket if hosts need to change them later.
+- `docs/impl/mocks/admin-event-new.html` still shows `/mod/…`; the app routes
+  `/m/<code>`. The mock is illustrative and was left alone.
