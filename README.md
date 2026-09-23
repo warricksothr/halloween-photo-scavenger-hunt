@@ -22,6 +22,8 @@ progress tracker live in [`docs/`](docs/).
 - [`docs/progress.md`](docs/progress.md) — what's done, what's next
 - [`docs/reference/THEME-NOTES.md`](docs/reference/THEME-NOTES.md) —
   Arkham visual language and verdict copy bank
+- [`docs/adr/0023-observability-boundary.md`](docs/adr/0023-observability-boundary.md) —
+  where logs, errors, traces, and metrics live
 
 ## What it looks like
 

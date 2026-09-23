@@ -41,7 +41,7 @@ when the increment runs and its tests pass.
 
 - [x] Request-ID structured logging and path redaction (ADR 0016)
 - [x] Error and trace reporting to self-hosted GlitchTip (ADR 0018)
-- [ ] Readiness/metrics surface
+- [x] Readiness/metrics surface (ADR 0021)
 - [ ] `?debug=1` diagnostics overlay
 
 ## Notes / blockers
@@ -92,6 +92,16 @@ when the increment runs and its tests pass.
   fields that actually changed, in the same locked transaction as the
   UPDATE; `docs/impl/audit-actions.md` gained the row and its
   `event.created` details now include `team_size_limit`.
+- **2026-09-23 — The observability boundary is one ADR.** ADR 0023 ties
+  together the request id (ADR 0016), the bounded SSE queues (ADR 0017),
+  self-hosted GlitchTip for errors and traces (ADR 0018), and the new
+  readiness surface: `/api/admin/readyz` (S2WM) reads in-process counters
+  (S2WP) for uploads by outcome, verdicts by state, writer-lock
+  acquisitions/contentions/wait, and SSE subscriber/overflow counts. The
+  decision the pieces did not make is recorded here: errors and traces are
+  shipped and scrubbed, metrics stay in the process and reset with it, and
+  the request id joins a log line to an error report to an audit row.
+
 - **2026-09-23 — The moderator link is a selector, not a credential.**
   TKT-01M33S9CWGZWA82EDFK6NG232V. `POST /api/mod/join/{code}` now requires
   an OIDC moderator session before the rate-limit gate even runs, so a
