@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0
 title: Add the admin console shell with login and session bootstrapping
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ dependencies:
   - TKT-01M33S9CTBFJTSEKX6QDA6N7P0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/admin-console-shell
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: b181a4ee564d0d77260bd57f252a75db217a8572
-  session: null
-  claimed_at: 2026-09-23T01:13:21Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T01:19:15Z
+updated_at: 2026-09-23T01:20:24Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -44,9 +37,9 @@ There is no admin UI anywhere in web/src, and deploy/RUNBOOK.md:39 claims a cons
 
 ## Acceptance criteria
 
-- [ ] /admin renders the login screen with no admin session and the console with one.
-- [ ] The login screen offers both the OIDC and password paths, and a failed login shows a real error instead of hanging.
-- [ ] The shell has navigation for events, riddles, and host actions, and introduces no theme leakage.
+- [x] /admin renders the login screen with no admin session and the console with one.
+- [x] The login screen offers both the OIDC and password paths, and a failed login shows a real error instead of hanging.
+- [x] The shell has navigation for events, riddles, and host actions, and introduces no theme leakage.
 
 ## Implementation plan
 
@@ -180,3 +173,38 @@ threshold". Both findings assessed and accepted.
 
 Fresh review requested on the fixed head; the earlier status belongs to the
 superseded commit.
+
+## Summary
+
+### Landed
+
+The `/admin` host console shell is on `main` (PR #22, merge `1382e20`).
+`web/src/main.jsx` matches `/admin` and its descendants by path segment and
+renders a self-contained `AdminScreen` before the player store boots, so the
+console document never calls `refresh()`, never subscribes to the store, and
+never loads a theme pack. `GET /api/admin/events` is the session probe (401 →
+login, 200 → console plus its first data); login offers the Authentik start
+route and the argon2 password fallback with the server's error surfaced
+(`reportUnauthorized` on `send()`). Navigation covers events, riddles, and
+host actions; events lists read-only and the other two are honest
+placeholders for S9CZ and S9D0. `admin.css` is scoped with its own
+`--admin-*` tokens and uses no theme class or theme token, so neither
+direction leaks.
+
+### Review
+
+Two rounds, request `admin-console-shell`.
+- Round 1, run `6fa735fa-0d60-4685-97df-3f5fe2e3d6df`: medium (overbroad
+  `/admin` prefix would hijack `/administrator`-style paths) and low (the
+  failed-login test bypassed the 401 transport). Both accepted and fixed.
+- Round 2, run `d11f3fc9-79f3-4bb6-8b8e-6086d4f51d68` on head `b811d06`:
+  clean, no findings at the failure threshold.
+
+### Evidence
+
+`bash scripts/check-quality.sh` green on the merged head: server 357 tests /
+95.36% coverage / Ruff, deploy checks, frontend 45 tests, production build.
+The RUNBOOK console line is deliberately unchanged: the shell exists, but
+create/open/purge arrive with S9CY/S9D0, so tightening the runbook now would
+overclaim. Follow-ons: S9CZ (riddles), S9D0 (host actions), S9CY (event
+management), S9CV (stub-provider SSO e2e), S9CW (gate the mod link).
