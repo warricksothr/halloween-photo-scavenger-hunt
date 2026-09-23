@@ -36,6 +36,12 @@ any event theme is known — without a hardcoded string in the shell. `Join`
 and `TeamJoin` already assumed the default pack for the same reason; the
 name now lives once as `DEFAULT_THEME`.
 
+**Only the latest request commits.** Two refreshes can overlap and resolve
+out of order, so `loadTheme` takes a generation number and skips the DOM
+when a newer request has started; the newest request wins the document, and
+a superseded caller gets the newest committed copy instead of pinning the
+older pack.
+
 ## Alternatives
 
 **Keep Vite's side-effect injection and diff `document.head`** before and
