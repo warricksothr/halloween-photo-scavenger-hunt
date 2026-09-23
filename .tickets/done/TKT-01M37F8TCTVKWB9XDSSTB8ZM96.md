@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M37F8TCTVKWB9XDSSTB8ZM96
 title: Arm the e2e specs with a CSRF token so they run again
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/e2e-csrf
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 954c6526997bb91551c08b1eead67b6f51b13237
-  session: null
-  claimed_at: 2026-09-23T17:41:06Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T15:48:39Z
-updated_at: 2026-09-23T18:01:58Z
+updated_at: 2026-09-23T18:06:53Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -137,3 +130,14 @@ PR #39 is open against `main`.
 - head: `7dfb99ebd2f38b19b80175e30a78b707565fb2fa`
 - base: `954c6526997bb91551c08b1eead67b6f51b13237`
 - review request: `e2e-csrf-r1`
+
+## Summary
+
+Landed in PR #39 (merged at `378c2922b9c4488fbeddb1deeb9ff27d20e278c9`).
+`npm run test:e2e` is green again: `web/e2e/support.js` arms the admin CSRF
+token for every spec, and `web/e2e/stub_idp.py` gives the test server a
+provider the moderator link can sign in against. The review request
+`e2e-csrf-r1` came back clean and the quality gate passed in 2m17s.
+
+Verified: `npm run test:e2e` (3 passed), the README screenshot spec (1
+passed), and `bash scripts/check-quality.sh`.
