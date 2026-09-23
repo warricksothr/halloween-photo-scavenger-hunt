@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T22:31:39Z
-updated_at: 2026-09-23T22:55:47Z
+updated_at: 2026-09-23T23:00:30Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -185,3 +185,7 @@ restarting. `deploy/arkham-hunt.service`'s env comment block gains the name.
 **agent:opencode/t3code-0691bbb1** at 2026-09-23T22:55:47Z
 
 PR #44, head f791e6527e4bbc9bcf36ff1b16d4b76ffaf7f3fc, base main. Terva review requested (request-id admin-api-token-r1). Gate green: 478 server tests, 96% coverage, 23 deploy checks, web tests and build. Behavior tests proven to fail on pre-fix code (4 failed with the app changes stashed).
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T23:00:30Z
+
+Terva r1 (run 7c3c21be, request admin-api-token-r1) returned one medium: the CSRF exemption was path-agnostic, so the admin token could skip CSRF on any unsafe route. Accepted and fixed in 76b193216d99795e9627ddc7bcaff8d820ac34bc via auth.is_admin_api_path (boundary match on /api/admin). Regression test fails pre-fix (non-admin POST got past the gate). Re-review requested as admin-api-token-r2.
