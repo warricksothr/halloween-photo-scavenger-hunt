@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWPVZG68H8JFWRK6JK70
 title: Guard against disk exhaustion on uploads
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/harden-uploads
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 04c88a5ec2742fac89f4563d77c16fbdd4d8a9d2
-  session: null
-  claimed_at: 2026-09-23T12:51:30Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T13:10:01Z
+updated_at: 2026-09-23T13:13:42Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -156,3 +149,42 @@ length before any body bytes are read. New test
 `test_middleware_rejects_when_only_the_spool_filesystem_is_full` proves
 the spool side alone is enough to reject. ADR 0023, `docs/progress.md`,
 and `deploy/RUNBOOK.md` (check `/tmp` too) updated.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T13:13:42Z
+
+Review record (Terva, `terva-review.yml`).
+
+- PR #32, head `463bc08b`, base `04c88a5e`; merged `e4d072007469e7681f4dcfc621495c4e5e892355`.
+- r1 `harden-uploads-r1`, run `97ea1550-6089-4ab0-b6c7-ae8269b2a42f` (#448), reviewed `68b191a8`: 2 findings.
+  - high: route check runs after the multipart body may already be spooled → added `StorageGuardMiddleware`, checked before parsing.
+  - medium: accounting omitted the files upload writes → route now adds `MAX_DERIVATIVE_BYTES`.
+- r2 `harden-uploads-r2`, run `6ff18b06-021d-4e83-92ce-52fe829ac934` (#450), reviewed `14318d77`: r1 resolved, 1 medium.
+  - medium: the low-disk test only exercised the middleware branch → test now passes the middleware check and fails the route check.
+- r3 `harden-uploads-r3`, run `71482f83-d3de-451b-a521-83605d0f23e3` (#452), reviewed `9176b0a4`: r2 resolved, 1 high.
+  - high: the pre-parse guard checked only the photos volume, not Starlette's spool filesystem → middleware now checks `TMPDIR` too.
+- r4 `harden-uploads-r4`, run `431435bc-7d44-424a-bf57-20dde1e9ad76` (#454), reviewed `463bc08b`: clean.
+
+All findings accepted and fixed with regression tests; none disputed or
+deferred.
+
+## Summary
+
+Uploads now refuse below a free-space floor, in two layers.
+`StorageGuardMiddleware` (registered outside the body cap in `main.py`)
+answers `507 storage_full` for a `POST /api/evidence` from the declared
+`Content-Length` — or the request cap for a chunked body — before any
+body bytes are read, checking both the photos volume and the multipart
+spool filesystem. The route re-checks after the bounded read, accounting
+for the original plus `images.MAX_DERIVATIVE_BYTES`, before any Pillow
+work. The floor is `ARKHAM_MIN_FREE_BYTES`, default 256 MiB, read once
+onto `app.state.min_free_bytes`.
+
+It is a guardrail, not a reservation or a quota (ADR 0023); the residual
+two-writer race is accepted and documented. The originals directory's
+documented bound is that floor, backed by the pre-event `df`/`du` check
+in `deploy/RUNBOOK.md` (now including `/tmp`).
+
+Both acceptance criteria ticked. Merged as PR #32, merge commit
+`e4d072007469e7681f4dcfc621495c4e5e892355`, after four Terva rounds
+(r1 two findings, r2 one, r3 one, r4 clean). Full
+`scripts/check-quality.sh` green.
