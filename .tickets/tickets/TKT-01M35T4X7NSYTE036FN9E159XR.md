@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T00:33:20Z
+updated_at: 2026-09-23T01:15:29Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -119,3 +119,31 @@ this change.
 **agent:opencode/glitchtip-integration** at 2026-09-23T00:33:20Z
 
 Implementation changed from the plan's 'handler calls capture_exception' to 'handler calls bind_request_id (tag-only)': reporting from the handler duplicated every 500 because the two carries (generic vs starlette mechanism) are not deduped. Auto-capture by Sentry's ASGI middleware yields exactly one event, and the handler tags the scope so that event carries the request id. Function renamed capture_exception -> bind_request_id.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:04:35Z
+
+PR #20 opened: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/20. Head f8e946c24b50963ec2b46d1adce0c49b66982ce3, base 4a28e2f54b2a79f0cd49634bb2546a43767b8fce.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:04:51Z
+
+Terva review requested: workflow terva-review.yml dispatched on ref main with pr=20, request-id=ready-review. Run task id 22498 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions?workflow=terva-review.yml).
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:11:47Z
+
+Terva reviews posted for head f8e946c24b50963ec2b46d1adce0c49b66982ce3 (base 0bc6c11b1ff5611825299b1ef1be461c7fd4f19a was the config commit; PR base moved to 4a28e2f54b2a79f0cd49634bb2546a43767b8fce after PR #19 merged).
+
+- Review 209, run 707377c5-707b-49a4-b705-029b103ffff0, Actions run #319 (id 9038), request ready-review: high scrub_text absolute-URL leak (web/src/errors.js:59); medium main.jsx:27 init not awaited before refresh; medium reportError has no production call site (errors.js:160).
+- Review 210, run 4d1266f3-c751-4b58-8f4a-0d5a97f47739, Actions run #320 (id 9041), request ready-review-2: high no browserTracingIntegration (errors.js:145); medium browser DROPPED_REQUEST_KEYS omits env (errors.js:20).
+
+The failed run #314 was infra (reviews had not posted); retry produced 209/210.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:15:29Z
+
+Addressed both reviews on head f8e946c. All five findings accepted:
+- scrub_text absolute-URL leak (high, both reviews' #1 style): server/app/errors.py _scrub now routes absolute-URL tokens through scrub_url via _ABSOLUTE_URL regex; web/src/errors.js scrubText now routes ABSOLUTE_URL tokens through scrubUrl. Tests: test_scrub_text_redacts_path_like_tokens absolute cases, test_scrub_transaction_scrubs_spans absolute span description, web transaction + breadcrumb absolute-URL tests.
+- browser tracing (high): web/src/errors.js Sentry.init now installs browserTracingIntegration(); test asserts it and that config.integrations contains it.
+- env dropped (medium): added 'env' to web DROPPED_REQUEST_KEYS (and asserted data too) to match the server.
+- async init race (medium): web/src/main.jsx now chains refresh on initErrorReporting().finally(refresh) so Sentry's handlers are installed before the first request.
+- reportError orphan (medium): web/src/store.js adds reportFailure() and calls it at all four caught-error paths (refresh snapshot, refresh modState, join, modJoin), reporting only 5xx/network (never a 4xx the player can act on). store.test.js asserts report on 500/503 and no report on 400.
+
+Quality gate: bash scripts/check-quality.sh exit 0 — 330 server tests @ 95.05%, 20 deploy checks, 57 frontend tests, production build. Bundle re-verified: no DSN → no Sentry chunk (56.09 kB entry); DSN → separate 447.71 kB lazy chunk, entry free of sentry references.
