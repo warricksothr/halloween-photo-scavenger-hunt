@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:41:46Z
+updated_at: 2026-09-23T01:45:41Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -196,3 +196,9 @@ Quality gate re-run: exit 0 — 336 server tests @ 95.02%, 20 deploy checks, 66 
 Eighth Terva review (221, head 2c0b242, run f086a9f3-b7d5-435c-a2ba-2d90edb0bed2, Actions run #342/id 9128, request review-fixes-7): the bare-path query/fragment finding resolved; one new high finding, accepted and fixed:
 - high span-data query/fragment: both span scrubbers only used scrub_url for an allowlisted URL key, and sent any other '/' -starting value through redact_path, which keeps a query or fragment. Both now run every string span-data value through scrub_url/scrubUrl, which redacts a bearer segment and drops query and fragment for a bare path, an absolute URL, or plain text alike; the now-redundant URL-key allowlist was removed on both surfaces. Tests added on both surfaces for a query and fragment under a non-URL key such as path.
 Quality gate re-run: exit 0 — 337 server tests @ 95.11%, 20 deploy checks, 67 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:45:41Z
+
+Ninth Terva review (222, head e6bd5fe, run df483f79-46e1-3b4d-8318-8f7d0dc913e1 -> run df483f79, Actions run #344/id 9132, request review-fixes-8): the span-data query/fragment finding resolved; one new high finding, accepted and fixed:
+- high breadcrumb data: scrub_breadcrumb/scrubBreadcrumb kept every breadcrumb data key except the three URL fields, so headers, cookies, body data, env and query_string rode along — against the ADR/PR promise that before_breadcrumb drops them. Both now call a new recursive drop helper (_drop_sensitive_keys / dropSensitiveKeys) that removes the sensitive keys at any depth, so a nested request/response shape is covered. The request drop-list constant was unified into _SENSITIVE_KEYS. ADR 0017 wording updated to say the drop is recursive and covers breadcrumb/span data. Tests added on both surfaces for headers, cookies, body data, env, query_string, and a nested response.headers.
+Quality gate re-run: exit 0 — 338 server tests @ 95.06%, 20 deploy checks, 68 frontend tests, build.
