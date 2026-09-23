@@ -5,7 +5,7 @@
 // and then hand the fresh snapshot back to the store. Errors follow
 // docs/impl/api.md: {"error": code, "message": human string}.
 
-import { recordRequestId } from './errors';
+import { beginRequest, recordRequestId } from './errors';
 
 // A fetch can stay pending indefinitely on a dead connection, which no
 // amount of retry logic can reach. Bound the whole exchange — headers *and*
@@ -45,6 +45,9 @@ async function send(path, options = {}) {
     () => controller.abort(),
     isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
   );
+  // Drop the previous request's id before the exchange: a fetch that never
+  // gets headers must not report under an unrelated request's id.
+  beginRequest();
   try {
     const resp = await fetch(path, {
       headers,

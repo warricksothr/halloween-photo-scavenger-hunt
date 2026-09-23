@@ -208,6 +208,31 @@ describe('api client', () => {
     expect(lastRequestIdForTest()).toBe('req-123');
   });
 
+  it('clears a stale request id when the next request fails', async () => {
+    globalThis.fetch.mockResolvedValueOnce(
+      response({ body: {}, requestId: 'req-123' }),
+    );
+    await api.snapshot();
+    expect(lastRequestIdForTest()).toBe('req-123');
+
+    globalThis.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await api.snapshot();
+
+    expect(lastRequestIdForTest()).toBeNull();
+  });
+
+  it('clears the request id when a response carries no header', async () => {
+    globalThis.fetch.mockResolvedValueOnce(
+      response({ body: {}, requestId: 'req-123' }),
+    );
+    await api.snapshot();
+
+    globalThis.fetch.mockResolvedValueOnce(response({ body: {} }));
+    await api.snapshot();
+
+    expect(lastRequestIdForTest()).toBeNull();
+  });
+
   it('returns the second csrf_failed rather than retrying forever', async () => {
     const fetchMock = globalThis.fetch;
     fetchMock.mockResolvedValue(

@@ -158,6 +158,17 @@ def _scrub_span(span: dict[str, Any]) -> dict[str, Any]:
     return span
 
 
+def _scrub_exception_value(value: Any) -> Any:
+    """Scrub the textual fields of one exception frame's payload."""
+    if not isinstance(value, dict):
+        return value
+    value = dict(value)
+    for key in ("value", "type", "module"):
+        if isinstance(value.get(key), str):
+            value[key] = scrub_text(value[key])
+    return value
+
+
 def scrub_event(
     event: dict[str, Any], hint: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -173,6 +184,21 @@ def scrub_event(
         event["request"] = request
     if isinstance(event.get("transaction"), str):
         event["transaction"] = scrub_text(event["transaction"])
+    # An exception message can carry the failing URL — an httpx error
+    # echoes it, and a raise site may include the path — so the text
+    # fields are scrubbed like any other free text, not only the request.
+    logentry = event.get("logentry")
+    if isinstance(logentry, dict):
+        logentry = dict(logentry)
+        if isinstance(logentry.get("message"), str):
+            logentry["message"] = scrub_text(logentry["message"])
+        event["logentry"] = logentry
+    exception = event.get("exception")
+    if isinstance(exception, dict) and isinstance(exception.get("values"), list):
+        event["exception"] = {
+            **exception,
+            "values": [_scrub_exception_value(v) for v in exception["values"]],
+        }
     user = event.get("user")
     if isinstance(user, dict):
         user = dict(user)

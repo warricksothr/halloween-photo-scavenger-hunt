@@ -166,6 +166,24 @@ describe('error reporting', () => {
     );
   });
 
+  it('redacts a credential inside an exception message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      exception: {
+        values: [
+          { type: 'TypeError', value: 'GET /api/join/SECRET failed' },
+        ],
+      },
+      logentry: { message: 'GET https://hunt.example/t/SECRET failed' },
+    });
+
+    expect(event.exception.values[0].value).toBe('GET /api/join/<redacted> failed');
+    expect(event.logentry.message).toBe(
+      'GET https://hunt.example/t/<redacted> failed',
+    );
+  });
+
   it('drops the user IP from an event', async () => {
     const errors = await loadErrors();
 

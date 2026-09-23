@@ -25,10 +25,20 @@ let lastRequestId = null;
 let sentry = null;
 let started = false;
 
+// api.js clears the id as a request begins and records the response id on
+// the way back, so a request that never got headers (a network failure)
+// reports with no id rather than the previous request's — the tag is a
+// correlation, and a wrong one is worse than none.
+export function beginRequest() {
+  lastRequestId = null;
+}
+
 // api.js records the header here; the tag reads it at send time, so an
 // event carries the id of the request that was in flight when it fired.
+// An absent header clears the id: the identity of this response is
+// unknown, and the previous request's id must not stand in for it.
 export function recordRequestId(id) {
-  if (id) lastRequestId = id;
+  lastRequestId = id || null;
 }
 
 export function lastRequestIdForTest() {
@@ -114,12 +124,36 @@ function scrubBreadcrumb(crumb) {
   return cleaned;
 }
 
+function scrubExceptionValue(value) {
+  if (!value || typeof value !== 'object') return value;
+  const cleaned = { ...value };
+  for (const key of ['value', 'type', 'module']) {
+    if (typeof cleaned[key] === 'string') cleaned[key] = scrubText(cleaned[key]);
+  }
+  return cleaned;
+}
+
 export function scrubEvent(event) {
   if (!event || typeof event !== 'object') return event;
   const cleaned = { ...event };
   if (cleaned.request) cleaned.request = scrubRequest(cleaned.request);
   if (typeof cleaned.transaction === 'string') {
     cleaned.transaction = scrubText(cleaned.transaction);
+  }
+  // An exception message can carry the failing URL, so the text fields
+  // are scrubbed like any other free text, not only the request.
+  if (cleaned.logentry && typeof cleaned.logentry === 'object') {
+    const logentry = { ...cleaned.logentry };
+    if (typeof logentry.message === 'string') {
+      logentry.message = scrubText(logentry.message);
+    }
+    cleaned.logentry = logentry;
+  }
+  if (cleaned.exception && Array.isArray(cleaned.exception.values)) {
+    cleaned.exception = {
+      ...cleaned.exception,
+      values: cleaned.exception.values.map(scrubExceptionValue),
+    };
   }
   if (cleaned.user && typeof cleaned.user === 'object') {
     const user = { ...cleaned.user };

@@ -177,6 +177,25 @@ def test_scrub_transaction_scrubs_spans():
     )
 
 
+def test_scrub_event_scrubs_exception_message_and_logentry():
+    event = {
+        "exception": {
+            "values": [
+                {
+                    "type": "HTTPStatusError",
+                    "value": "GET https://hunt.example/api/join/SECRET failed",
+                }
+            ]
+        },
+        "logentry": {"message": "GET /api/mod/join/MODSECRET failed"},
+    }
+    cleaned = errors.scrub_event(event)
+    assert cleaned["exception"]["values"][0]["value"] == (
+        "GET https://hunt.example/api/join/<redacted> failed"
+    )
+    assert cleaned["logentry"]["message"] == "GET /api/mod/join/<redacted> failed"
+
+
 def test_scrub_breadcrumb_scrubs_from_and_to():
     crumb = {
         "message": "navigation",
