@@ -310,6 +310,38 @@ class TestRiddleHints:
         assert resp.json()["text"] == "Renamed."
         assert resp.json()["hints"] == ["Back."]
 
+    def test_patch_audit_records_hint_values(self, admin):
+        event = self._event(admin)
+        riddle = admin.post(
+            f"/api/admin/events/{event['id']}/riddles",
+            json={"text": "Start.", "sort_order": 1, "hints": ["One.", "Two."]},
+        ).json()
+        admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"hints": ["Alpha.", "Beta.", "Gamma."]},
+        )
+        rows = _audit_rows(admin, "riddle.edited")
+        details = json.loads(rows[-1]["details"])
+        # Two ladders of the same length are still different ladders, so
+        # the log carries the values, not just a count.
+        assert details["old_hints"] == ["One.", "Two."]
+        assert details["new_hints"] == ["Alpha.", "Beta.", "Gamma."]
+        # An edit that leaves hints alone records both sides unchanged.
+        admin.patch(
+            f"/api/admin/events/{event['id']}/riddles/{riddle['id']}",
+            json={"text": "Renamed."},
+        )
+        details = json.loads(_audit_rows(admin, "riddle.edited")[-1]["details"])
+        assert (
+            details["old_hints"]
+            == details["new_hints"]
+            == [
+                "Alpha.",
+                "Beta.",
+                "Gamma.",
+            ]
+        )
+
     def test_over_long_hint_rejected(self, admin):
         event = self._event(admin)
         resp = admin.post(

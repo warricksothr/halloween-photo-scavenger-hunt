@@ -23,8 +23,8 @@ Rules repeated from ADR 0004 so this file stands alone:
 | `event.closed`           | admin      | event        | `{ expired_pending: <count> }`                  | 2 |
 | `event.updated`          | admin      | event        | `{ old: {...}, new: {...} }` (changed fields)   | RFWM |
 | `event.purged`           | admin      | event        | `{ submissions: n, evidence: n }` (pre-delete)  | 10 |
-| `riddle.created`         | admin      | riddle       | `{ text, sort_order }`                          | 2 |
-| `riddle.edited`          | admin      | riddle       | `{ old_text, new_text, old_sort, new_sort }`    | 2 |
+| `riddle.created`         | admin      | riddle       | `{ text, sort_order, hint_count }`              | 2 |
+| `riddle.edited`          | admin      | riddle       | `{ old_text, new_text, old_sort, new_sort, old_hints, new_hints }` | 2 |
 | `riddle.deleted`         | admin      | riddle       | `{ text }` (final copy for forensics)           | 2 |
 | `player.joined`          | player     | player       | `{ display_name, device_label }`                | 3 |
 | `session.revoked`        | player/mod | session      | `{ reason: "logout" \| "moderator" }`           | 3, stretch |

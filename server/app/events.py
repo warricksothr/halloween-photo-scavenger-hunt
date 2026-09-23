@@ -636,12 +636,14 @@ def patch_riddle(
                 f"UPDATE riddle SET {assignments} WHERE id = ?",
                 (*updates.values(), riddle_id),
             )
-        old_hint_count = len(_load_hints(writer, riddle_id))
+        old_hints = _load_hints(writer, riddle_id)
         if hints is not None:
             _replace_hints(writer, riddle_id, hints)
         if updates or hints is not None:
             # Before/after in details: riddle rows carry no updated_at,
-            # because the audit log *is* the history (schema.md).
+            # because the audit log *is* the history (schema.md). Hints
+            # log their values, not just their length: two ladders of the
+            # same size are still two different ladders.
             log_action(
                 writer,
                 event_id=event_id,
@@ -657,10 +659,8 @@ def patch_riddle(
                     "new_sort": body.sort_order
                     if body.sort_order is not None
                     else row["sort_order"],
-                    "old_hint_count": old_hint_count,
-                    "new_hint_count": len(hints)
-                    if hints is not None
-                    else old_hint_count,
+                    "old_hints": old_hints,
+                    "new_hints": hints if hints is not None else old_hints,
                 },
             )
         updated = _get_riddle(writer, event_id, riddle_id)

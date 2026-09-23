@@ -149,6 +149,45 @@ describe('player screens', () => {
     expect(screen.queryByRole('button', { name: 'Need a nudge?' })).toBeNull();
   });
 
+  it('starts a different riddle with its hints hidden again', async () => {
+    // Routing reuses the screen instance for the next riddle, so a
+    // revealed count carried over would open the new ladder for free.
+    const twoRiddles = {
+      riddles: [
+        { id: 'riddle-1', state: 'unsolved', text: 'First', hints: ['One.', 'Two.'] },
+        { id: 'riddle-2', state: 'unsolved', text: 'Second', hints: ['A.', 'B.'] },
+      ],
+      submissions: [],
+      me: { restriction: { level: 0 } },
+    };
+    const { rerender } = render(
+      <RiddleDetailScreen
+        snapshot={twoRiddles}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Need a nudge?' }));
+    expect(screen.getByText('One.')).toBeTruthy();
+
+    rerender(
+      <RiddleDetailScreen
+        snapshot={twoRiddles}
+        copy={copy}
+        riddleId="riddle-2"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('A.')).toBeNull();
+    expect(screen.queryByText('B.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Need a nudge?' })).toBeTruthy();
+  });
+
   it('does not offer submission when the player is submission-banned', async () => {    render(
       <RiddleDetailScreen
         snapshot={snapshot({ restrictionLevel: 3 })}

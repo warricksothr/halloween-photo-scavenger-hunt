@@ -51,6 +51,12 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
     });
   }, []);
 
+  // A different riddle means a different ladder: carry the count over
+  // and the next riddle opens with hints the player never asked for.
+  useEffect(() => {
+    setRevealed(0);
+  }, [riddleId]);
+
   if (!riddle) {
     // Riddle vanished from the snapshot (moderator edit) — retreat.
     onBack();
