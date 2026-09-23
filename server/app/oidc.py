@@ -43,6 +43,7 @@ import time
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx2
 from authlib.integrations.base_client import OAuthError
@@ -467,12 +468,19 @@ def _is_mod_surface(target: str) -> bool:
 
 
 def _with_marker(target: str, marker: str) -> str:
-    # Append to the query, and never after a ``#``: a parameter placed in
-    # the fragment is invisible to ``URLSearchParams(location.search)``.
-    path, sep, fragment = target.partition("#")
-    separator = "&" if "?" in path else "?"
-    marked = f"{path}{separator}sso={marker}"
-    return f"{marked}#{fragment}" if sep else marked
+    # Set ``sso`` in the query, replacing any value already there: the
+    # screen reads the first one (``URLSearchParams.get``), so a stale
+    # marker would shadow the callback's authoritative refusal. The query
+    # stays before the ``#``; a parameter after it is invisible to
+    # ``URLSearchParams(location.search)``.
+    parts = urlsplit(target)
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key != "sso"
+    ]
+    query.append(("sso", marker))
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 def _refusal_redirect(target: str, marker: str) -> RedirectResponse:

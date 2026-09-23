@@ -30,7 +30,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T05:19:14Z
+updated_at: 2026-09-23T05:22:44Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -204,3 +204,32 @@ fragment-bearing input, so the fix is defensive:
   to `/admin`.
 
 `bash scripts/check-quality.sh` passes on the fix.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T05:22:44Z
+
+Terva review rounds 3–4 and the stale-marker fix.
+
+### Round 3 (`mod-link-oidc-r3`, run 396, head a590ee6)
+
+Review id 240. `finding-1` from r2 confirmed resolved. One new medium finding:
+`_with_marker` appended `sso=` without removing an existing `sso`, so a target
+such as `/m/CODE?sso=stale` produced two values and
+`URLSearchParams.get('sso')` returned the stale first one.
+
+This one is reachable: `_safe_next` permits ordinary query parameters, so a
+`next` that already carries `sso` passes validation. `signInNext()` strips it
+before the login round-trip, but a hand-written link does not.
+
+### Fix
+
+`_with_marker` now parses the target, drops any `sso` pair, appends the
+callback's marker, and reassembles with the query before the fragment. This
+subsumes the r2 fragment fix. Tests:
+
+- `test_refusal_marker_lands_in_the_query_not_the_fragment` now has six cases,
+  two of which seed a stale `sso`.
+- `test_a_stale_sso_marker_does_not_shadow_the_callback` drives the callback
+  with `next=/m/MODCODE1?sso=stale` and asserts the location carries
+  `sso=not_moderator`.
+
+`bash scripts/check-quality.sh` passes: 400 server tests, 95.59% coverage.
