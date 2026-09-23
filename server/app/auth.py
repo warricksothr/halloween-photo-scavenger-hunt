@@ -43,6 +43,10 @@ COOKIE_NAME = "arkham_admin"
 PLAYER_COOKIE_NAME = "arkham_session"
 MOD_COOKIE_NAME = "arkham_mod"
 
+API_TOKEN_ENV = "ARKHAM_ADMIN_API_TOKEN"
+API_TOKEN_SENTINEL = "api-token"
+_BEARER_PREFIX = "Bearer "
+
 # How long any session stays live. Twelve hours covers one long party
 # night; a device left behind stops working before the next morning.
 # ARKHAM_SESSION_TTL_SECONDS overrides it (an all-day event, a rehearsal).
@@ -66,6 +70,36 @@ def configured_session_ttl() -> int:
     except ValueError:
         configured = 0
     return configured if configured > 0 else SESSION_TTL_SECONDS
+
+
+def configured_api_token() -> str | None:
+    """The admin API token from ``ARKHAM_ADMIN_API_TOKEN``, or ``None``.
+
+    Unset (or empty) turns the feature off — the bearer path does nothing,
+    which is the normal case. A value is a standing credential: unlike a
+    session it does not expire with the process, so rotating it means
+    editing the env file and restarting (deploy/RUNBOOK.md)."""
+    token = os.environ.get(API_TOKEN_ENV, "")
+    return token or None
+
+
+def is_api_token_request(request: Request, token: str | None) -> bool:
+    """True when the request carries ``Authorization: Bearer <token>`` and
+    that token is the configured one.
+
+    One definition, used by ``current_admin`` here and by the CSRF
+    middleware, so "authenticated by token" means the same thing in both
+    places. ``token`` is passed in rather than read from the env so the
+    check reads the same value the app started with. The comparison is
+    constant-time: a token is a secret and a byte-by-byte early return
+    leaks its prefix."""
+    if not token:
+        return False
+    header = request.headers.get("Authorization", "")
+    if not header.startswith(_BEARER_PREFIX):
+        return False
+    presented = header[len(_BEARER_PREFIX) :]
+    return secrets.compare_digest(presented, token)
 
 
 def _expired(created_at: int, ttl: int) -> bool:
@@ -101,7 +135,17 @@ def revoke_admin_session(request: Request, token: str) -> None:
 
 
 def current_admin(request: Request) -> str | None:
-    """Return the admin token if the request carries a live session."""
+    """Return the admin token if the request carries a live session.
+
+    A configured API token (``ARKHAM_ADMIN_API_TOKEN``) is the second way
+    in: a script has no cookie jar, so it presents the token as a bearer
+    credential. The sentinel stands in for the session token — it is not
+    in ``admin_sessions``, so revoking it is a no-op and it can never be
+    mistaken for a live cookie token."""
+    if is_api_token_request(
+        request, getattr(request.app.state, "admin_api_token", None)
+    ):
+        return API_TOKEN_SENTINEL
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None

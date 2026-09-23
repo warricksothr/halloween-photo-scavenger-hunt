@@ -29,6 +29,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app import auth
+
 CSRF_COOKIE_NAME = "arkham_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -104,6 +106,15 @@ class CsrfMiddleware:
 
         request = Request(scope)
         if scope["method"].upper() in SAFE_METHODS:
+            await self.app(scope, receive, self._planting(send, request))
+            return
+
+        # A bearer-authenticated request carries its credential in a header,
+        # not an ambient cookie, so the double-submit check proves nothing
+        # for it (auth.is_api_token_request explains). A bad or absent token
+        # fails the check and still gets challenged below.
+        token = getattr(request.app.state, "admin_api_token", None)
+        if auth.is_api_token_request(request, token):
             await self.app(scope, receive, self._planting(send, request))
             return
 

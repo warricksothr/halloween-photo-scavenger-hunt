@@ -23,6 +23,7 @@
 #     ARKHAM_OIDC_ISSUER=https://<authentik-host>/application/o/<slug>/
 #     ARKHAM_OIDC_CLIENT_ID=<client id>
 #     ARKHAM_OIDC_CLIENT_SECRET=<client secret>
+#     ARKHAM_ADMIN_API_TOKEN=<random secret; scripted admin access>
 #     ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/1
 #     ARKHAM_TRACES_SAMPLE_RATE=0.1
 #     ARKHAM_ENVIRONMENT=production
@@ -36,6 +37,12 @@
 # the groups mapping has its own scope name (the default does not request
 # it). This file is an EnvironmentFile: bare NAME=value, never `export`.
 # See deploy/RUNBOOK.md §6.
+#
+# ARKHAM_ADMIN_API_TOKEN is an optional standing credential for scripts
+# with no browser: send it as `Authorization: Bearer <token>` and skip the
+# cookie jar and CSRF pair. Unset means the feature is off. Unlike a
+# session it does not expire on restart, so rotate it by editing this file
+# and restarting.
 #
 # ARKHAM_ERROR_DSN turns on server error/trace reporting to GlitchTip
 # (app/errors.py, ADR 0017). Unset means reporting is off, which is the

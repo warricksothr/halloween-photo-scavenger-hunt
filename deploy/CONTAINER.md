@@ -104,6 +104,11 @@ The environment variables, and why:
   `ARKHAM_OIDC_SCOPES="openid profile email groups"` — an unrequested
   scope emits no claim. `deploy/RUNBOOK.md` §6 covers the Authentik side
   and troubleshooting.
+- `ARKHAM_ADMIN_API_TOKEN` — optional. A standing credential for a script
+  with no browser: send it as `Authorization: Bearer <token>` and skip the
+  cookie jar and CSRF pair. Unset means off. Unlike a session it does not
+  expire on restart, so rotate it by editing the env and recreating the
+  container.
 
 `-p 127.0.0.1:8080:8000` binds loopback only. For a LAN party (players
 on phones on the same network), publish on all interfaces and give the
