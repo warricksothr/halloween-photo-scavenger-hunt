@@ -39,6 +39,7 @@ from app import (
     ratelimit,
     sse,
     state,
+    storage,
     submissions,
     teams,
 )
@@ -156,6 +157,9 @@ def create_app(
         # deployment is one worker and a restart may as well clear them.
         app.state.rate_limiter = ratelimit.RateLimiter()
         app.state.photos_dir = photos_dir
+        # Uploads refuse below this free-space floor (app/storage.py).
+        # Read once here so the env var is a process setting, like the TTL.
+        app.state.min_free_bytes = storage.configured_min_free_bytes()
         # The broker captures the running loop: sync endpoints publish
         # from the threadpool, and asyncio queues can only be fed from
         # the loop's thread (see app/sse.py).

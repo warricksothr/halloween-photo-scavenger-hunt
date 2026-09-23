@@ -13,6 +13,7 @@ from PIL import Image
 from support import arm_csrf
 
 from app import evidence as evidence_module
+from app import storage
 from app.images import (
     MAX_BYTES,
     NotAnImageError,
@@ -277,3 +278,31 @@ class TestUploadEndpoint:
             "/api/evidence", files={"photo": ("x.jpg", make_jpeg(), "image/jpeg")}
         )
         assert resp.status_code == 401
+
+
+class TestDiskGuardrail:
+    def test_low_disk_rejects_before_any_work(self, admin, client, monkeypatch):
+        _party(admin, client)
+        monkeypatch.setattr(storage, "has_room", lambda *a, **k: False)
+
+        resp = _upload(client, make_jpeg())
+        assert resp.status_code == 507, resp.text
+        assert resp.json()["error"] == "storage_full"
+        # Refused before Pillow, the row, and the files: nothing to undo.
+        conn = client.app.state.db
+        assert conn.execute("SELECT COUNT(*) FROM evidence_item").fetchone()[0] == 0
+        assert list(client.app.state.photos_dir.rglob("*")) == []
+
+    def test_room_available_uploads_normally(self, admin, client, monkeypatch):
+        _party(admin, client)
+        calls = []
+        real = storage.has_room
+
+        def spy(path, extra_bytes, minimum):
+            calls.append((extra_bytes, minimum))
+            return real(path, extra_bytes, minimum)
+
+        monkeypatch.setattr(storage, "has_room", spy)
+        assert _upload(client, make_jpeg()).status_code == 201
+        # The guardrail was consulted, not skipped on the happy path.
+        assert calls and calls[0][1] == client.app.state.min_free_bytes

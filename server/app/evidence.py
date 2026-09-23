@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from app import auth, ids
+from app import auth, ids, storage
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.conduct import now as conduct_now
@@ -100,6 +100,17 @@ async def upload(
     data = await photo.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         return _err(413, "too_large", "That photo is too large.")
+
+    # Disk guardrail before any Pillow work: a full disk fails SQLite writes
+    # too, so refuse while the host can still recover. Guardrail, not a
+    # reservation — two uploads can both pass and then write (ADR 0023).
+    photos_dir = request.app.state.photos_dir
+    if not storage.has_room(photos_dir, len(data), request.app.state.min_free_bytes):
+        return _err(
+            507,
+            "storage_full",
+            "The server is out of storage space — tell the host.",
+        )
 
     # Optional aim tag: must be a riddle on this event.
     if riddle_id is not None:
