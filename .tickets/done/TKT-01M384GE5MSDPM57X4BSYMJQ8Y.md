@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M384GE5MSDPM57X4BSYMJQ8Y
 title: smoke-container.sh login misses the CSRF handshake and 403s
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: null
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 181b00a1393addfb142b9c9a0172a58e2b8989e3
-  session: null
-  claimed_at: 2026-09-23T22:30:52Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-23T22:30:52Z
+updated_at: 2026-09-23T22:35:27Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -86,3 +79,31 @@ A regression test should assert the smoke sends the handshake — e.g. a
 deployment-checks test that reads the script and requires a `X-CSRF-Token` header
 and an `arkham_csrf` read before the first `--data` POST. A shellcheck-style read
 of the script is enough; nobody wants to stand up a container in the unit suite.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T22:31:23Z
+
+Fix on branch t3code/smoke-csrf-fix, commit fca0f2d317b4582a10924dcf1903a0501a2faeb4, PR #42. Terva review requested (request-id smoke-csrf-fix-r1). Scope widened from the report: player join and upload also needed the handshake. Verified end-to-end against a live server; deployment check fails pre-fix.
+
+## Summary
+
+smoke-container.sh now performs the CSRF handshake, and a deployment check
+keeps it that way.
+
+The script logged in with a fresh jar and no X-CSRF-Token, so the
+safe-by-default middleware (ADR 0015) returned 403 csrf_failed and curl
+--fail aborted the whole run. The report named only the login; the player
+join and the evidence upload were broken the same way, so the fix covers
+all six unsafe calls. Each jar is armed with one safe GET, arkham_csrf is
+read from it, and the value is echoed on every unsafe call.
+
+Verified against a live server: the pre-fix login returns 403, and the
+fixed sequence runs login, create event, riddle, open, join, and upload
+end to end. The new test parses the script's curl invocations, requires
+the header on any unsafe call, and requires both jars to be armed; it
+fails on the pre-fix script and passes after. Full gate green: 469 server
+tests, 23 deploy checks, web tests and build.
+
+Merge 2a39a09822387228d61f2c5100de7410c81cf261 (PR #42), reviewed clean on
+fca0f2d317b4582a10924dcf1903a0501a2faeb4 by Terva run 685bbeff.
