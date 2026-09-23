@@ -182,10 +182,21 @@ export function scrubTransaction(event) {
 
 // Boot the SDK. No DSN means nothing loads and this is a no-op, which is
 // what keeps a developer checkout free of network calls.
+//
+// The lazy chunk can fail to load on a flaky connection. That must not
+// latch reporting off forever, so `started` is set only once the SDK is
+// in hand — a failed import leaves it false and a later call retries. The
+// failure is swallowed rather than rethrown: the caller carries on
+// without a reporter, and there is no reporter to tell.
 export async function initErrorReporting() {
   if (started || !DSN) return false;
+  let Sentry;
+  try {
+    Sentry = await import('@sentry/browser');
+  } catch {
+    return false;
+  }
   started = true;
-  const Sentry = await import('@sentry/browser');
   Sentry.init({
     dsn: DSN,
     environment: ENVIRONMENT,
@@ -207,11 +218,16 @@ export async function initErrorReporting() {
 }
 
 // Report an error the app caught itself — a rejected boot, a failed
-// mutation — with the failing request id attached when there is one.
-export function reportError(error, context = {}) {
+// mutation — with the failing request id attached when there is one. The
+// id is passed explicitly when the caller has it (an API result carries
+// its own), because the module-global is shared by concurrent requests;
+// it falls back to the global for errors that have no request of their
+// own.
+export function reportError(error, context = {}, requestId = undefined) {
   if (!sentry) return;
+  const id = requestId === undefined ? lastRequestId : requestId;
   sentry.withScope((scope) => {
-    if (lastRequestId) scope.setTag('request_id', lastRequestId);
+    if (id) scope.setTag('request_id', id);
     for (const [key, value] of Object.entries(context)) {
       if (value !== undefined) scope.setContext(key, value);
     }

@@ -46,6 +46,7 @@ describe('api client', () => {
       error: 'request_failed',
       message: 'Something went wrong.',
       status: 502,
+      requestId: null,
     });
   });
 
@@ -61,6 +62,7 @@ describe('api client', () => {
       error: 'submission_pending',
       message: 'Already scanning.',
       status: 409,
+      requestId: null,
     });
   });
 
@@ -71,6 +73,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -90,6 +93,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
     vi.useRealTimers();
   });
@@ -114,6 +118,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
     vi.useRealTimers();
   });
@@ -129,6 +134,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -143,6 +149,7 @@ describe('api client', () => {
       error: 'network_error',
       message: 'Could not reach the server. Check your connection.',
       network: true,
+      requestId: null,
     });
   });
 
@@ -243,6 +250,7 @@ describe('api client', () => {
       error: 'csrf_failed',
       message: 'stale',
       status: 403,
+      requestId: null,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

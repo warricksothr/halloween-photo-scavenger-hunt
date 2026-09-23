@@ -301,6 +301,25 @@ describe('store', () => {
       where: 'join',
       error_code: 'request_failed',
       http_status: 503,
+    }, null);
+  });
+
+  it('reports under the failing request id, not a shared global', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({
+      error: 'request_failed',
+      message: 'Something went wrong.',
+      status: 500,
+      requestId: 'req-own',
     });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(mocks.reportError.mock.calls[0][2]).toBe('req-own');
+    vi.useRealTimers();
   });
 });

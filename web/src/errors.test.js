@@ -20,6 +20,7 @@ async function loadErrors({ dsn } = {}) {
 describe('error reporting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sentryMock.withScope.mockReset();
   });
 
   afterEach(() => {
@@ -54,6 +55,38 @@ describe('error reporting', () => {
     expect(sentryMock.browserTracingIntegration).toHaveBeenCalled();
     const config = sentryMock.init.mock.calls[0][0];
     expect(config.integrations).toContainEqual({ name: 'BrowserTracing' });
+  });
+
+  it('retries a failed SDK import instead of latching reporting off', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_ERROR_DSN', 'https://key@glitchtip.example/1');
+    let attempts = 0;
+    vi.doMock('@sentry/browser', () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('chunk failed to load');
+      return sentryMock;
+    });
+    const errors = await import('./errors');
+
+    await expect(errors.initErrorReporting()).resolves.toBe(false);
+    expect(sentryMock.init).not.toHaveBeenCalled();
+
+    await expect(errors.initErrorReporting()).resolves.toBe(true);
+    expect(sentryMock.init).toHaveBeenCalledTimes(1);
+    vi.doMock('@sentry/browser', () => sentryMock);
+  });
+
+  it('reports under an explicit request id over the shared global', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+    await errors.initErrorReporting();
+    errors.recordRequestId('req-global');
+
+    const scope = { setTag: vi.fn(), setContext: vi.fn() };
+    sentryMock.withScope.mockImplementation((fn) => fn(scope));
+
+    errors.reportError(new Error('boom'), { where: 'join' }, 'req-own');
+
+    expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-own');
   });
 
   it('records the last request id and attaches it as a tag', async () => {

@@ -21,6 +21,12 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // the store's phase and, once ready, the event status. This is the
 // snapshot contract made visible — every screen renders FROM the
 // snapshot, and nothing here talks to the API except through store.js.
+// A failed reporter boot must not block the app or surface as an
+// unhandled rejection, so the whole chain settles into refresh().
+function bootReportThenRefresh() {
+  initErrorReporting().then(refresh, refresh);
+}
+
 function App() {
   const [state, setState] = useState(getState());
 
@@ -31,7 +37,7 @@ function App() {
     // once. With a DSN the SDK import is awaited first: a boot failure
     // that fired before Sentry's global handlers were installed would go
     // unreported, which is the whole point of starting here.
-    initErrorReporting().finally(refresh);
+    bootReportThenRefresh();
     return unsubscribe;
   }, []);
 

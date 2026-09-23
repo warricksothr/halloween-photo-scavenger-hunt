@@ -45,8 +45,11 @@ async function send(path, options = {}) {
     () => controller.abort(),
     isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
   );
-  // Drop the previous request's id before the exchange: a fetch that never
-  // gets headers must not report under an unrelated request's id.
+  // The id of THIS response, carried on the result so a caller reports
+  // under its own request rather than a shared global another in-flight
+  // request may have overwritten. beginRequest() clears the global for the
+  // SDK's own auto-capture, which cannot receive a per-call id.
+  let responseId = null;
   beginRequest();
   try {
     const resp = await fetch(path, {
@@ -57,7 +60,8 @@ async function send(path, options = {}) {
     });
     // The request id is the join key to this request's server log line and
     // error report, so a browser error can name the same request (ADR 0016).
-    recordRequestId(resp.headers?.get?.('X-Request-ID'));
+    responseId = resp.headers?.get?.('X-Request-ID') ?? null;
+    recordRequestId(responseId);
     if (resp.status === 401) {
       // Not joined (or session revoked) — the store routes to the join
       // screen; it is not an error from the player's point of view.
@@ -80,10 +84,10 @@ async function send(path, options = {}) {
       bodyMalformed = true;
     }
     if (!resp.ok) {
-      return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status };
+      return { error: body.error ?? 'request_failed', message: body.message ?? 'Something went wrong.', status: resp.status, requestId: responseId };
     }
     if (bodyMalformed) {
-      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status };
+      return { error: 'request_failed', message: 'Something went wrong.', status: resp.status, requestId: responseId };
     }
     return body;
   } catch {
@@ -91,7 +95,7 @@ async function send(path, options = {}) {
     // dead one never settles until the timeout aborts it. Fold both into
     // the same error shape the rest of the client branches on, so callers
     // never see a rejection and a waiting screen cannot stay busy forever.
-    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true };
+    return { error: 'network_error', message: 'Could not reach the server. Check your connection.', network: true, requestId: null };
   } finally {
     clearTimeout(timer);
   }

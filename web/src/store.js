@@ -122,14 +122,19 @@ async function withRetry(request) {
 
 // A failure the player cannot act on — a 5xx or a dead connection — is a
 // bug worth a report; a 4xx is the game telling the player something and
-// is not. Reporting is inert with no DSN (errors.js).
+// is not. The result carries its own request id, so concurrent requests
+// cannot cross-tag. Reporting is inert with no DSN (errors.js).
 function reportFailure(result, context) {
   if (result.network || result.status >= 500) {
-    reportError(new Error(result.message || 'request failed'), {
-      ...context,
-      error_code: result.error ?? 'unknown',
-      http_status: result.status ?? null,
-    });
+    reportError(
+      new Error(result.message || 'request failed'),
+      {
+        ...context,
+        error_code: result.error ?? 'unknown',
+        http_status: result.status ?? null,
+      },
+      result.requestId ?? null,
+    );
   }
 }
 
