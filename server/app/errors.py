@@ -53,9 +53,17 @@ DEFAULT_TRACES_SAMPLE_RATE = 0.1
 _DROPPED_REQUEST_KEYS = ("headers", "cookies", "data", "env", "query_string")
 # Span data keys whose value is a URL rather than an opaque string.
 _URL_DATA_KEYS = frozenset({"url", "http.url", "http.query", "http.fragment"})
-# A bare absolute URL inside a longer string (a transaction name or a
-# breadcrumb message), as opposed to one that is the whole value.
-_ABSOLUTE_URL = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+# A path-like or URL-like run inside free text. The run starts at a ``/``
+# (a bare path) or a URL scheme, and continues over path/query characters.
+# Free text wraps it in quotes, follows a ``key=``, or puts it on its own
+# line, so the match is a substring rather than a whole whitespace token.
+# Trailing sentence punctuation is not part of the run and is peeled back
+# before redaction, then restored.
+_URL_IN_TEXT = re.compile(
+    r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+|/[^\s]*",
+)
+# Characters that commonly close a quoted or parenthesised URL in prose.
+_TRAILING_PUNCTUATION = "'\"`)]}>,.;:!?"
 
 
 @dataclass(frozen=True)
@@ -103,24 +111,26 @@ def scrub_url(url: str | None) -> str | None:
 
 
 def scrub_text(text: str) -> str:
-    """Redact a bearer path that appears inside a larger string.
+    """Redact a bearer path or URL that appears inside a larger string.
 
-    A transaction name is ``"GET /api/join/SECRET"`` rather than a bare
-    path, so redacting the whole string as a path would miss it. Split on
-    whitespace and redact the path-like tokens: a token that is a bare
-    path, and a token that is an absolute URL (``"GET
-    https://host/api/join/SECRET"``), whose credential reaches the same
-    scrubber.
+    The path is not the whole value: a transaction name is ``"GET
+    /api/join/SECRET"``, an exception message may be ``"request to
+    '/api/join/SECRET' failed"``, and a log line may be
+    ``"url=/api/join/SECRET"``. Scan the text for the path-like run
+    anywhere, redact it, and leave the surrounding prose and punctuation
+    exactly as it was — so a leading quote, a ``key=``, or a newline does
+    not hide the credential.
     """
 
-    def _scrub(token: str) -> str:
-        if token.startswith("/"):
-            return redact_path(token)
-        if _ABSOLUTE_URL.match(token):
-            return scrub_url(token) or token
-        return token
+    def _replace(match: re.Match[str]) -> str:
+        run = match.group(0)
+        stripped = run.rstrip(_TRAILING_PUNCTUATION)
+        trailing = run[len(stripped) :]
+        if stripped.startswith("/"):
+            return redact_path(stripped) + trailing
+        return (scrub_url(stripped) or stripped) + trailing
 
-    return " ".join(_scrub(token) for token in text.split())
+    return _URL_IN_TEXT.sub(_replace, text)
 
 
 def scrub_breadcrumb(

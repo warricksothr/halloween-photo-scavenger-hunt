@@ -47,6 +47,13 @@ export function lastRequestIdForTest() {
 
 const ABSOLUTE_URL = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]*/;
 
+// A path-like or URL-like run inside free text — quoted, key-prefixed, or
+// on its own line — so the credential is not hidden by surrounding prose
+// or punctuation. The run ends at whitespace; sentence punctuation that
+// closes a quote or bracket is peeled back before redaction.
+const URL_IN_TEXT = /[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s]+|\/[^\s]*/g;
+const TRAILING_PUNCTUATION = /['"`)\]}>,.;:!?]+$/;
+
 function scrubUrl(value) {
   if (typeof value !== 'string' || value === '') return value;
   // Split the path off any absolute URL before redacting: redactPath
@@ -70,16 +77,13 @@ function scrubText(value) {
   if (typeof value !== 'string') return value;
   // A path can arrive bare ("GET /j/SECRET") or inside an absolute URL
   // ("GET https://host/j/SECRET"); both carry the same credential, so
-  // both go through the URL scrubber rather than only the "/"-prefixed
-  // tokens.
-  return value
-    .split(' ')
-    .map((token) => {
-      if (token.startsWith('/')) return redactPath(token);
-      if (ABSOLUTE_URL.test(token)) return scrubUrl(token);
-      return token;
-    })
-    .join(' ');
+  // both go through the URL scrubber wherever they sit in the text.
+  return value.replace(URL_IN_TEXT, (run) => {
+    const stripped = run.replace(TRAILING_PUNCTUATION, '');
+    const trailing = run.slice(stripped.length);
+    if (stripped.startsWith('/')) return redactPath(stripped) + trailing;
+    return scrubUrl(stripped) + trailing;
+  });
 }
 
 function scrubRequest(request) {

@@ -116,6 +116,20 @@ def test_scrub_text_redacts_path_like_tokens():
     )
 
 
+def test_scrub_text_reaches_a_path_wrapped_in_prose():
+    # A leading quote, an assignment, or a newline must not hide the path —
+    # the credential sits in the path, not in the surrounding punctuation.
+    assert (
+        errors.scrub_text("request to '/api/join/SECRET' failed")
+        == "request to '/api/join/<redacted>' failed"
+    )
+    assert errors.scrub_text("url=/api/join/SECRET,") == "url=/api/join/<redacted>,"
+    assert (
+        errors.scrub_text("GET\n/api/join/SECRET\nfailed")
+        == "GET\n/api/join/<redacted>\nfailed"
+    )
+
+
 def test_scrub_event_strips_request_secrets_and_keeps_the_url_redacted():
     event = {
         "request": {

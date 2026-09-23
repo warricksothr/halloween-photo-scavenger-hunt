@@ -151,6 +151,21 @@ describe('error reporting', () => {
     );
   });
 
+  it('reaches a path wrapped in prose, quoting, or a newline', async () => {
+    const errors = await loadErrors();
+
+    expect(
+      errors.scrubEvent({ message: "request to '/api/join/SECRET' failed" })
+        .message,
+    ).toBe("request to '/api/join/<redacted>' failed");
+    expect(errors.scrubEvent({ message: 'url=/api/join/SECRET,' }).message).toBe(
+      'url=/api/join/<redacted>,',
+    );
+    expect(
+      errors.scrubEvent({ message: 'GET\n/api/join/SECRET\nfailed' }).message,
+    ).toBe('GET\n/api/join/<redacted>\nfailed');
+  });
+
   it('redacts span descriptions and URL-shaped span data', async () => {
     const errors = await loadErrors();
 
