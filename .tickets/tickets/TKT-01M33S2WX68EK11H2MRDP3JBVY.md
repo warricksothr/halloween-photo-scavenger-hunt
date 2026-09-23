@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WX68EK11H2MRDP3JBVY
 title: Record the observability boundary in an ADR
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -14,19 +14,18 @@ assignees: []
 milestone: null
 parent: TKT-01M33S2WHFKP09V3Z7TM90Y1VQ
 origin: null
-dependencies:
-  - TKT-01M33S2WVJM5SGE3Q90G3XMNTZ
+dependencies: []
 blocks_on: none
 references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T05:23:13Z
+updated_at: 2026-09-23T03:02:13Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/session
   name: ""
 extensions: {}
 ---

@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WP0F879M8AKQXVS7HRZ
 title: Add in-process metrics for locks, SSE, and ingest
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -21,12 +21,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T05:23:13Z
+updated_at: 2026-09-23T03:02:14Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/review-system-design
+  id: agent:opencode/session
   name: ""
 extensions: {}
 ---

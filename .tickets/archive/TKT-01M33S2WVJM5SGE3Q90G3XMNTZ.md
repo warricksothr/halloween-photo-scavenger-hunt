@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S2WVJM5SGE3Q90G3XMNTZ
 title: Deploy Bugsink as a sidecar and wire the error DSNs
 type: task
-status: draft
+status: archived
 status_reason: null
 priority: high
 due_on: null
@@ -21,14 +21,17 @@ dependencies:
 blocks_on: none
 references: []
 claim: null
-archive: null
+archive:
+  archived_at: 2026-09-23T03:02:10Z
+  from_status: draft
+  reason: "Obsolete: GlitchTip is hosted, not a Bugsink sidecar. TKT-01M35T4X7NSYTE036FN9E159XR wired the DSNs and merged, so there is no sidecar to deploy."
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T00:20:31Z
+updated_at: 2026-09-23T03:02:10Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
 updated_by:
-  id: agent:opencode/glitchtip-integration
+  id: agent:opencode/session
   name: ""
 extensions: {}
 ---
@@ -49,3 +52,7 @@ Run Bugsink on the same VPS as a loopback-bound compose service behind nginx wit
 **agent:opencode/glitchtip-integration** at 2026-09-23T00:20:31Z
 
 Obsolete as written: GlitchTip is hosted, not a sidecar. TKT-01M35T4X7NSYTE036FN9E159XR wires the DSNs instead of deploying Bugsink.
+
+**agent:opencode/session** at 2026-09-23T03:02:10Z
+
+archived from draft: Obsolete: GlitchTip is hosted, not a Bugsink sidecar. TKT-01M35T4X7NSYTE036FN9E159XR wired the DSNs and merged, so there is no sidecar to deploy.

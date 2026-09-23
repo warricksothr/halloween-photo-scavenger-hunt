@@ -19,7 +19,7 @@ dependencies: []
 blocks_on: none
 references:
   - ref: ticket:TKT-01M33S2WP0F879M8AKQXVS7HRZ
-    path: .tickets/draft/TKT-01M33S2WP0F879M8AKQXVS7HRZ.md
+    path: .tickets/tickets/TKT-01M33S2WP0F879M8AKQXVS7HRZ.md
 claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
