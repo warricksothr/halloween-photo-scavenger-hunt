@@ -410,6 +410,65 @@ def reverse_strike(
     return {"ok": True, "id": strike_id}
 
 
+# ── Conduct: the host's player view ──────────────────────────────────
+
+
+def _strike_json(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "level": row["level"],
+        "note": row["note"],
+        "cooldown_until": row["cooldown_until"],
+        "created_at": row["created_at"],
+        "reversed_at": row["reversed_at"],
+    }
+
+
+@router.get("/events/{event_id}/players")
+def list_event_players(
+    event_id: str, request: Request, _: str = Depends(auth.require_admin)
+):
+    """Every player on the event with their derived restriction and their
+    strike history — the host's reversal view (RUNBOOK step 7), so a
+    disputed or mis-tapped strike can be found and reversed.
+
+    Reads are not audited (ADR 0004). The restriction comes from
+    ``derive_restriction`` rather than a second copy of the ladder rule
+    (ADR 0001), so the host's view and the player's snapshot can never
+    disagree. One strike query covers the event; ``derive_restriction``
+    runs per player because ``pending_notice`` needs its audit check.
+    """
+    conn: sqlite3.Connection = reader(request)
+    if _get_event(conn, event_id) is None:
+        return _err(404, "event_not_found", "No such event.")
+    players = conn.execute(
+        "SELECT p.id, p.display_name, p.team_id, t.name AS team_name"
+        " FROM player p JOIN team t ON t.id = p.team_id"
+        " WHERE t.event_id = ? ORDER BY p.created_at, p.id",
+        (event_id,),
+    ).fetchall()
+    strikes = conn.execute(
+        "SELECT id, player_id, level, note, cooldown_until, created_at,"
+        "       reversed_at FROM strike WHERE event_id = ?"
+        " ORDER BY created_at, id",
+        (event_id,),
+    ).fetchall()
+    by_player: dict[str, list[dict]] = {}
+    for strike in strikes:
+        by_player.setdefault(strike["player_id"], []).append(_strike_json(strike))
+    return [
+        {
+            "id": player["id"],
+            "display_name": player["display_name"],
+            "team_id": player["team_id"],
+            "team_name": player["team_name"],
+            "restriction": derive_restriction(conn, player["id"]).as_dict(),
+            "strikes": by_player.get(player["id"], []),
+        }
+        for player in players
+    ]
+
+
 # ── Riddles ───────────────────────────────────────────────────────────
 
 

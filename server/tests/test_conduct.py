@@ -415,3 +415,66 @@ class TestStrikeReversal:
         assert len(history["strikes"]) == 1
         assert history["strikes"][0]["level"] == 1
         assert history["strikes"][0]["reversed_at"] is not None
+
+
+class TestAdminPlayerView:
+    """The host's reversal view (RUNBOOK step 7): the player list carries
+    the derived restriction and the full strike history, reversed strikes
+    included, so the host can find the strike and see the result."""
+
+    def _strike(self, admin, client, p):
+        mod = _mod(client, p["mod_code"])
+        sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
+        resp = _inappropriate(mod, sub["id"], note="not a party photo")
+        assert resp.status_code == 200, resp.text
+        return resp.json()["strike"]
+
+    def test_lists_restriction_and_history_then_reflects_reversal(self, admin, client):
+        p = _party(admin, client)
+        strike = self._strike(admin, client, p)
+
+        players = admin.get(f"/api/admin/events/{p['event_id']}/players").json()
+        assert [player["id"] for player in players] == [p["player_id"]]
+        player = players[0]
+        assert player["display_name"] == "Batman"
+        assert player["restriction"] == {
+            "level": 1,
+            "cooldown_until": None,
+            "pending_notice": True,
+        }
+        assert len(player["strikes"]) == 1
+        assert player["strikes"][0]["id"] == strike["id"]
+        assert player["strikes"][0]["level"] == 1
+        assert player["strikes"][0]["note"] == "not a party photo"
+        assert player["strikes"][0]["reversed_at"] is None
+
+        assert (
+            admin.post(
+                f"/api/admin/strikes/{strike['id']}/reverse", json={"reason": "mis-tap"}
+            ).status_code
+            == 200
+        )
+
+        player = admin.get(f"/api/admin/events/{p['event_id']}/players").json()[0]
+        assert player["restriction"] == {
+            "level": 0,
+            "cooldown_until": None,
+            "pending_notice": False,
+        }
+        # The reversal is recorded, not erased: the strike stays in the
+        # history with reversed_at set.
+        assert len(player["strikes"]) == 1
+        assert player["strikes"][0]["reversed_at"] is not None
+
+    def test_unknown_event_404(self, admin):
+        assert admin.get("/api/admin/events/nope/players").status_code == 404
+
+    def test_host_only(self, admin, client):
+        p = _party(admin, client)
+        mod = _mod(client, p["mod_code"])
+        assert mod.get(f"/api/admin/events/{p['event_id']}/players").status_code == 401
+        player_only = arm_csrf(TestClient(client.app))
+        assert (
+            player_only.get(f"/api/admin/events/{p['event_id']}/players").status_code
+            == 401
+        )

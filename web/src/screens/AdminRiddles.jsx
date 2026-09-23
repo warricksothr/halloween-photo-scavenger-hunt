@@ -9,7 +9,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
 
-export function AdminRiddles() {
+export function AdminRiddles({ onSessionExpired }) {
   const [events, setEvents] = useState([]);
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [eventId, setEventId] = useState(null);
@@ -20,23 +20,39 @@ export function AdminRiddles() {
   const [editText, setEditText] = useState('');
   const [confirming, setConfirming] = useState(null); // riddle id awaiting delete
 
+  // A 401 mid-use means the admin session expired; the shell owns the
+  // recovery, and the panel clears so the board does not outlive the login.
+  function expired() {
+    setEvents([]);
+    setRiddles([]);
+    setEditing(null);
+    setConfirming(null);
+    setError(null);
+    onSessionExpired?.();
+  }
+
   useEffect(() => {
     let live = true;
     (async () => {
       const result = await api.adminEvents();
       if (!live) return;
+      if (result?.unauthenticated) {
+        expired();
+        return;
+      }
       setEventsLoaded(true);
       if (result?.error) {
         setError(result.message);
         return;
       }
-      if (result?.unauthenticated) return;
       setEvents(result);
       setEventId((current) => current ?? result[0]?.id ?? null);
     })();
     return () => {
       live = false;
     };
+    // `expired` reads only setters and the prop; it never changes identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -44,7 +60,11 @@ export function AdminRiddles() {
     let live = true;
     (async () => {
       const result = await api.adminRiddles(eventId);
-      if (!live || result?.unauthenticated) return;
+      if (!live) return;
+      if (result?.unauthenticated) {
+        expired();
+        return;
+      }
       if (result?.error) setError(result.message);
       else {
         // A successful load clears the previous event's failure, or the old
@@ -56,13 +76,19 @@ export function AdminRiddles() {
     return () => {
       live = false;
     };
+    // The shell unmounts this panel on a 401, so the prop's identity is
+    // irrelevant to the fetch; re-running on it would refetch the same list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   // Takes the event explicitly so a response can never be applied to a
   // different selection than the one it was fetched for.
   async function fetchRiddles(targetId) {
     const result = await api.adminRiddles(targetId);
-    if (result?.unauthenticated) return result;
+    if (result?.unauthenticated) {
+      expired();
+      return result;
+    }
     if (result?.error) return result;
     setError(null);
     setRiddles(result);

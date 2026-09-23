@@ -24,7 +24,7 @@ function when(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleString();
 }
 
-export function AdminEvents({ initialEvents }) {
+export function AdminEvents({ initialEvents, onSessionExpired }) {
   const [events, setEvents] = useState(initialEvents);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -35,8 +35,16 @@ export function AdminEvents({ initialEvents }) {
 
   async function reload() {
     const result = await api.adminEvents();
-    if (result?.error) setError(result.message);
-    else if (!result?.unauthenticated) setEvents(result);
+    if (result?.unauthenticated) {
+      // The lifecycle is a mutation surface; once the session is gone the
+      // buttons must go with it, so the shell takes back the view.
+      setEvents([]);
+      setCreated(null);
+      setPurgeFor(null);
+      setError(null);
+      onSessionExpired?.();
+    } else if (result?.error) setError(result.message);
+    else setEvents(result);
   }
 
   // Every mutation funnels through one guard: `busy` cannot strand a

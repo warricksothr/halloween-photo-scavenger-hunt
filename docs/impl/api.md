@@ -245,6 +245,11 @@ POST   /api/mod/queue/{sub_id}/inappropriate
                                         Logs verdict.issued + strike.issued.
 POST   /api/admin/strikes/{id}/reverse  host-only; logs strike.reversed.
                                         Derived state recomputes (ADR 0001).
+GET    /api/admin/events/{id}/players   the host's reversal view: every
+                                        player with their derived
+                                        restriction and full strike history
+                                        (reversed strikes included), so a
+                                        mis-tap can be found. Read-only.
 ```
 
 ### Leaderboard & recap (increment 9)

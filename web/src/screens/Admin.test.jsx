@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   api: {
     adminEvents: vi.fn(),
     adminRiddles: vi.fn(),
+    adminPlayers: vi.fn(),
     adminLogin: vi.fn(),
     adminLogout: vi.fn(),
   },
@@ -18,6 +19,7 @@ describe('admin console shell', () => {
   beforeEach(() => {
     mocks.api.adminLogin.mockResolvedValue({ ok: true });
     mocks.api.adminLogout.mockResolvedValue({ ok: true });
+    mocks.api.adminPlayers.mockResolvedValue([]);
   });
 
   it('offers both sign-in paths when there is no admin session', async () => {
@@ -62,6 +64,26 @@ describe('admin console shell', () => {
 
     expect(await screen.findByText('I guard the door.')).toBeTruthy();
     expect(mocks.api.adminRiddles).toHaveBeenCalledWith('event-1');
+  });
+
+  it('opens the host actions panel on the Host actions tab', async () => {
+    mocks.api.adminEvents.mockResolvedValue([
+      { id: 'event-1', name: 'Gotham Halloween', status: 'open' },
+    ]);
+    mocks.api.adminPlayers.mockResolvedValue([]);
+
+    render(<AdminScreen />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Host actions' }));
+
+    expect(
+      await screen.findByText(
+        'No players yet. Strikes appear here once a moderator flags a submission.',
+      ),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(mocks.api.adminPlayers).toHaveBeenCalledWith('event-1');
+    });
   });
 
   it('shows a failed password login instead of hanging', async () => {

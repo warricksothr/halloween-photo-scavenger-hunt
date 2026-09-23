@@ -46,6 +46,18 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — The host console reverses strikes.** TKT-01M33S9D0Z4W4MH4AQZSCKCRX6.
+  The reversal endpoint already shipped, but nothing read a strike list, so
+  the RUNBOOK host step had no screen. `GET /api/admin/events/{id}/players`
+  now returns each player with their derived restriction (via
+  `derive_restriction`, so the ladder rule stays in one place) and their full
+  strike history, reversed strikes included; one query covers the event's
+  strikes, and the new Host actions panel (`AdminHost.jsx`) picks an event
+  and a player, shows the ladder standing, and reverses a strike behind a
+  confirm step with an optional reason. The panel refetches after the
+  reversal, so the row records `reversed_at` and the restriction drops off
+  the derived count (ADR 0001). Reads are never audited (ADR 0004).
+
 - **2026-09-23 — The frontend lints, and the e2e specs use roles.**
   TKT-01M33RFWY6Q15S7JF417RQXH5Y. `web/eslint.config.js` adds ESLint 10 (flat
   config) with `eslint-plugin-react-hooks`; `npm --prefix web test` now runs
