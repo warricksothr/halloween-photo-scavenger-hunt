@@ -109,27 +109,37 @@ def reader(request: Request) -> sqlite3.Connection:
 
 
 def writer_is_writable(request: Request) -> bool:
-    """Prove the writer connection can open a write transaction.
+    """Prove the writer connection can accept a page write.
 
-    ``BEGIN IMMEDIATE`` takes the write lock at once, so a read-only file,
-    a full disk, or a conflicting connection surfaces here rather than on
-    the next mutation. The transaction is rolled back immediately — this
-    is a probe, not a write. Lives here because only this module and
-    ``main`` may name the writer connection (ADR 0013).
+    ``BEGIN IMMEDIATE`` alone only takes SQLite's write reservation: it can
+    succeed on a volume with no room for the journal or the new page. So the
+    probe also writes the header (``PRAGMA user_version``) to a value it
+    means to discard, then rolls the whole transaction back. A read-only
+    file, a full disk, or a conflicting connection fails here, and the
+    transaction leaves no trace. Everything that touches the shared writer
+    — including the recovery on failure — stays under ``db_lock``; a
+    rollback outside it could abort a concurrent request's transaction
+    (ADR 0013). Lives here because only this module and ``main`` may name
+    the writer connection.
     """
     conn: sqlite3.Connection = request.app.state.db
-    try:
-        with request.app.state.db_lock:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.rollback()
-    except sqlite3.Error:
-        # A failed BEGIN can leave no transaction, but a half-open one
-        # would poison later statements on the shared connection.
+    with request.app.state.db_lock:
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            # A differing value guarantees a real page write rather than a
+            # no-op the engine can skip; the rollback discards it either way.
+            current = conn.execute("PRAGMA user_version").fetchone()[0]
+            conn.execute(f"PRAGMA user_version = {current + 1}")
             conn.rollback()
         except sqlite3.Error:
-            pass
-        return False
+            # A failed BEGIN can leave no transaction, but a half-open one
+            # would poison later statements on the shared connection. This
+            # rollback runs while the lock is still held.
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass
+            return False
     return True
 
 

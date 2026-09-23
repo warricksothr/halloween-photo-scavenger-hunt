@@ -102,14 +102,15 @@ first data. The admin cookie is httpOnly, so the client cannot read it.
 
 `GET /api/admin/readyz` is the deeper probe behind the same admin gate: a
 401 unless an admin session is live, else a JSON body of what an operator
-needs to judge readiness — `db_writable` (a `BEGIN IMMEDIATE` on the writer,
-rolled back), `schema_version`, `disk` (`free_bytes` / `total_bytes` on the
-DB volume), `photo_count` (evidence rows), `sse_subscribers` (live stream
-clients), `release` (`ARKHAM_RELEASE`, else `unknown`), and
-`uptime_seconds`. A read-only or full database reports `db_writable: false`
-rather than raising, so the endpoint answers precisely when things are
-wrong. `GET /api/health` stays the public liveness check and never reveals
-the build or counts.
+needs to judge readiness — `db_writable` (a `BEGIN IMMEDIATE` plus a
+header write rolled back, so it proves the volume can accept a real page,
+not merely take the write lock), `schema_version`, `disk` (`free_bytes` /
+`total_bytes` on the DB volume), `photo_count` (evidence rows),
+`sse_subscribers` (live stream clients), `release` (`ARKHAM_RELEASE`, else
+`unknown`), and `uptime_seconds`. A read-only or full database reports
+`db_writable: false` rather than raising, so the endpoint answers precisely
+when things are wrong. `GET /api/health` stays the public liveness check
+and never reveals the build or counts.
 
 ### Single sign-on (S9CT)
 

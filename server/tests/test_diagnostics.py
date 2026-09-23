@@ -3,8 +3,6 @@ ready to serve, not merely alive (``/api/health``). Covered here are the
 shape an operator reads, the admin gate, and a writer that has gone
 read-only — the failure the probe exists to catch."""
 
-import sqlite3
-
 from app import diagnostics
 
 
@@ -62,23 +60,27 @@ def test_readyz_requires_admin(client):
     assert resp.json()["detail"]["error"] == "not_authenticated"
 
 
-def test_readyz_reports_read_only_writer(admin, monkeypatch):
-    """A writer that cannot open a transaction reports the failure in the
-    body rather than raising a 500 — the probe's whole point is to answer
-    when things are wrong. Only the writer is broken; the reader still
-    serves schema and photo counts."""
-
-    class ReadOnlyWriter:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.OperationalError("attempt to write a readonly database")
-
-        def rollback(self):
-            raise sqlite3.OperationalError("no transaction is active")
-
-    monkeypatch.setattr(admin.app.state, "db", ReadOnlyWriter())
+def test_readyz_reports_read_only_writer(admin):
+    """A writer that cannot accept a write reports the failure in the body
+    rather than raising a 500 — the probe's whole point is to answer when
+    things are wrong. ``PRAGMA query_only`` puts real SQLite into its
+    read-only path (``SQLITE_READONLY`` on any write), so this exercises
+    the engine rather than a fake connection object."""
+    admin.app.state.db.execute("PRAGMA query_only = ON")
     body = admin.get("/api/admin/readyz").json()
     assert body["db_writable"] is False
     assert body["status"] == "ok"
+
+
+def test_failed_probe_leaves_no_open_transaction(admin):
+    """The recovery rollback runs while ``db_lock`` is held, so it cannot
+    abort a concurrent request's transaction; afterwards the writer is
+    usable again with no transaction left open."""
+    admin.app.state.db.execute("PRAGMA query_only = ON")
+    assert admin.get("/api/admin/readyz").json()["db_writable"] is False
+    admin.app.state.db.execute("PRAGMA query_only = OFF")
+    assert admin.app.state.db.in_transaction is False
+    assert admin.get("/api/admin/readyz").json()["db_writable"] is True
 
 
 def test_snapshot_uptime_is_none_without_start(monkeypatch, client):
