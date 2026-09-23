@@ -9,10 +9,15 @@ const mocks = vi.hoisted(() => ({
     snapshot: vi.fn(),
   },
   loadTheme: vi.fn(),
+  reportError: vi.fn(),
 }));
 
 vi.mock('./api', () => ({ api: mocks.api }));
 vi.mock('./theme', () => ({ loadTheme: mocks.loadTheme }));
+vi.mock('./errors', () => ({
+  recordRequestId: vi.fn(),
+  reportError: mocks.reportError,
+}));
 
 import {
   getState,
@@ -247,5 +252,55 @@ describe('store', () => {
     expect(getState().phase).toBe('booting');
     await done;
     expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+  });
+
+  it('reports a 5xx boot failure through the reporter', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot.mockResolvedValue({
+      error: 'request_failed',
+      message: 'Something went wrong.',
+      status: 500,
+    });
+
+    const done = refresh();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(mocks.reportError).toHaveBeenCalledTimes(1);
+    expect(mocks.reportError.mock.calls[0][1]).toMatchObject({
+      where: 'refresh.snapshot',
+      http_status: 500,
+    });
+    vi.useRealTimers();
+  });
+
+  it('does not report a 4xx the player can act on', async () => {
+    mocks.api.snapshot.mockResolvedValue({
+      error: 'not_joined',
+      message: 'Join first.',
+      status: 400,
+    });
+
+    await refresh();
+
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed join only when the server faulted', async () => {
+    mocks.api.join.mockResolvedValue({
+      error: 'request_failed',
+      message: 'Something went wrong.',
+      status: 503,
+    });
+
+    await join('JOINCODE', 'Robin', 'phone');
+
+    expect(mocks.reportError).toHaveBeenCalledWith(expect.any(Error), {
+      where: 'join',
+      error_code: 'request_failed',
+      http_status: 503,
+    });
   });
 });

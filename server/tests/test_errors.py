@@ -104,6 +104,16 @@ def test_scrub_url_redacts_the_bearer_and_drops_the_query():
 def test_scrub_text_redacts_path_like_tokens():
     assert errors.scrub_text("GET /api/join/SECRET") == "GET /api/join/<redacted>"
     assert errors.scrub_text("GET /api/state") == "GET /api/state"
+    # A credential can arrive inside an absolute URL rather than a bare
+    # path; the same scrubber has to reach it.
+    assert (
+        errors.scrub_text("GET https://hunt.example/api/join/SECRET")
+        == "GET https://hunt.example/api/join/<redacted>"
+    )
+    assert (
+        errors.scrub_text("GET https://hunt.example/api/state")
+        == "GET https://hunt.example/api/state"
+    )
 
 
 def test_scrub_event_strips_request_secrets_and_keeps_the_url_redacted():
@@ -150,7 +160,11 @@ def test_scrub_transaction_scrubs_spans():
                     "http.url": "https://hunt.example/m/MODCODE",
                     "path": "/j/CODE",
                 },
-            }
+            },
+            {
+                "description": "GET https://hunt.example/api/join/ABS_SECRET",
+                "data": {},
+            },
         ],
     }
     cleaned = errors.scrub_transaction(event)
@@ -158,6 +172,9 @@ def test_scrub_transaction_scrubs_spans():
     assert span["description"] == "GET /api/team/invites/<redacted>"
     assert span["data"]["http.url"] == "https://hunt.example/m/<redacted>"
     assert span["data"]["path"] == "/j/<redacted>"
+    assert cleaned["spans"][1]["description"] == (
+        "GET https://hunt.example/api/join/<redacted>"
+    )
 
 
 def test_scrub_breadcrumb_scrubs_from_and_to():

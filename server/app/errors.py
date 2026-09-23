@@ -26,6 +26,7 @@ request id, because the request log has already reset the contextvar by then
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -52,6 +53,9 @@ DEFAULT_TRACES_SAMPLE_RATE = 0.1
 _DROPPED_REQUEST_KEYS = ("headers", "cookies", "data", "env", "query_string")
 # Span data keys whose value is a URL rather than an opaque string.
 _URL_DATA_KEYS = frozenset({"url", "http.url", "http.query", "http.fragment"})
+# A bare absolute URL inside a longer string (a transaction name or a
+# breadcrumb message), as opposed to one that is the whole value.
+_ABSOLUTE_URL = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
 
 @dataclass(frozen=True)
@@ -103,11 +107,20 @@ def scrub_text(text: str) -> str:
 
     A transaction name is ``"GET /api/join/SECRET"`` rather than a bare
     path, so redacting the whole string as a path would miss it. Split on
-    whitespace and redact the path-like tokens.
+    whitespace and redact the path-like tokens: a token that is a bare
+    path, and a token that is an absolute URL (``"GET
+    https://host/api/join/SECRET"``), whose credential reaches the same
+    scrubber.
     """
-    return " ".join(
-        redact_path(token) if token.startswith("/") else token for token in text.split()
-    )
+
+    def _scrub(token: str) -> str:
+        if token.startswith("/"):
+            return redact_path(token)
+        if _ABSOLUTE_URL.match(token):
+            return scrub_url(token) or token
+        return token
+
+    return " ".join(_scrub(token) for token in text.split())
 
 
 def scrub_breadcrumb(

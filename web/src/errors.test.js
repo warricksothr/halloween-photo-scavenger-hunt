@@ -6,6 +6,7 @@ const sentryMock = {
   init: vi.fn(),
   withScope: vi.fn(),
   captureException: vi.fn(),
+  browserTracingIntegration: vi.fn(() => ({ name: 'BrowserTracing' })),
 };
 vi.mock('@sentry/browser', () => sentryMock);
 
@@ -45,6 +46,16 @@ describe('error reporting', () => {
     );
   });
 
+  it('installs browser tracing so transactions are created', async () => {
+    const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
+
+    await errors.initErrorReporting();
+
+    expect(sentryMock.browserTracingIntegration).toHaveBeenCalled();
+    const config = sentryMock.init.mock.calls[0][0];
+    expect(config.integrations).toContainEqual({ name: 'BrowserTracing' });
+  });
+
   it('records the last request id and attaches it as a tag', async () => {
     const errors = await loadErrors();
     errors.recordRequestId('req-123');
@@ -73,12 +84,16 @@ describe('error reporting', () => {
         headers: { Cookie: 'session=leak' },
         cookies: 'session=leak',
         query_string: 'token=leak',
+        env: { SECRET: 'leak' },
+        data: 'leak',
       },
     });
 
     expect(event.request.headers).toBeUndefined();
     expect(event.request.cookies).toBeUndefined();
     expect(event.request.query_string).toBeUndefined();
+    expect(event.request.env).toBeUndefined();
+    expect(event.request.data).toBeUndefined();
   });
 
   it('redacts the credential in a transaction name', async () => {
@@ -89,6 +104,18 @@ describe('error reporting', () => {
     });
 
     expect(event.transaction).toBe('GET /api/team/invites/<redacted>');
+  });
+
+  it('redacts a credential inside an absolute URL in a transaction name', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubTransaction({
+      transaction: 'GET https://hunt.example/api/join/SECRET',
+    });
+
+    expect(event.transaction).toBe(
+      'GET https://hunt.example/api/join/<redacted>',
+    );
   });
 
   it('redacts span descriptions and URL-shaped span data', async () => {
@@ -123,6 +150,20 @@ describe('error reporting', () => {
 
     expect(event.breadcrumbs.values[0].message).toBe('navigated to /t/<redacted>');
     expect(event.breadcrumbs.values[0].data.from).toBe('/j/<redacted>');
+  });
+
+  it('redacts a credential inside an absolute URL in a breadcrumb message', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [{ message: 'GET https://hunt.example/j/SECRET' }],
+      },
+    });
+
+    expect(event.breadcrumbs.values[0].message).toBe(
+      'GET https://hunt.example/j/<redacted>',
+    );
   });
 
   it('drops the user IP from an event', async () => {

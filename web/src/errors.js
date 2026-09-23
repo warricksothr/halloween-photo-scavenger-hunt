@@ -18,7 +18,7 @@ const TRACES_SAMPLE_RATE = Number(
 const ENVIRONMENT = import.meta.env.VITE_ERROR_ENVIRONMENT || undefined;
 const RELEASE = import.meta.env.VITE_ERROR_RELEASE || undefined;
 
-const DROPPED_REQUEST_KEYS = ['headers', 'cookies', 'data', 'query_string'];
+const DROPPED_REQUEST_KEYS = ['headers', 'cookies', 'data', 'env', 'query_string'];
 const URL_DATA_KEYS = new Set(['url', 'http.url', 'http.query', 'http.fragment']);
 
 let lastRequestId = null;
@@ -35,13 +35,15 @@ export function lastRequestIdForTest() {
   return lastRequestId;
 }
 
+const ABSOLUTE_URL = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]*/;
+
 function scrubUrl(value) {
   if (typeof value !== 'string' || value === '') return value;
   // Split the path off any absolute URL before redacting: redactPath
   // matches from the start, so a scheme and host would hide the prefix.
   let rest = value;
   let origin = '';
-  const scheme = rest.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]*/);
+  const scheme = rest.match(ABSOLUTE_URL);
   if (scheme) {
     origin = scheme[0];
     rest = rest.slice(origin.length);
@@ -56,9 +58,17 @@ function scrubUrl(value) {
 
 function scrubText(value) {
   if (typeof value !== 'string') return value;
+  // A path can arrive bare ("GET /j/SECRET") or inside an absolute URL
+  // ("GET https://host/j/SECRET"); both carry the same credential, so
+  // both go through the URL scrubber rather than only the "/"-prefixed
+  // tokens.
   return value
     .split(' ')
-    .map((token) => (token.startsWith('/') ? redactPath(token) : token))
+    .map((token) => {
+      if (token.startsWith('/')) return redactPath(token);
+      if (ABSOLUTE_URL.test(token)) return scrubUrl(token);
+      return token;
+    })
     .join(' ');
 }
 
@@ -149,6 +159,9 @@ export async function initErrorReporting() {
     tracesSampleRate: Number.isFinite(TRACES_SAMPLE_RATE)
       ? TRACES_SAMPLE_RATE
       : 0.1,
+    // tracesSampleRate only gates transactions that exist; this
+    // integration is what creates them for page loads and fetch calls.
+    integrations: [Sentry.browserTracingIntegration()],
     autoSessionTracking: false,
     sendDefaultPii: false,
     beforeSend: (event) => scrubEvent(event),

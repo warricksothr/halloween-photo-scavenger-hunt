@@ -27,9 +27,11 @@ function App() {
   useEffect(() => {
     const unsubscribe = subscribe(setState);
     // Boot the reporter before the first request so a failure on boot is
-    // reported; without a DSN this loads nothing.
-    initErrorReporting();
-    refresh(); // boot: the snapshot decides everything
+    // reported; without a DSN this loads nothing and refresh starts at
+    // once. With a DSN the SDK import is awaited first: a boot failure
+    // that fired before Sentry's global handlers were installed would go
+    // unreported, which is the whole point of starting here.
+    initErrorReporting().finally(refresh);
     return unsubscribe;
   }, []);
 
