@@ -37,7 +37,12 @@ specification of record — read it before changing behavior:
 
 - Build in small runnable increments per `docs/build-plan.md`; each leaves
   the app working. Mark increments off in `docs/progress.md`.
-- Write ADRs for non-obvious decisions (`docs/adr/NNNN-title.md`).
+- Write ADRs for non-obvious decisions (`docs/adr/NNNN-title.md`). Before
+  touching logging, metrics, or error reporting, read
+  [`docs/adr/0023-observability-boundary.md`](docs/adr/0023-observability-boundary.md):
+  errors and traces ship to self-hosted GlitchTip, metrics stay in-process
+  and are read through `/api/admin/readyz`, and the request id is the join
+  key.
 - Comment the *why*, not the what. Docs carry design, code carries
   mechanism — this project is a teaching vehicle.
 - Work on a branch and open a pull request for each change; commit early and
