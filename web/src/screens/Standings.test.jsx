@@ -59,6 +59,15 @@ describe('closed standings', () => {
     expect(await screen.findByText('FALLBACK_ERROR')).toBeTruthy();
   });
 
+  it('shows the error state when the recap request rejects', async () => {
+    mocks.api.recap.mockRejectedValue(new Error('transport down'));
+
+    render(<StandingsScreen snapshot={closed()} copy={copy} />);
+
+    expect(await screen.findByText('FALLBACK_ERROR')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
   it('renders the empty state when no team is on the final board', async () => {
     mocks.api.recap.mockResolvedValue({ standings: [], total_riddles: 3, timeline: [] });
 

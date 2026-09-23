@@ -96,6 +96,10 @@ export function StandingsScreen({ snapshot, copy }) {
         return;
       }
       setRecap(result);
+    }, () => {
+      // A rejected request (transport failure) must land in the same error
+      // state as a resolved one, or the loading line never clears.
+      if (!stale) setError(c.error);
     });
     return () => { stale = true; };
   }, [closed, attempt]);
