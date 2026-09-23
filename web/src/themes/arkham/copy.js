@@ -47,11 +47,19 @@ export default {
   },
 
   screens: {
+    // Shown while the store boots, before any event theme is known. The
+    // loader serves it from the default pack (theme.js: defaultCopy).
+    boot: {
+      loading: 'Waking the Batcomputer…',
+    },
     join: {
       headline: 'Gotham Needs You',
       subtext: 'Enter your codename to join the hunt.',
       nameLabel: 'Codename',
       deviceLabel: 'Device label (optional)',
+      codeLabel: 'Join code',
+      codePlaceholder: 'from the QR at the door',
+      devicePlaceholder: "Sam's phone",
       submit: 'Join the Hunt',
     },
     lobby: {
@@ -96,6 +104,9 @@ export default {
       // final-reveal mid-round (snapshot.leaderboard is null)
       sealed: 'Standings are sealed — the host reveals them when the round closes.',
       empty: 'No operatives on the board yet.',
+      loading: "Compiling the night's intel…",
+      // Closed, but no team scored — the celebration line needs a fallback.
+      noWinner: 'Final standings are in.',
       caseClosed: 'Case Closed',
       caseClosedSubtext: (winner, score, total) =>
         `${winner} solved Gotham — ${score} of ${total} riddles. Final standings are in.`,
@@ -121,11 +132,21 @@ export default {
       teamFull: 'The team is at full strength.',
       inviteNote:
         'Share the link with your teammate — it works once, for ten minutes.',
+      // Roster last-seen, in the pack's voice. `mins` is null when the
+      // member has never been seen; the component owns the clock math.
+      lastSeen: (mins) => {
+        if (mins === null) return 'never seen';
+        if (mins < 1) return 'active now';
+        if (mins < 60) return `${mins} min ago`;
+        return `${Math.floor(mins / 60)} h ${mins % 60} min ago`;
+      },
     },
     teamJoin: {
       // The /t/<token> landing: an invite, not a join code. Themed like
       // join (it is game onboarding, not a conduct surface).
       headline: 'You Have Been Recruited',
+      loading: 'Checking the invite…',
+      unavailable: 'Invite Unavailable',
       teamLine: (teamName, eventName) =>
         teamName
           ? `${teamName} wants you on their team — ${eventName}.`

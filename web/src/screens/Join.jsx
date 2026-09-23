@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { join } from '../store';
-import { loadTheme } from '../theme';
+import { DEFAULT_THEME, loadTheme } from '../theme';
 
 export function JoinScreen() {
   const [copy, setCopy] = useState(null);
@@ -20,7 +20,7 @@ export function JoinScreen() {
   // All hooks must run before any early return (hook order is fixed),
   // so the theme loads in an effect and the loading gate sits below.
   useEffect(() => {
-    loadTheme('arkham').then(setCopy);
+    loadTheme(DEFAULT_THEME).then(setCopy);
   }, []);
 
   // /j/<code> links put the code in the path; everything else types it.
@@ -52,13 +52,13 @@ export function JoinScreen() {
         <form onSubmit={onSubmit}>
           {!joinCode && (
             <div class="field" style={{ marginBottom: 16 }}>
-              <label for="join-code">Join code</label>
+              <label for="join-code">{c.codeLabel}</label>
               <input
                 type="text"
                 id="join-code"
                 value={typedCode}
                 onInput={(e) => setTypedCode(e.target.value.toUpperCase())}
-                placeholder="from the QR at the door"
+                placeholder={c.codePlaceholder}
                 autocomplete="off"
               />
             </div>
@@ -82,7 +82,7 @@ export function JoinScreen() {
               value={deviceLabel}
               onInput={(e) => setDeviceLabel(e.target.value)}
               maxLength={80}
-              placeholder="Sam's phone"
+              placeholder={c.devicePlaceholder}
             />
           </div>
           {error && (

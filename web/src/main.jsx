@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { initErrorReporting } from './errors';
 import { getState, refresh, retry, subscribe } from './store';
+import { defaultCopy } from './theme';
 import { Header } from './components/Header';
 import { AdminScreen } from './screens/Admin';
 import { ConnectionErrorScreen } from './screens/ConnectionError';
@@ -84,7 +85,10 @@ function PlayerApp() {
   }, []);
 
   if (state.phase === 'booting') {
-    return <div class="frame"><main style={{ padding: 16 }}><p class="dim">Waking the Batcomputer…</p></main></div>;
+    // No event theme exists yet, so the boot line comes from the default
+    // pack rather than a string baked into the shell (theme.js).
+    const boot = state.copy ?? defaultCopy();
+    return <div class="frame"><main style={{ padding: 16 }}><p class="dim">{boot.screens.boot.loading}</p></main></div>;
   }
 
   if (state.phase === 'error') {

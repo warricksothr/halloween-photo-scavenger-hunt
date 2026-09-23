@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
-import { loadTheme } from '../theme';
+import { DEFAULT_THEME, loadTheme } from '../theme';
 import { refresh } from '../store';
 
 export function TeamJoinScreen({ token, copy: copyProp }) {
@@ -32,7 +32,7 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
   const [confirmSwitch, setConfirmSwitch] = useState(false);
 
   useEffect(() => {
-    if (!copyProp) loadTheme('arkham').then(setLoadedCopy);
+    if (!copyProp) loadTheme(DEFAULT_THEME).then(setLoadedCopy);
   }, [copyProp]);
 
   useEffect(() => {
@@ -102,12 +102,12 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
             <>
               <div class="verdict-chip" style={{ background: 'var(--alert)', color: 'var(--text)' }}>!</div>
               <h1 class="verdict-headline" style={{ color: 'var(--alert)', marginTop: 10 }}>
-                Invite Unavailable
+                {c.unavailable}
               </h1>
               <p class="subtext" style={{ marginTop: 8 }}>{c.expired}</p>
             </>
           ) : info === null ? (
-            <p class="dim">Checking the invite…</p>
+            <p class="dim">{c.loading}</p>
           ) : confirmSwitch ? (
             // Switch warning variant — amber banner, Stay / Switch.
             <div class="verdict-banner sev-amber" style={{ flexDirection: 'column' }}>

@@ -96,7 +96,14 @@ strike interstitial, and the drawer restricted variant.
   riddle list and submission detail; no separate inbox screen in MVP.
 - **Conduct surfaces are un-themed by rule** — strike interstitial and
   upload-suspended banner use plain copy (design.md), which the mocks
-  demonstrate by dropping the Arkham flavor voice.
+  demonstrate by dropping the Arkham flavor voice. The same holds for
+  `ConnectionError`, the moderator console, and the host console.
+- **The theme loader owns the stylesheet** — `web/src/theme.js` injects one
+  `<style data-theme>` node per active pack and removes the previous pack's
+  node on a switch (ADR 0024), so no stale tokens survive. Surfaces that
+  render before an event theme exists (the boot screen) read the default
+  pack's copy through `defaultCopy()` rather than a string baked into the
+  shell; every other game-facing string lives in the pack's `copy.js`.
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
 - **The lobby screen exists** — joining before the round opens needs a

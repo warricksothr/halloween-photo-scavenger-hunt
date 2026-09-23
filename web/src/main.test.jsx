@@ -68,4 +68,12 @@ describe('app entry', () => {
     await waitFor(() => expect(screen.getByTestId('mod-join')).toBeTruthy());
     expect(screen.queryByTestId('join')).toBeNull();
   });
+
+  it('renders the boot line from the default theme pack', async () => {
+    mocks.getState.mockReturnValue({ phase: 'booting' });
+
+    await import('./main.jsx');
+
+    await waitFor(() => expect(screen.getByText('Waking the Batcomputer…')).toBeTruthy());
+  });
 });
