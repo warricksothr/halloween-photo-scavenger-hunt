@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T16:35:03Z
+updated_at: 2026-09-23T16:43:46Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -56,3 +56,13 @@ Moderator console: the backend already accepts `{ note?, cooldown_minutes? }` (`
 Tests: new `web/src/screens/Standings.test.jsx` (recap error shows the error and Retry refetches; empty standings show the empty line) and `web/src/screens/ModConsole.test.jsx` (arming the strike sends the typed note and cooldown to `modInappropriate`; an out-of-range cooldown is rejected without a call).
 
 Docs: note the two new standings copy keys and the conduct controls in `docs/impl/ui.md`; add a `docs/progress.md` entry.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T16:43:46Z
+
+Terva review history.
+
+PR #37, base c59e089db03acacb94c2dc42cb329a5cef886e20.
+
+- r1: request standings-mod-controls-r1, head 3f6d1465a5f7bc79d6b298680ed568b712ff0a0a, run 4d37cd1c-df7f-4024-99fc-77966e9b491b (Actions run #505, id 9403). One medium finding: a rejected `api.recap()` promise never reaches `.then`, so the closed-standings loading line still never cleared (web/src/screens/Standings.jsx:93). Fixed in d1d1c53 by adding a rejection handler that sets the same error state under the `stale` guard, plus a test that rejects and asserts the error + Retry; the test was verified to fail on the pre-fix component.
