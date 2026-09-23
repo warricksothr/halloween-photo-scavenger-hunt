@@ -45,6 +45,7 @@ MOD_COOKIE_NAME = "arkham_mod"
 
 API_TOKEN_ENV = "ARKHAM_ADMIN_API_TOKEN"
 API_TOKEN_SENTINEL = "api-token"
+ADMIN_API_PREFIX = "/api/admin"
 _BEARER_PREFIX = "Bearer "
 
 # How long any session stays live. Twelve hours covers one long party
@@ -81,6 +82,16 @@ def configured_api_token() -> str | None:
     editing the env file and restarting (deploy/RUNBOOK.md)."""
     token = os.environ.get(API_TOKEN_ENV, "")
     return token or None
+
+
+def is_admin_api_path(path: str) -> bool:
+    """True for a route under the admin API prefix.
+
+    The token is admin-scoped, so its CSRF exemption must be too: a
+    player or moderator write that happened to carry the header keeps
+    its CSRF pair. Match the prefix on a boundary so a path like
+    ``/api/administrators`` is not swept in."""
+    return path == ADMIN_API_PREFIX or path.startswith(ADMIN_API_PREFIX + "/")
 
 
 def is_api_token_request(request: Request, token: str | None) -> bool:

@@ -44,6 +44,29 @@ def test_configured_api_token_absent_and_empty_mean_off(monkeypatch):
     assert auth.configured_api_token() == TOKEN
 
 
+def test_the_csrf_exemption_is_scoped_to_admin_routes(tmp_path, monkeypatch):
+    # The token is admin-scoped, so its CSRF exemption must be too. An
+    # unsafe non-admin write that carries the header (say, a confused
+    # script) must still present its CSRF pair, or the token would act as
+    # a general CSRF bypass for any ambient role cookie.
+    app = _app(tmp_path, monkeypatch, token=TOKEN)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/join/JOINCODE1", json={"display_name": "Bats"}, headers=_bearer(TOKEN)
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"] == "csrf_failed"
+
+
+def test_is_admin_api_path_matches_only_the_prefix_on_a_boundary():
+    assert auth.is_admin_api_path("/api/admin")
+    assert auth.is_admin_api_path("/api/admin/events")
+    assert not auth.is_admin_api_path("/api/administrators")
+    assert not auth.is_admin_api_path("/api/mod/join/x")
+    assert not auth.is_admin_api_path("/api/join/x")
+    assert not auth.is_admin_api_path("/api/evidence")
+
+
 def test_token_off_leaves_the_cookie_path_and_the_gate_unchanged(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch)  # feature off
     with TestClient(app) as client:

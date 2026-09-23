@@ -111,10 +111,14 @@ class CsrfMiddleware:
 
         # A bearer-authenticated request carries its credential in a header,
         # not an ambient cookie, so the double-submit check proves nothing
-        # for it (auth.is_api_token_request explains). A bad or absent token
-        # fails the check and still gets challenged below.
-        token = getattr(request.app.state, "admin_api_token", None)
-        if auth.is_api_token_request(request, token):
+        # for it (auth.is_api_token_request explains). The exemption is
+        # scoped to /api/admin: the token only authenticates admin routes,
+        # and a player or moderator write that happened to carry it must
+        # still present its CSRF pair. A bad or absent token fails the
+        # check and still gets challenged below.
+        if auth.is_admin_api_path(scope["path"]) and auth.is_api_token_request(
+            request, getattr(request.app.state, "admin_api_token", None)
+        ):
             await self.app(scope, receive, self._planting(send, request))
             return
 
