@@ -162,7 +162,7 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
         )
         if already:
             continue
-        _apply_one(conn, version, path.read_text(encoding="utf-8"))
+        _apply_one(conn, version, path.read_text(encoding="utf-8-sig"))
         applied.append(version)
     return applied
 
@@ -263,5 +263,12 @@ def _without_comments(sql: str) -> str:
 
 
 def _first_keyword(statement: str) -> str:
+    """The statement's first keyword, normalized for the rejection check.
+
+    Files are read as ``utf-8-sig``, but the leading BOM is stripped here
+    too so the check does not depend on how the text was decoded: SQLite
+    accepts a BOM before the keyword, so a BOM-prefixed ``COMMIT`` must not
+    slip past ``_TRANSACTION_CONTROL``.
+    """
     tokens = _without_comments(statement).split()
-    return tokens[0].rstrip(";").lower() if tokens else ""
+    return tokens[0].lstrip("\ufeff").rstrip(";").lower() if tokens else ""

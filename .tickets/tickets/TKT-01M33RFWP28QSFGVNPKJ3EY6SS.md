@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:45:01Z
+updated_at: 2026-09-23T12:48:33Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -120,3 +120,19 @@ Splitting is now per character: a `;` ends a statement when
 statements on one line stay two. New test
 `test_two_statements_on_one_line_are_both_applied`; ADR 0022 notes the
 per-statement split.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:48:33Z
+
+### Review r3 finding and fix
+
+`request:harden-migrations-r3` (run `5f7e9a92-049c-4a22-ac6f-24885a0d019b`,
+Actions run #441) confirmed the r2 splitter finding resolved, then found
+one medium: `_first_keyword` did not strip a UTF-8 BOM, so a file starting
+with `\ufeffCOMMIT;` would not match `_TRANSACTION_CONTROL` even though
+SQLite accepts the BOM before the keyword — letting a migration commit the
+runner's transaction. Accepted.
+
+Migration files are now read as `utf-8-sig`, and `_first_keyword` strips a
+leading `\ufeff` (and the trailing `;`) before matching, so the check does
+not depend on decoding. New test
+`test_bom_does_not_hide_transaction_control`; ADR 0022 updated.

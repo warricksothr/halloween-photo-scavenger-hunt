@@ -55,6 +55,24 @@ def test_a_trigger_body_is_one_statement_not_transaction_control():
     assert db_module._first_keyword(statements[1]) == "create"
 
 
+def test_bom_does_not_hide_transaction_control(tmp_path, monkeypatch):
+    """SQLite accepts a UTF-8 BOM before a keyword, so the rejection check
+    must strip it; the runner also reads files as utf-8-sig."""
+    assert db_module._first_keyword("\ufeffCOMMIT;") == "commit"
+
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text("COMMIT;\n", encoding="utf-8-sig")
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "bom.db")
+    try:
+        with pytest.raises(ValueError, match="transaction control"):
+            db_module.apply_migrations(conn)
+    finally:
+        conn.close()
+
+
 def test_two_statements_on_one_line_are_both_applied(tmp_path, monkeypatch):
     """Splitting is per statement, not per line: executescript accepted two
     statements on one line, so the replacement has to as well."""

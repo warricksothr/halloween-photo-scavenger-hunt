@@ -62,8 +62,11 @@ Two details are load-bearing:
 
 Because the transaction is the runner's, a file that contains its own
 transaction control is **refused before execution**. `_statements` reads
-each statement's first keyword (after stripping comments) and rejects
-`BEGIN`, `COMMIT`, `END`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE`. A
+each statement's first keyword (after stripping comments, a leading UTF-8
+BOM, and the trailing semicolon — SQLite accepts a BOM before a keyword,
+so the check normalizes it away) and rejects `BEGIN`, `COMMIT`, `END`,
+`ROLLBACK`, `SAVEPOINT`, and `RELEASE`. Files are read as `utf-8-sig` for
+the same reason. A
 `COMMIT` mid-file would otherwise persist a partial migration that
 `rollback` could no longer undo — the exact applied-but-unrecorded state
 this change exists to remove. Reading the first keyword is what keeps a
