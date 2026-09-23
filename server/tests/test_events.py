@@ -9,8 +9,11 @@ these tests exist to prove.
 """
 
 import json
+import time
 
 from conftest import ADMIN_PASSWORD, ADMIN_USER
+
+from app import auth
 
 
 def _audit_rows(client, action=None):
@@ -59,6 +62,14 @@ class TestAdminLogin:
         assert resp.status_code == 200
         cookie = resp.headers["set-cookie"]
         assert "arkham_admin=" in cookie and "HttpOnly" in cookie
+        assert f"Max-Age={auth.SESSION_TTL_SECONDS}" in cookie
+
+    def test_expired_admin_session_is_rejected(self, admin):
+        token = admin.cookies["arkham_admin"]
+        # Backdate the in-memory expiry; the next request must drop it.
+        admin.app.state.admin_sessions[token] = int(time.time()) - 1
+        assert admin.get("/api/admin/events").status_code == 401
+        assert token not in admin.app.state.admin_sessions
 
     def test_routes_require_auth(self, client):
         assert client.get("/api/admin/events").status_code == 401

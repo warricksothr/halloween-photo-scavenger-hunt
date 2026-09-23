@@ -19,6 +19,10 @@ Conventions:
 - Auth is cookie-based: player session cookie, moderator session cookie,
   or admin session cookie. No bearer headers — the browser owns
   credentials (httpOnly cookie, token hash at rest per the schema).
+  Every session expires a fixed `SESSION_TTL_SECONDS` (default 12h,
+  `ARKHAM_SESSION_TTL_SECONDS`) after it was issued; an expired cookie is
+  a 401 and the credential cookie carries the matching `Max-Age`
+  (ADR 0021).
 - IDs and timestamps follow `docs/impl/schema.md` (TEXT ids, INTEGER
   epoch seconds).
 
@@ -41,6 +45,11 @@ Three checks wrap the routes, so they are not repeated per endpoint:
   *failed* attempts (successes are not counted). Attempts are reserved
   against a per-source cap (client IP) and an endpoint-wide global cap;
   the global is what bounds a guess spread across many addresses.
+
+Every `/api` response also carries `Cache-Control: no-store` (ADR 0021):
+the bodies are per-session, so a shared cache must never store one. The
+SPA shell and its hashed assets are served outside `/api` and keep their
+own caching.
 
 ## Roles
 

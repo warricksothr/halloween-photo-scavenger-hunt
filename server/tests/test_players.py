@@ -10,6 +10,10 @@ import hashlib
 import json
 import time
 
+import pytest
+from fastapi import HTTPException
+
+from app import auth
 from app.auth import PLAYER_COOKIE_NAME
 
 
@@ -140,6 +144,47 @@ class TestLastSeenThrottle:
         client.post("/api/logout")
         seen1 = conn.execute("SELECT last_seen_at FROM session").fetchone()[0]
         assert seen1 == seen0 + 61
+
+
+class TestSessionExpiry:
+    def test_player_session_is_rejected_once_expired(self, admin, client):
+        _, join_code = _make_event(admin)
+        _join(client, join_code)
+        conn = client.app.state.db
+        # Backdate creation past the TTL rather than sleeping: the check
+        # is arithmetic on created_at, so this is the same as a session
+        # that has simply been alive too long. Commit so the reader
+        # connection (ADR 0013) sees it.
+        conn.execute(
+            "UPDATE session SET created_at = ?",
+            (int(time.time()) - auth.SESSION_TTL_SECONDS,),
+        )
+        conn.commit()
+        assert client.get("/api/state").status_code == 401
+
+    def test_player_cookie_carries_the_ttl(self, admin, client):
+        _, join_code = _make_event(admin)
+        resp = _join(client, join_code)
+        assert f"Max-Age={auth.SESSION_TTL_SECONDS}" in resp.headers["set-cookie"]
+
+    def test_writer_guard_rejects_an_expired_session(self, admin, client):
+        # The reader checked expiry when the request started; a session
+        # that ages out before a handler writes must also fail on the
+        # writer (ADR 0013), which is what this guard is for.
+        _, join_code = _make_event(admin)
+        _join(client, join_code)
+        conn = client.app.state.db
+        session_id = conn.execute("SELECT id FROM session").fetchone()[0]
+        guard = auth._live_session_guard(
+            "session", session_id, auth.SESSION_TTL_SECONDS
+        )
+        conn.execute(
+            "UPDATE session SET created_at = ? WHERE id = ?",
+            (int(time.time()) - auth.SESSION_TTL_SECONDS, session_id),
+        )
+        with pytest.raises(HTTPException) as exc:
+            guard(conn)
+        assert exc.value.status_code == 401
 
 
 class TestLogout:

@@ -25,6 +25,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import (
+    auth,
+    cache,
     csrf,
     errors,
     events,
@@ -128,7 +130,10 @@ def create_app(
         # acquire it again around their transaction blocks.
         app.state.db_lock = threading.RLock()
         app.state.admin_config = admin_config
-        app.state.admin_sessions = set()  # in-memory; auth.py explains why
+        app.state.admin_sessions = {}  # in-memory; auth.py explains why
+        # Session lifetime for every kind of session (auth.py). Read once
+        # here so the env var is a process setting, not a per-request one.
+        app.state.session_ttl = auth.configured_session_ttl()
         app.state.cookie_secure = cookie_secure
         # SSO: the provider caches discovery and JWKS; identities are the
         # in-memory counterpart of admin_sessions (app/oidc.py).
@@ -216,6 +221,7 @@ def create_app(
     # reject, and measures the whole request.
     app.add_middleware(csrf.CsrfMiddleware)
     app.add_middleware(limits.BodyLimitMiddleware)
+    app.add_middleware(cache.NoStoreMiddleware)
     app.add_middleware(RequestLogMiddleware)
     app.include_router(events.router)
     app.include_router(oidc.router)

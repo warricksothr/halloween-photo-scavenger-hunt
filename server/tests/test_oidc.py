@@ -755,7 +755,11 @@ def test_config_from_env_reads_overrides():
 def _identity_request():
     return SimpleNamespace(
         cookies={},
-        app=SimpleNamespace(state=SimpleNamespace(oidc_identities={})),
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                oidc_identities={}, session_ttl=auth.SESSION_TTL_SECONDS
+            )
+        ),
     )
 
 

@@ -150,6 +150,7 @@ def join(
         httponly=True,
         secure=request.app.state.cookie_secure,
         samesite="lax",
+        max_age=request.app.state.session_ttl,
     )
     return resp
 

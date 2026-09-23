@@ -46,6 +46,18 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — Every session now expires, and API responses are never
+  cached.** TKT-01M33RFWN88Y57BZ6ZFE4NEQND. `auth.SESSION_TTL_SECONDS`
+  (default 12h, overridable with `ARKHAM_SESSION_TTL_SECONDS`) bounds
+  admin, player, and moderator sessions; expiry is checked on the reader
+  and re-checked on the writer (`_live_session_guard`, ADR 0013),
+  credential cookies carry the matching `Max-Age`, and `app/cache.py`
+  stamps `Cache-Control: no-store` on every `/api` response (ADR 0021).
+- **2026-09-23 — Editing an event leaves an audit row.** TKT-01M33RFWMFMPB3JY9CH60MAGR5.
+  `events.patch_event` logs `event.updated` with `{old, new}` over the
+  fields that actually changed, in the same locked transaction as the
+  UPDATE; `docs/impl/audit-actions.md` gained the row and its
+  `event.created` details now include `team_size_limit`.
 - **2026-09-23 — The moderator link is a selector, not a credential.**
   TKT-01M33S9CWGZWA82EDFK6NG232V. `POST /api/mod/join/{code}` now requires
   an OIDC moderator session before the rate-limit gate even runs, so a
