@@ -22,3 +22,9 @@ class TestNoStore:
     def test_non_api_path_keeps_its_own_caching(self, client):
         resp = client.get("/")
         assert resp.headers.get("cache-control") != "no-store"
+
+    def test_near_prefix_path_is_not_no_store(self, client):
+        # The boundary is a path segment, not the first three characters:
+        # /apiary and /api-docs are not the API.
+        resp = client.get("/apiary")
+        assert resp.headers.get("cache-control") != "no-store"

@@ -20,6 +20,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 NO_STORE = b"no-store"
 
 
+def _is_api_path(path: str) -> bool:
+    """Whether ``path`` is under ``/api``.
+
+    The boundary matters: ``str.startswith("/api")`` also matches
+    ``/apiary`` and ``/api-docs``, which are not the API and must keep
+    their own caching."""
+    return path == "/api" or path.startswith("/api/")
+
+
 class NoStoreMiddleware:
     """Pure-ASGI so it can rewrite the response headers without the app
     building a response object it does not need."""
@@ -28,7 +37,7 @@ class NoStoreMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope.get("path", "").startswith("/api"):
+        if scope["type"] != "http" or not _is_api_path(scope.get("path", "")):
             await self.app(scope, receive, send)
             return
 
