@@ -51,8 +51,10 @@ RELEASE_ENV = "ARKHAM_RELEASE"
 DEFAULT_TRACES_SAMPLE_RATE = 0.1
 
 # A request mapping carries the credential-bearing URL, every header
-# (cookies, Authorization) and the body; none of it belongs in a report.
-_DROPPED_REQUEST_KEYS = ("headers", "cookies", "data", "env", "query_string")
+# (cookies, Authorization) and the body; a breadcrumb or span ``data`` can
+# carry the same shapes nested under ``request``/``response``. None of it
+# belongs in a report, so these keys are dropped wherever they appear.
+_SENSITIVE_KEYS = ("headers", "cookies", "data", "env", "query_string")
 # A path-like or URL-like run inside free text. The run starts at a ``/``
 # (a bare path) or a URL scheme, and continues over path/query characters.
 # Free text wraps it in quotes, follows a ``key=``, or puts it on its own
@@ -134,6 +136,24 @@ def scrub_text(text: str) -> str:
     return _URL_IN_TEXT.sub(_replace, text)
 
 
+def _drop_sensitive_keys(value: Any) -> Any:
+    """Recursively remove credential-bearing keys from arbitrary data.
+
+    A breadcrumb or span ``data`` mapping can nest the request under
+    ``request``/``response``, so a top-level pop is not enough; walk dicts
+    and lists and drop the key wherever it appears.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _drop_sensitive_keys(item)
+            for key, item in value.items()
+            if key not in _SENSITIVE_KEYS
+        }
+    if isinstance(value, list):
+        return [_drop_sensitive_keys(item) for item in value]
+    return value
+
+
 def scrub_breadcrumb(
     breadcrumb: dict[str, Any], hint: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -145,7 +165,7 @@ def scrub_breadcrumb(
         for key in ("url", "from", "to"):
             if isinstance(data.get(key), str):
                 data[key] = scrub_url(data[key])
-        crumb["data"] = data
+        crumb["data"] = _drop_sensitive_keys(data)
     if isinstance(crumb.get("message"), str):
         crumb["message"] = scrub_text(crumb["message"])
     return crumb
@@ -208,7 +228,7 @@ def scrub_event(
         request = dict(request)
         if "url" in request:
             request["url"] = scrub_url(request["url"])
-        for key in _DROPPED_REQUEST_KEYS:
+        for key in _SENSITIVE_KEYS:
             request.pop(key, None)
         event["request"] = request
     if isinstance(event.get("transaction"), str):

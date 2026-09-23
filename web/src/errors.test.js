@@ -238,6 +238,38 @@ describe('error reporting', () => {
     expect(event.breadcrumbs.values[0].data.from).toBe('/j/<redacted>');
   });
 
+  it('drops credential-bearing keys from breadcrumb data', async () => {
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            message: 'http',
+            data: {
+              url: 'https://hunt.example/api/join/SECRET',
+              headers: { Cookie: 'session=abc' },
+              cookies: { session: 'abc' },
+              data: { password: 'hunter2' },
+              env: { SECRET: 'leak' },
+              query_string: 'token=SECRET',
+              response: { headers: { 'Set-Cookie': 'session=abc' } },
+              keep: 'fine',
+            },
+          },
+        ],
+      },
+    });
+
+    const data = event.breadcrumbs.values[0].data;
+    expect(data.url).toBe('https://hunt.example/api/join/<redacted>');
+    for (const key of ['headers', 'cookies', 'data', 'env', 'query_string']) {
+      expect(data[key]).toBeUndefined();
+    }
+    expect(data.response.headers).toBeUndefined();
+    expect(data.keep).toBe('fine');
+  });
+
   it('redacts a credential inside an absolute URL in a breadcrumb message', async () => {
     const errors = await loadErrors();
 

@@ -115,6 +115,22 @@ function scrubSpan(span) {
   return cleaned;
 }
 
+// Recursively drop credential-bearing keys from arbitrary data. A
+// breadcrumb or span data mapping can nest the request under
+// request/response, so a top-level delete is not enough.
+function dropSensitiveKeys(value) {
+  if (Array.isArray(value)) return value.map(dropSensitiveKeys);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (DROPPED_REQUEST_KEYS.includes(key)) continue;
+      out[key] = dropSensitiveKeys(item);
+    }
+    return out;
+  }
+  return value;
+}
+
 function scrubBreadcrumb(crumb) {
   if (!crumb || typeof crumb !== 'object') return crumb;
   const cleaned = { ...crumb };
@@ -126,7 +142,7 @@ function scrubBreadcrumb(crumb) {
     for (const key of ['url', 'from', 'to']) {
       if (typeof data[key] === 'string') data[key] = scrubUrl(data[key]);
     }
-    cleaned.data = data;
+    cleaned.data = dropSensitiveKeys(data);
   }
   return cleaned;
 }

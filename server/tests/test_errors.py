@@ -266,6 +266,31 @@ def test_scrub_breadcrumb_scrubs_from_and_to():
     assert cleaned["data"] == {"from": "/m/<redacted>", "to": "/t/<redacted>"}
 
 
+def test_scrub_breadcrumb_drops_credential_bearing_data():
+    crumb = {
+        "message": "http",
+        "data": {
+            "url": "https://hunt.example/api/join/SECRET",
+            "headers": {"Cookie": "session=abc"},
+            "cookies": {"session": "abc"},
+            "data": {"password": "hunter2"},
+            "env": {"SECRET": "leak"},
+            "query_string": "token=SECRET",
+            "response": {"headers": {"Set-Cookie": "session=abc"}},
+            "keep": "fine",
+        },
+    }
+
+    cleaned = errors.scrub_breadcrumb(crumb)
+    data = cleaned["data"]
+
+    assert data["url"] == "https://hunt.example/api/join/<redacted>"
+    for key in ("headers", "cookies", "data", "env", "query_string"):
+        assert key not in data
+    assert "headers" not in data["response"]
+    assert data["keep"] == "fine"
+
+
 def test_internal_error_is_reported_once_with_the_request_id(tmp_path):
     transport = FakeTransport()
     errors.init_error_reporting(_config(), transport=transport)

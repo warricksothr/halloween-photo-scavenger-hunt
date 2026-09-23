@@ -48,9 +48,11 @@ puts bearer secrets in the URL: `/api/join/<code>`, `/api/mod/join/<code>`,
 `/t/<token>`. `before_send`, `before_send_transaction` and `before_breadcrumb`
 run the payload through the same `redact_path` the request log uses, redact the
 request `url` (path segment plus query and fragment), and drop `headers`,
-`cookies`, `data`, `env` and `query_string` outright. The web scrubbers are the
-mirror of the server's in `web/src/redact.js`. `send_default_pii=False` and the
-IP is dropped from `user` as well.
+`cookies`, `data`, `env` and `query_string` outright — recursively, so a
+breadcrumb or span `data` that nests the request under `request`/`response` is
+covered too. The web scrubbers are the mirror of the server's in
+`web/src/redact.js`. `send_default_pii=False` and the IP is dropped from `user`
+as well.
 
 **Transaction names use the route, not the path.** Both integrations are
 configured with `transaction_style="endpoint"`. The default, `"url"`, would
