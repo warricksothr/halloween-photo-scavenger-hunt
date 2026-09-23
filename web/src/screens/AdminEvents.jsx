@@ -39,54 +39,60 @@ export function AdminEvents({ initialEvents }) {
     else if (!result?.unauthenticated) setEvents(result);
   }
 
-  // Every mutation funnels through one guard so `busy` cannot strand a
-  // button and the API's message is what the host reads.
-  async function mutate(action) {
+  // Every mutation funnels through one guard: `busy` cannot strand a
+  // button, the API's message is what the host reads, and a lifecycle
+  // change holds the guard across the refetch. Releasing it at the request
+  // would leave the row showing its old status with its old action enabled,
+  // so a second click could fire the transition the server just refused.
+  async function mutate(action, { refetch = false } = {}) {
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await action();
-    if (result?.error) setError(result.message);
-    setBusy(false);
-    return result;
-  }
-
-  // A lifecycle change is only real once the server agrees; reload so the
-  // row's single action matches the new status instead of the old one.
-  async function transition(action) {
-    const result = await mutate(action);
-    if (result && !result.error) await reload();
+    try {
+      const result = await action();
+      if (result?.error) {
+        setError(result.message);
+        return result;
+      }
+      if (refetch) await reload();
+      return result;
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onCreate(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const result = await mutate(() =>
-      api.adminCreateEvent({
-        name: data.get('name').trim(),
-        theme: data.get('theme'),
-        leaderboard_visibility: data.get('visibility'),
-        team_size_limit: Number(data.get('team_size')),
-      }),
+    const result = await mutate(
+      () =>
+        api.adminCreateEvent({
+          name: data.get('name').trim(),
+          theme: data.get('theme'),
+          leaderboard_visibility: data.get('visibility'),
+          team_size_limit: Number(data.get('team_size')),
+        }),
+      { refetch: true },
     );
     if (result && !result.error) {
       setCreated(result);
       setShowCreate(false);
       form.reset();
-      await reload();
     }
   }
 
   async function onPurge(event) {
     event.preventDefault();
     const target = purgeFor;
-    const result = await mutate(() => api.adminPurgeEvent(target.id, confirmName));
+    const result = await mutate(
+      () => api.adminPurgeEvent(target.id, confirmName),
+      { refetch: true },
+    );
     if (result && !result.error) {
       setPurgeFor(null);
       setConfirmName('');
       if (created?.id === target.id) setCreated(null);
-      await reload();
     }
   }
 
@@ -172,13 +178,19 @@ export function AdminEvents({ initialEvents }) {
                 <span class="admin-actions">
                   {item.status === 'lobby' && (
                     <button class="admin-btn secondary" disabled={busy}
-                            onClick={() => transition(() => api.adminOpenEvent(item.id))}>
+                            onClick={() =>
+                              mutate(() => api.adminOpenEvent(item.id), {
+                                refetch: true,
+                              })}>
                       Open
                     </button>
                   )}
                   {item.status === 'open' && (
                     <button class="admin-btn secondary" disabled={busy}
-                            onClick={() => transition(() => api.adminCloseEvent(item.id))}>
+                            onClick={() =>
+                              mutate(() => api.adminCloseEvent(item.id), {
+                                refetch: true,
+                              })}>
                       Close
                     </button>
                   )}

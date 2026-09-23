@@ -71,6 +71,37 @@ describe('admin event management', () => {
     expect(mocks.api.adminOpenEvent).toHaveBeenCalledWith('ev-1');
     expect(await screen.findByRole('button', { name: 'Close' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+
+    mocks.api.adminEvents.mockResolvedValue([{ ...lobby, status: 'closed' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(mocks.api.adminCloseEvent).toHaveBeenCalledWith('ev-1');
+    expect(await screen.findByRole('button', { name: 'Purge' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
+
+  it('keeps the guard until the refetch lands so a stale second click cannot fire', async () => {
+    let release;
+    mocks.api.adminEvents.mockResolvedValue([{ ...lobby, status: 'open' }]);
+
+    render(<AdminEvents initialEvents={[lobby]} />);
+
+    mocks.api.adminOpenEvent.mockResolvedValue({});
+    const pending = new Promise((resolve) => {
+      release = () => resolve([{ ...lobby, status: 'open' }]);
+    });
+    mocks.api.adminEvents.mockReturnValue(pending);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Open' }).disabled).toBe(true);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(mocks.api.adminOpenEvent).toHaveBeenCalledTimes(1);
+
+    release();
+    expect(await screen.findByRole('button', { name: 'Close' })).toBeTruthy();
   });
 
   it('surfaces the API message when a transition is refused', async () => {

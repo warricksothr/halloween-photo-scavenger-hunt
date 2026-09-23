@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T04:33:17Z
+updated_at: 2026-09-23T04:36:01Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -153,3 +153,26 @@ deployment checks 20 passed, frontend 87 passed, production build clean.
   visibility after creation.
 - No purge confirmation dialog beyond the typed name; the API's `confirm`
   check is the real gate.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T04:36:01Z
+
+### Review round 1 (request `admin-event-management`)
+
+PR #24, head `395d51959bceeaed50f39233cac95238a8650441`, base
+`3c13182e2dd1cfa5c4397f99d671068763a8e110`.
+Run `2e3eb50d-8d27-4c1d-926d-74c4da7c54cc`, Actions run #374
+(https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/374).
+Outcome: completed with findings at the failure threshold.
+
+- **medium — the guard was released before the refetch finished.** Accepted.
+  `mutate` now holds `busy` across the optional `refetch` (one guarded
+  operation, `finally` clears it), and `transition` is gone: the two lifecycle
+  buttons call `mutate(..., { refetch: true })`. A second click during the
+  refetch can no longer fire the transition the server just refused. New test
+  "keeps the guard until the refetch lands" pins it with a deferred
+  `adminEvents` promise.
+- **low — the lifecycle test never clicked Close.** Accepted. The test now
+  refetches into `open`, clicks Close, asserts `adminCloseEvent('ev-1')`, and
+  checks the row settles into the closed state with a Purge action.
+
+Re-dispatched under the same request id (same review purpose, substantive fix).
