@@ -39,10 +39,14 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  // How many hint levels this player has asked to see. Nothing shows
-  // until they ask: a hint the player did not want is a spoiler, and
-  // the ladder is their escape hatch, not part of the riddle text.
-  const [revealed, setRevealed] = useState(0);
+  // How many hint levels this player has asked to see, tagged with the
+  // riddle it belongs to. Nothing shows until they ask: a hint the
+  // player did not want is a spoiler, and the ladder is their escape
+  // hatch, not part of the riddle text. Tagging the riddle means a
+  // reused screen cannot render the next ladder from a stale count —
+  // an effect would reset it only after that first render committed.
+  const [reveal, setReveal] = useState({ riddleId, count: 0 });
+  const revealed = reveal.riddleId === riddleId ? reveal.count : 0;
 
   useEffect(() => {
     api.drawer().then((result) => {
@@ -50,12 +54,6 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
       else setDrawer(result);
     });
   }, []);
-
-  // A different riddle means a different ladder: carry the count over
-  // and the next riddle opens with hints the player never asked for.
-  useEffect(() => {
-    setRevealed(0);
-  }, [riddleId]);
 
   if (!riddle) {
     // Riddle vanished from the snapshot (moderator edit) — retreat.
@@ -153,7 +151,7 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
             </ul>
           )}
           {revealed < hints.length ? (
-            <button class="btn secondary" onClick={() => setRevealed(revealed + 1)}>
+            <button class="btn secondary" onClick={() => setReveal({ riddleId, count: revealed + 1 })}>
               {c.needNudge}
             </button>
           ) : (
