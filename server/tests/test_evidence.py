@@ -13,8 +13,10 @@ from PIL import Image
 from support import arm_csrf
 
 from app import evidence as evidence_module
+from app import storage
 from app.images import (
     MAX_BYTES,
+    MAX_DERIVATIVE_BYTES,
     NotAnImageError,
     TooManyPixelsError,
     process_upload,
@@ -277,3 +279,41 @@ class TestUploadEndpoint:
             "/api/evidence", files={"photo": ("x.jpg", make_jpeg(), "image/jpeg")}
         )
         assert resp.status_code == 401
+
+
+class TestDiskGuardrail:
+    def test_low_disk_rejects_before_any_work(self, admin, client, monkeypatch):
+        _party(admin, client)
+        # Let the middleware's check (declared body only) pass so the
+        # route's own guard — the one that also accounts for the
+        # derivative — is the branch under test.
+        monkeypatch.setattr(
+            storage,
+            "has_room",
+            lambda path, extra_bytes, minimum: extra_bytes < MAX_DERIVATIVE_BYTES,
+        )
+
+        resp = _upload(client, make_jpeg())
+        assert resp.status_code == 507, resp.text
+        assert resp.json()["error"] == "storage_full"
+        # Refused before Pillow, the row, and the files: nothing to undo.
+        conn = client.app.state.db
+        assert conn.execute("SELECT COUNT(*) FROM evidence_item").fetchone()[0] == 0
+        assert list(client.app.state.photos_dir.rglob("*")) == []
+
+    def test_room_available_uploads_normally(self, admin, client, monkeypatch):
+        _party(admin, client)
+        calls = []
+        real = storage.has_room
+
+        def spy(path, extra_bytes, minimum):
+            calls.append((extra_bytes, minimum))
+            return real(path, extra_bytes, minimum)
+
+        monkeypatch.setattr(storage, "has_room", spy)
+        assert _upload(client, make_jpeg()).status_code == 201
+        # The guardrail was consulted, not skipped on the happy path, and
+        # the route's check accounts for the derivative as well as the body
+        # (the middleware's earlier check only sees the declared length).
+        assert calls and calls[0][1] == client.app.state.min_free_bytes
+        assert any(extra >= MAX_DERIVATIVE_BYTES for extra, _ in calls)

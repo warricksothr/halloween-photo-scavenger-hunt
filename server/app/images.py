@@ -48,6 +48,13 @@ MAX_BYTES = 15 * 1024 * 1024  # 15 MB wire cap (route enforces)
 MAX_DIMENSION = 1920  # long-edge cap for the derivative
 MAX_PIXELS = 50_000_000  # decompressed pixel ceiling
 
+# What one accepted upload writes beyond the request body: the derivative
+# is a JPEG whose long edge is capped, and an encoded image cannot
+# meaningfully exceed the raw RGB bytes of that bitmap. Used to size the
+# free-space check (app/storage.py), so it only has to be an upper bound,
+# not an estimate.
+MAX_DERIVATIVE_BYTES = MAX_DIMENSION * MAX_DIMENSION * 3
+
 JPEG_QUALITY = 85
 
 _MAGIC = {

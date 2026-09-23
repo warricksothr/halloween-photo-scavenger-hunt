@@ -166,6 +166,8 @@ POST   /api/evidence                    multipart photo + optional riddle_id
                                         → 201 evidence item |
                                           413 too big | 415 not an image |
                                           429 rate limited |
+                                          507 storage_full (disk below the
+                                          free-space floor, ADR 0023) |
                                           403 upload-restricted (strike)
                                         Logs evidence.uploaded; raises
                                         duplicate_flag.raised on cross-team

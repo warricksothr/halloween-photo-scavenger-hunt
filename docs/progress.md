@@ -46,6 +46,18 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — Uploads refuse below a free-space floor.**
+  TKT-01M33RFWPVZG68H8JFWRK6JK70. `app/storage.py` gives uploads a
+  free-space guardrail in two layers: `StorageGuardMiddleware` refuses a
+  `POST /api/evidence` from the declared length before Starlette spools
+  the body, checking the photos volume and the multipart spool filesystem
+  (`TMPDIR`) both, and the route re-checks after the bounded read
+  accounting for the original plus the derivative, before any Pillow
+  work. Below
+  `ARKHAM_MIN_FREE_BYTES` (default 256 MiB) either answers
+  `507 storage_full`, so a full disk cannot break SQLite writes
+  mid-party. It is a guardrail, not a quota (ADR 0023);
+  `deploy/RUNBOOK.md` carries the pre-event `df`/`du` check.
 - **2026-09-23 — A migration and its version row commit together.**
   TKT-01M33RFWP28QSFGVNPKJ3EY6SS. `apply_migrations` used to run
   `executescript` inside `with conn:`, but `executescript` commits the

@@ -269,3 +269,9 @@ CREATE TABLE IF NOT EXISTS team_invite (
   policy can be added later without a schema change (the DB never points
   at originals, so deleting them is a filesystem-only operation).
   Originals still die with the event data purge (increment 10).
+- **Uploads refuse below a free-space floor** — 256 MiB by default,
+  `ARKHAM_MIN_FREE_BYTES` to override (ADR 0023). That is the documented
+  cap on the originals directory in the sense that matters: the host
+  never runs to zero, so SQLite writes keep working. `deploy/RUNBOOK.md`
+  carries the pre-event `df` check; the floor is a guardrail, not a
+  per-team quota, so two uploads can still pass and then write.

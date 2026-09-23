@@ -58,7 +58,12 @@ directory (an unmounted mount point).
 4. Print two QR codes — the **join link** (`https://<host>/j/<code>`)
    for players and the **mod link** (`https://<host>/m/<code>`) for
    moderators. The codes appear only in the create response.
-5. Press **open** only when players are physically present.
+5. Check free disk before opening: `df -h ~/arkham/data /tmp` and
+   `du -sh ~/arkham/data/photos/originals`. Uploads refuse below 256 MiB
+   free on the data volume **and** on the multipart spool filesystem
+   (`ARKHAM_MIN_FREE_BYTES` to change the floor, ADR 0023), and a full
+   disk breaks SQLite writes too — so clear space now, not mid-round.
+6. Press **open** only when players are physically present.
 
 ## 3. Full smoke walkthrough (do this with a second phone)
 
@@ -113,6 +118,7 @@ If all eight pass, the night is ready.
 | --- | --- |
 | Queue/tiles don't update live | `proxy_buffering off` on the SSE location; `curl -N https://<host>/api/events/stream` should stream heartbeats |
 | Players can't upload big photos | nginx `client_max_body_size 16m` sits above the app's 15 MB cap, so the app owns the 413 |
+| Uploads answer 507 `storage_full` | `df -h` the data dir; free space, or set `ARKHAM_MIN_FREE_BYTES` to the floor you actually want, then restart |
 | 502 after reboot | `loginctl enable-linger "$USER"`; `systemctl --user status arkham-hunt` |
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |
 | Nothing in GlitchTip | `ARKHAM_ERROR_DSN` / `VITE_ERROR_DSN` are set and the app was restarted/rebuilt; the CSP `connect-src` includes the GlitchTip origin |

@@ -83,7 +83,7 @@ podman run -d --name arkham-hunt \
   arkham-hunt:local
 ```
 
-The three environment variables, and why:
+The environment variables, and why:
 
 - `ARKHAM_ADMIN_USERNAME` / `ARKHAM_ADMIN_PASSWORD_HASH` — required;
   the app refuses to start without them.
@@ -91,6 +91,9 @@ The three environment variables, and why:
   sets `Secure` cookies by default; browsers refuse to send those over
   plain HTTP, and without the toggle every login silently 401s. Do not
   set this on the TLS path — production keeps the default.
+- `ARKHAM_MIN_FREE_BYTES` — optional. The free-space floor below which
+  uploads answer 507 `storage_full`; defaults to 256 MiB. Set it on a
+  small volume, and size the `arkham-data` volume above it (ADR 0023).
 
 `-p 127.0.0.1:8080:8000` binds loopback only. For a LAN party (players
 on phones on the same network), publish on all interfaces and give the
