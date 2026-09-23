@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-22T23:56:49Z
+updated_at: 2026-09-23T00:06:32Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -350,3 +350,33 @@ the two cookie representations; `docs/progress.md` #19 entry follows.
 
 Evidence: head after this commit, `bash scripts/check-server.sh` green — 336
 tests, coverage 95.43%, Ruff clean (45 files formatted). Re-review requested.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T00:06:32Z
+
+Supersedes the note at head c6b56275.
+
+### high (review 202, run #299, request short-secret-cookie-fix)
+Terva resolved both earlier highs (`finding-1`: no length floor, four-digit test;
+`finding-2`: `SimpleCookie` values join the set, quoted-cookie test). The same
+review opened a high.
+
+**high: a JSON escape could survive in the message.** The JSON branch derived
+candidates only from `json.loads`, so `{"password":"top\u002fsecret"}` gave
+`top/secret` but not the escaped `top\u002fsecret`. A route that reads the raw
+body and quotes it logs the escaped form, and the body parsed, so the message
+was not dropped. The form and query branches already carried their raw text;
+JSON did not.
+
+Accepted: carry it too. A new `_raw_json_tokens` yields the whole body text and
+every quoted literal with escapes intact (`re.findall(r'"((?:[^"\\]|\\.)*)"')`),
+which adds the escaped value beside its decode. This is the same
+decoded-versus-raw pairing the form branch uses.
+
+Tests: `test_body_secrets_reads_json_and_form_values` now asserts the escaped
+literal is a candidate; `test_a_raw_escaped_json_body_is_scrubbed` proves the
+escaped body is gone and the message kept.
+
+Docs: `docs/progress.md` #19 entry follows.
+
+Evidence: head after this commit, `bash scripts/check-server.sh` green — 337
+tests, coverage 95.37%, Ruff clean. Re-review requested.
