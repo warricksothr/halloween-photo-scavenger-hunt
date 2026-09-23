@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:35:11Z
+updated_at: 2026-09-23T01:38:53Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -184,3 +184,9 @@ Sixth Terva review (219, head c1647f8, run 2dcf0a66-f14f-4769-ad2c-9f701c07268c,
 - high frame locals: init now sets include_local_variables=False, and scrub_event defensively drops exception.values[*].stacktrace.frames[*].vars through a new _drop_frame_vars helper. Tests: a transport-level test holds a credential in a runtime-built local and asserts it is absent from the serialized envelope; a unit test feeds a frame carrying vars and asserts they are dropped. (Note: with this SDK, frame vars do not appear in the envelope either way, so the unit test is the deterministic guard and the option is the documented one.)
 - medium setContext shape: reportError now passes the scalar fields as one named object via scope.setContext('app', fields) instead of a primitive per key; the errors test asserts the 'app' object shape.
 Quality gate re-run: exit 0 — 335 server tests @ 95.03%, 20 deploy checks, 65 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:38:53Z
+
+Seventh Terva review (220, head 3f8f61e, run 2d77a102-eda1-4550-91ef-8377a4dce9d1, Actions run #340/id 9118, request review-fixes-6): both prior findings resolved; one new high finding, accepted and fixed:
+- high bare-path query/fragment: scrub_text's _replace sent a bare-path match straight to redact_path, which redacts only designated bearer segments and keeps any query string or fragment, so '/api/state?token=SECRET' survived. Both surfaces now route every match — bare path and absolute URL alike — through scrub_url/scrubUrl, which was already able to drop query and fragment for a schemeless path. Tests added on both surfaces for a query and a fragment on an ordinary (non-bearer) path.
+Quality gate re-run: exit 0 — 336 server tests @ 95.02%, 20 deploy checks, 66 frontend tests, build.
