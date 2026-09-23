@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:59:16Z
+updated_at: 2026-09-23T02:11:40Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -220,3 +220,9 @@ Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 70 
 Twelfth Terva review (225, head a070252, run 35a58e74-7599-4bf6-a4cd-876508d50860, Actions run #350/id 9176, request review-fixes-11): the prose-in-data finding resolved; one new medium finding, accepted and fixed:
 - medium uncorrelated errors re-correlated at beforeSend: reportError(error, context, null) means 'do not correlate', but scrubEvent's fallback re-added the module-global lastRequestId whenever the event had no request_id tag, so a concurrent request finishing between capture and beforeSend could attach the wrong id. reportError now marks an explicit null with scope.setContext('arkham_uncorrelated', {value: true}); scrubEvent reads and deletes that marker and skips the global fallback. Test: explicit-null report, then the global moves, then scrubEvent — no tag attached and the marker removed. Server unchanged: it has no global fallback, bind_request_id is tag-only and auto-capture is the single path.
 Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 71 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T02:11:40Z
+
+Thirteenth Terva review (226, head 3c384a4, run 71b55b47-0a35-4c4b-9bbc-54be24c05b98, Actions run #352/id 9181, request review-fixes-12): the re-correlation finding resolved; one new medium finding, accepted with a direction the user chose:
+- medium duplicate cross-surface 500: a browser request hitting an unhandled server 500 produced a server event (ASGI auto-capture, real stack) and a synthetic browser event from reportFailure. The ADR's 'one event per 500' was scoped to the server middleware chain, not cross-surface, so it was not literally violated, but both readings were defensible and the user chose to make the browser honour the same rule: report a 5xx only when the result has no request id (a proxy/network-boundary 5xx no server event describes), and always report a dead connection (the server never saw the request). reportFailure now skips a 5xx that carries requestId; tests: a 500 with an id is not reported, a network failure is reported under its own id, a 500 without an id (proxy) still reports. ADR 0017 gains the browser-side rule.
+Quality gate re-run: exit 0 — 340 server tests @ 95.08%, 20 deploy checks, 72 frontend tests, build.
