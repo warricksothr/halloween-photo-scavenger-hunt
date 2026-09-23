@@ -92,6 +92,110 @@ body:has(.admin-shell) {
   padding: 16px 18px;
 }
 
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-panel-head h2 {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.admin-event + .admin-event {
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-event-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-event-when {
+  font-size: 0.75rem;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-actions .admin-btn {
+  font-size: 0.8rem;
+  padding: 5px 10px;
+}
+
+.admin-create {
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+
+.admin-purge {
+  background: rgba(224, 98, 63, 0.08);
+  border: 1px solid var(--admin-danger);
+  border-radius: var(--admin-radius);
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+}
+
+.admin-purge p {
+  margin: 0 0 10px;
+}
+
+.admin-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 14px 0;
+}
+
+.admin-code {
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  padding: 14px;
+  text-align: center;
+}
+
+.admin-code .admin-status {
+  margin-bottom: 10px;
+}
+
+/* Fixed black-on-white with a quiet border: a QR that inherits the dark
+   theme inverts and stops scanning (ADR 0019). */
+.admin-qr {
+  background: #ffffff;
+  border-radius: 4px;
+  display: block;
+  height: auto;
+  margin: 0 auto 10px;
+  max-width: 100%;
+  padding: 6px;
+}
+
+.admin-code-url {
+  color: var(--admin-accent);
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+
+.admin-btn.danger {
+  background: var(--admin-danger);
+  border-color: var(--admin-danger);
+  color: #ffffff;
+}
+
+.admin-btn.danger:disabled {
+  opacity: 0.45;
+}
+
 .admin-panel + .admin-panel {
   margin-top: 12px;
 }

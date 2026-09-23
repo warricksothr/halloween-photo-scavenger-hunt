@@ -42,7 +42,7 @@ describe('admin console shell', () => {
 
     expect(await screen.findByText('Gotham Halloween')).toBeTruthy();
     for (const label of ['Events', 'Riddles', 'Host actions']) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(screen.getByRole('button', { name: label })).toBeTruthy();
     }
     expect(screen.queryByLabelText('Password')).toBeNull();
   });
