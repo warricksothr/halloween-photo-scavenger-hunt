@@ -80,8 +80,9 @@ PATCH  /api/admin/events/{id}/riddles/{rid}   { text?, sort_order? }
 DELETE /api/admin/events/{id}/riddles/{rid}   (409 if submissions reference it)
 ```
 
-Lifecycle transitions log `event.opened` / `event.closed`; riddle edits
-log `riddle.edited` with before/after text in `details`.
+Lifecycle transitions log `event.opened` / `event.closed`; event edits log
+`event.updated` and riddle edits log `riddle.edited`, both with before/after
+values in `details`.
 
 The admin console has no separate session endpoint: `GET /api/admin/events`
 is the probe. A 401 means no admin session (the shell shows the login

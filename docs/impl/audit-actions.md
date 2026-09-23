@@ -18,9 +18,10 @@ Rules repeated from ADR 0004 so this file stands alone:
 
 | Action                   | Actor      | Entity       | `details` contents                              | Logged by (increment) |
 | ------------------------ | ---------- | ------------ | ----------------------------------------------- | --------------------- |
-| `event.created`          | admin      | event        | `{ name, theme, leaderboard_visibility }`       | 2 |
+| `event.created`          | admin      | event        | `{ name, theme, leaderboard_visibility, team_size_limit }` | 2 |
 | `event.opened`           | admin      | event        | `{}`                                            | 2 |
 | `event.closed`           | admin      | event        | `{ expired_pending: <count> }`                  | 2 |
+| `event.updated`          | admin      | event        | `{ old: {...}, new: {...} }` (changed fields)   | RFWM |
 | `event.purged`           | admin      | event        | `{ submissions: n, evidence: n }` (pre-delete)  | 10 |
 | `riddle.created`         | admin      | riddle       | `{ text, sort_order }`                          | 2 |
 | `riddle.edited`          | admin      | riddle       | `{ old_text, new_text, old_sort, new_sort }`    | 2 |
