@@ -8,7 +8,7 @@ Conventions from docs/impl/schema.md:
   the version unrecorded and the file is simply retried on next boot —
   never a schema change without its version row. Migration files must not
   contain their own transaction control (``BEGIN``/``COMMIT``); the runner
-  owns the transaction (ADR 0022).
+  owns the transaction and refuses a file that tries to take it (ADR 0022).
 - ``PRAGMA foreign_keys = ON`` and ``PRAGMA journal_mode = WAL`` are
   per-connection settings, not schema — they are set here on every
   connection at open time, not in the SQL files.
@@ -144,8 +144,7 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
     Returns the versions applied by this call. Each migration file and its
     ``schema_migrations`` row are written in a single transaction, so a
     crash mid-file leaves the version unrecorded and the file is retried
-    on next boot. See ``_apply_one`` for why the transaction has to live
-    inside the script rather than in a ``with conn:`` here.
+    on next boot.
     """
     applied: list[int] = []
     for path in sorted(MIGRATIONS_DIR.iterdir()):
@@ -168,31 +167,99 @@ def apply_migrations(conn: sqlite3.Connection) -> list[int]:
     return applied
 
 
+# Statements that would end the runner's transaction or start another. A
+# file must not carry them: a ``COMMIT`` mid-file would persist a partial
+# migration that ``rollback`` could no longer undo, which is the exact
+# applied-but-unrecorded state the single transaction exists to prevent.
+# ``BEGIN``/``END`` are here for the same reason even though SQLite rejects
+# a nested ``BEGIN`` — failing before execution is clearer than failing
+# after, and the check reads the statement's first keyword, so a
+# ``CREATE TRIGGER ... BEGIN ... END`` body is not mistaken for one.
+_TRANSACTION_CONTROL = frozenset(
+    {"begin", "commit", "end", "rollback", "savepoint", "release"}
+)
+
+
 def _apply_one(conn: sqlite3.Connection, version: int, sql: str) -> None:
     """Apply one migration and record its version in one transaction.
 
-    ``executescript`` commits any open transaction before it runs, so a
-    ``with conn:`` around it would not cover the schema change: the version
-    row would commit in a second transaction, and a crash between the two
-    commits would leave the schema applied but unrecorded. Recovery would
-    then depend on every migration being idempotent, an invariant nothing
-    enforced. An explicit ``BEGIN``/``COMMIT`` inside the script is the
-    only way to hold both in one transaction, because ``executescript``
-    controls transaction handling itself and ignores an outer one. That is
-    why migration files must not contain their own transaction control.
+    The runner owns the transaction and starts it with an explicit
+    ``BEGIN``: Python's sqlite3 only opens an implicit transaction for DML,
+    so a file's ``CREATE TABLE`` would otherwise autocommit before the
+    version row was written. ``executescript`` cannot be used here — it
+    commits any open transaction before it runs, which is what used to put
+    the schema change and the version row in two transactions and leave
+    recovery depending on every file being ``IF NOT EXISTS``. Because the
+    transaction is the runner's, a file containing its own transaction
+    control is refused before anything executes.
     """
-    applied_at = int(time.time())
-    script = (
-        "BEGIN;\n"
-        f"{sql}\n"
-        "INSERT INTO schema_migrations (version, applied_at) "
-        f"VALUES ({version}, {applied_at});\n"
-        "COMMIT;"
-    )
+    statements = _statements(sql)
     try:
-        conn.executescript(script)
+        conn.execute("BEGIN")
+        for statement in statements:
+            conn.execute(statement)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+            (version, int(time.time())),
+        )
+        conn.commit()
     except Exception:
-        # The BEGIN is still open when a statement fails; close it so the
-        # caller's connection is usable and nothing partial is visible.
         conn.rollback()
         raise
+
+
+def _statements(sql: str) -> list[str]:
+    """Split a migration file into complete SQL statements.
+
+    ``sqlite3.complete_statement`` understands quoted strings, comments,
+    and the ``BEGIN ... END`` body of a ``CREATE TRIGGER``, so this splits
+    on top-level semicolons without mis-reading any of them. A trailing
+    comment or blank line is not a statement and is dropped; a trailing
+    fragment that is not a complete statement is an error, because running
+    it would silently ignore the file's last statement.
+    """
+    statements: list[str] = []
+    buffer = ""
+    for line in sql.splitlines(keepends=True):
+        buffer += line
+        if sqlite3.complete_statement(buffer):
+            statements.append(buffer)
+            buffer = ""
+    if _without_comments(buffer).strip():
+        raise ValueError("migration ends with an incomplete SQL statement")
+    for statement in statements:
+        keyword = _first_keyword(statement)
+        if keyword in _TRANSACTION_CONTROL:
+            raise ValueError(
+                f"migration statement starts with {keyword!r}; the migration "
+                "runner owns the transaction, so files must not use "
+                "transaction control"
+            )
+    return statements
+
+
+def _without_comments(sql: str) -> str:
+    """Drop ``--`` line comments and ``/* ... */`` blocks from SQL.
+
+    Used only to find a statement's first keyword, so string literals are
+    left alone: the keywords this looks for are never inside one.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(sql):
+        if sql.startswith("--", i):
+            i = sql.find("\n", i)
+            if i == -1:
+                break
+        elif sql.startswith("/*", i):
+            end = sql.find("*/", i + 2)
+            i = len(sql) if end == -1 else end + 2
+        else:
+            out.append(sql[i])
+            i += 1
+    return "".join(out)
+
+
+def _first_keyword(statement: str) -> str:
+    tokens = _without_comments(statement).split()
+    return tokens[0].rstrip(";").lower() if tokens else ""

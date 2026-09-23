@@ -15,6 +15,46 @@ def test_migrations_are_idempotent(conn):
     assert db_module.apply_migrations(conn) == []
 
 
+def test_migration_with_transaction_control_is_refused(tmp_path, monkeypatch):
+    """The runner owns the transaction, so a file that tries to end it is
+    refused before anything executes — otherwise a COMMIT could persist a
+    partial migration that rollback could not undo."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text(
+        "CREATE TABLE canary (id INTEGER PRIMARY KEY);\nCOMMIT;\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "control.db")
+    try:
+        with pytest.raises(ValueError, match="transaction control"):
+            db_module.apply_migrations(conn)
+        # The check runs before execution: nothing was created.
+        assert (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='canary'"
+            ).fetchone()
+            is None
+        )
+        assert conn.in_transaction is False
+    finally:
+        conn.close()
+
+
+def test_a_trigger_body_is_one_statement_not_transaction_control():
+    """BEGIN/END inside a CREATE TRIGGER is the trigger's body, not the
+    runner's transaction: the statement's first keyword is CREATE."""
+    sql = (
+        "CREATE TABLE t (id INTEGER);\n"
+        "CREATE TRIGGER trg AFTER INSERT ON t BEGIN UPDATE t SET id = id; END;\n"
+    )
+    statements = db_module._statements(sql)
+    assert len(statements) == 2
+    assert db_module._first_keyword(statements[1]) == "create"
+
+
 def test_failed_migration_leaves_no_partial_state(tmp_path, monkeypatch):
     """A migration and its version row are one transaction, so a crash
     mid-file leaves neither the schema change nor the record. The next

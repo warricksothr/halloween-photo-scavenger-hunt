@@ -1,4 +1,4 @@
-# 0022. A migration and its version row commit in one transaction
+# 0022. A migration and its version row commit in one runner-owned transaction
 
 Date: 2026-09-23
 Status: accepted
@@ -28,30 +28,44 @@ protect. The fix belongs in the runner, once.
 
 ## Decision
 
-Apply each migration and record its version in a single transaction by
-putting an explicit `BEGIN`/`COMMIT` *inside* the script:
+The runner owns the transaction. `_apply_one` starts one with an explicit
+`BEGIN`, executes the file's statements on the writer, writes the version
+row, and commits; any error rolls the whole thing back:
 
 ```python
-script = (
-    "BEGIN;\n"
-    f"{sql}\n"
-    "INSERT INTO schema_migrations (version, applied_at) "
-    f"VALUES ({version}, {applied_at});\n"
-    "COMMIT;"
-)
-conn.executescript(script)
+statements = _statements(sql)          # validated before anything runs
+try:
+    conn.execute("BEGIN")
+    for statement in statements:
+        conn.execute(statement)
+    conn.execute("INSERT INTO schema_migrations ...", (version, ...))
+    conn.commit()
+except Exception:
+    conn.rollback()
+    raise
 ```
 
-`executescript` ignores an outer transaction but honours one written into
-the script, so this is the only placement that works. `version` and
-`applied_at` are integers the runner generated, so inlining them is safe
-(`executescript` takes no parameters).
+Two details are load-bearing:
 
-On a statement error the `BEGIN` is still open, so `_apply_one` rolls
-back and re-raises: the connection is left usable and nothing partial is
-visible. Because the runner owns the transaction, **migration files must
-not contain their own `BEGIN`/`COMMIT`/`ROLLBACK`**; this is documented
-in `db.py` and `docs/impl/schema.md`.
+- **`BEGIN` is explicit.** Python's `sqlite3` only opens an implicit
+  transaction for DML. Without the explicit `BEGIN`, a file's
+  `CREATE TABLE` autocommits before the version row is written — the same
+  split the bug produced, now caused by DDL instead of `executescript`.
+- **`executescript` is gone.** It is what forced the split in the first
+  place, and it ignores an outer transaction. `_statements` splits the
+  file with `sqlite3.complete_statement`, which understands quoted
+  strings, comments, and a `CREATE TRIGGER ... BEGIN ... END` body, so a
+  trigger is one statement and the split is not fooled by a semicolon
+  inside either.
+
+Because the transaction is the runner's, a file that contains its own
+transaction control is **refused before execution**. `_statements` reads
+each statement's first keyword (after stripping comments) and rejects
+`BEGIN`, `COMMIT`, `END`, `ROLLBACK`, `SAVEPOINT`, and `RELEASE`. A
+`COMMIT` mid-file would otherwise persist a partial migration that
+`rollback` could no longer undo — the exact applied-but-unrecorded state
+this change exists to remove. Reading the first keyword is what keeps a
+trigger's `BEGIN`/`END` body legal: that statement starts with `CREATE`.
 
 ## Consequences
 
@@ -61,9 +75,10 @@ in `db.py` and `docs/impl/schema.md`.
 - `IF NOT EXISTS` in the existing files is now defensive rather than the
   recovery mechanism. New migrations do not have to be idempotent to be
   safe — which is what makes a future `ALTER` or backfill possible.
-- The rule "no transaction control in a migration file" is documented but
-  not machine-checked. A file that breaks it will fail loudly at boot
-  (the runner's `COMMIT` arrives early and the following statements run
-  outside the intended transaction), which is the right time to find out.
+- A migration file that uses transaction control fails at boot with a
+  message naming the keyword, before any statement runs. The rule is
+  enforced, not merely documented.
+- A file whose last statement is not terminated by `;` is refused rather
+  than silently truncated.
 - A failed migration aborts startup, as before; the difference is that
   the database is left at the previous version, not a partial one.

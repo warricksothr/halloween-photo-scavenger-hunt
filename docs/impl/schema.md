@@ -29,12 +29,14 @@ Conventions used throughout:
   (`PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL`) — they are
   per-connection settings, not schema, so they live in `db.py`, not here.
 - **Each migration and its `schema_migrations` row commit together.** The
-  runner wraps a file in one transaction, so a crash mid-file leaves the
-  version unrecorded and the file is retried on the next boot — never a
-  schema change without its record. Migration files must not contain their
-  own `BEGIN`/`COMMIT`; the runner owns the transaction. Files still use
-  `IF NOT EXISTS` (the DDL below does), but that is now belt-and-braces,
-  not the recovery mechanism (ADR 0022).
+  runner owns the transaction: it splits the file with
+  `sqlite3.complete_statement`, runs every statement and the version row
+  inside one explicit `BEGIN`, and rolls back on error, so a crash mid-file
+  leaves the version unrecorded and the file is retried on the next boot —
+  never a schema change without its record. Migration files must not
+  contain their own `BEGIN`/`COMMIT`; the runner refuses one before
+  executing it. Files still use `IF NOT EXISTS` (the DDL below does), but
+  that is now belt-and-braces, not the recovery mechanism (ADR 0022).
 
 ```sql
 -- 0001_init.sql — full MVP schema. Each file and its version row commit

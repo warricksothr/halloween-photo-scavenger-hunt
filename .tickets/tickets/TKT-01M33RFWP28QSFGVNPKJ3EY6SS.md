@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:33:36Z
+updated_at: 2026-09-23T12:41:00Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -82,3 +82,24 @@ Docs: `docs/adr/0022-atomic-migrations.md`, `docs/impl/schema.md`
 convention + DDL comment, `docs/progress.md`. Verification:
 `bash scripts/check-quality.sh` green — 417 server tests, deploy checks,
 106 web tests, production build.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:41:00Z
+
+### Review r1 finding and fix
+
+`request:harden-migrations-r1` (run `7287881f-a4e5-44dc-8fdb-93c3856a58d0`,
+Actions run #427) found one medium: the runner documented "no transaction
+control in a migration file" but did not enforce it, so a file with
+`COMMIT;` could persist a partial migration that `rollback` could not
+undo. Accepted.
+
+The design changed from "explicit `BEGIN`/`COMMIT` inside the script" to a
+runner-owned transaction: `_statements` splits the file with
+`sqlite3.complete_statement` (so a `CREATE TRIGGER ... BEGIN ... END`
+body is one statement), rejects a statement whose first keyword is
+`BEGIN`/`COMMIT`/`END`/`ROLLBACK`/`SAVEPOINT`/`RELEASE` before executing
+anything, and `_apply_one` runs the statements plus the version row inside
+one explicit `BEGIN`. The explicit `BEGIN` is required because Python's
+sqlite3 only opens an implicit transaction for DML, so a file's
+`CREATE TABLE` would otherwise autocommit. New test
+`test_migration_with_transaction_control_is_refused`; ADR 0022 rewritten.

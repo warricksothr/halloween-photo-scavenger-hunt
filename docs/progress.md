@@ -51,10 +51,10 @@ when the increment runs and its tests pass.
   `executescript` inside `with conn:`, but `executescript` commits the
   open transaction first, so the schema change and the `schema_migrations`
   row landed in two transactions; recovery depended on every file being
-  `IF NOT EXISTS`, an invariant nothing checked. `_apply_one` now puts an
-  explicit `BEGIN`/`COMMIT` inside the script so both commit together, and
-  rolls back on error (ADR 0022). Migration files must not carry their own
-  transaction control.
+  `IF NOT EXISTS`, an invariant nothing checked. The runner now splits a
+  file with `sqlite3.complete_statement`, runs the statements and the
+  version row inside one explicit `BEGIN`, rolls back on error, and
+  refuses a file that carries its own transaction control (ADR 0022).
 - **2026-09-23 — Every session now expires, and API responses are never
   cached.** TKT-01M33RFWN88Y57BZ6ZFE4NEQND. `auth.SESSION_TTL_SECONDS`
   (default 12h, overridable with `ARKHAM_SESSION_TTL_SECONDS`) bounds
