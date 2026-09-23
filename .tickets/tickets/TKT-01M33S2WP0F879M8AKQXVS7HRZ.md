@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:23:13Z
-updated_at: 2026-09-23T04:59:45Z
+updated_at: 2026-09-23T12:30:17Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -119,3 +119,50 @@ they replace the lock wholesale.
 
 The operator CLI and RUNBOOK queries are TKT-01M33S2WT; this ticket only makes
 the counters observable through readyz and the shared snapshot.
+
+## Notes
+
+**agent:opencode/session** at 2026-09-23T12:30:14Z
+
+Branch `t3code/observability-metrics`, rebased onto current `main`
+(`455f763`), stacked on the S2WM branch.
+
+- Head `38ff160`, base `t3code/observability-readyz` (`a91fa00`).
+- PR https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/29
+- S2WM's PR #23 was retargeted onto branch `t3code/observability-readyz`
+  (head on the remote branch `t3code/observability-diagnostics` now
+  `a91fa00`), so the two PRs are a real stack: #29 → #23 → main.
+- `bash scripts/check-quality.sh` exit 0 after the rebase.
+- Terva review dispatched: request `metrics-29`.
+
+New main added a schema migration (`schema_version` is now 2) and an OIDC
+moderator identity; the metrics tests reuse `test_mod._mod`/`_party`
+rather than a local helper so they follow that auth, and the readyz shape
+test now asserts `schema_version >= 1` instead of an exact value.
+
+**agent:opencode/session** at 2026-09-23T12:30:14Z
+
+Second review round (`metrics-29`) found the writer-lock contention
+metric counted nearly every acquire: it inferred contention from elapsed
+time, and even a free acquire spends some. Fixed in `3ac3cf9` — probe
+with a nonblocking acquire, time only the blocking branch — with a test
+that uncontended and reentrant acquires add acquisitions but no
+contention. Re-requested.
+
+Recovered ticket bookkeeping after a `git reset --hard` discarded the
+uncommitted claim/AC/note writes; no source change was lost.
+
+## Summary
+
+In-process counters on `app.state.metrics`, exposed through
+`/api/admin/readyz`: uploads by outcome, verdicts by settled state, and
+writer-lock acquisitions/contentions/wait, plus the SSE subscriber and
+overflow counts. No counter writes to SQLite.
+
+Two Terva rounds. The first (`metrics-29`) found the lock contention
+metric counted nearly every acquire because it inferred contention from
+elapsed time; fixed with a nonblocking probe and a regression test. The
+rebase onto current main also fixed the schema-version assertion and the
+moderator sign-in in the tests.
+
+Branch `t3code/observability-metrics`, PR #29 stacked on #23, gate green.
