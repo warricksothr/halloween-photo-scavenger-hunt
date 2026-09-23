@@ -128,8 +128,9 @@ def scrub_text(text: str) -> str:
         run = match.group(0)
         stripped = run.rstrip(_TRAILING_PUNCTUATION)
         trailing = run[len(stripped) :]
-        if stripped.startswith("/"):
-            return redact_path(stripped) + trailing
+        # scrub_url handles a bare path and an absolute URL alike: it
+        # redacts the bearer segment, and drops the query and fragment,
+        # which may hold a credential on any path — not only a bearer one.
         return (scrub_url(stripped) or stripped) + trailing
 
     return _URL_IN_TEXT.sub(_replace, text)

@@ -81,7 +81,9 @@ function scrubText(value) {
   return value.replace(URL_IN_TEXT, (run) => {
     const stripped = run.replace(TRAILING_PUNCTUATION, '');
     const trailing = run.slice(stripped.length);
-    if (stripped.startsWith('/')) return redactPath(stripped) + trailing;
+    // scrubUrl takes a bare path and an absolute URL alike: it redacts the
+    // bearer segment and drops the query and fragment, which may hold a
+    // credential on any path — not only a bearer one.
     return scrubUrl(stripped) + trailing;
   });
 }

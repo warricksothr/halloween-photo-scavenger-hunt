@@ -131,6 +131,23 @@ def test_scrub_text_reaches_a_path_wrapped_in_prose():
     )
 
 
+def test_scrub_text_drops_a_query_or_fragment_on_an_ordinary_path():
+    # The credential need not be in the path: a query string or fragment
+    # can carry it, and redact_path alone would leave it in place.
+    assert (
+        errors.scrub_text("request failed at /api/state?token=SECRET")
+        == "request failed at /api/state"
+    )
+    assert (
+        errors.scrub_text("see /some/path#credential for detail")
+        == "see /some/path for detail"
+    )
+    assert (
+        errors.scrub_text("GET https://hunt.example/api/state?token=SECRET")
+        == "GET https://hunt.example/api/state"
+    )
+
+
 def test_scrub_event_strips_request_secrets_and_keeps_the_url_redacted():
     event = {
         "request": {

@@ -166,6 +166,24 @@ describe('error reporting', () => {
     ).toBe('GET\n/api/join/<redacted>\nfailed');
   });
 
+  it('drops a query or fragment on an ordinary path', async () => {
+    const errors = await loadErrors();
+
+    expect(
+      errors.scrubEvent({ message: 'request failed at /api/state?token=SECRET' })
+        .message,
+    ).toBe('request failed at /api/state');
+    expect(
+      errors.scrubEvent({ message: 'see /some/path#credential for detail' })
+        .message,
+    ).toBe('see /some/path for detail');
+    expect(
+      errors.scrubEvent({
+        message: 'GET https://hunt.example/api/state?token=SECRET',
+      }).message,
+    ).toBe('GET https://hunt.example/api/state');
+  });
+
   it('redacts span descriptions and URL-shaped span data', async () => {
     const errors = await loadErrors();
 
