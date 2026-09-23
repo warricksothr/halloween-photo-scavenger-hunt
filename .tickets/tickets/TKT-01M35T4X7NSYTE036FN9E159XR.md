@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:38:53Z
+updated_at: 2026-09-23T01:41:46Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -190,3 +190,9 @@ Quality gate re-run: exit 0 — 335 server tests @ 95.03%, 20 deploy checks, 65 
 Seventh Terva review (220, head 3f8f61e, run 2d77a102-eda1-4550-91ef-8377a4dce9d1, Actions run #340/id 9118, request review-fixes-6): both prior findings resolved; one new high finding, accepted and fixed:
 - high bare-path query/fragment: scrub_text's _replace sent a bare-path match straight to redact_path, which redacts only designated bearer segments and keeps any query string or fragment, so '/api/state?token=SECRET' survived. Both surfaces now route every match — bare path and absolute URL alike — through scrub_url/scrubUrl, which was already able to drop query and fragment for a schemeless path. Tests added on both surfaces for a query and a fragment on an ordinary (non-bearer) path.
 Quality gate re-run: exit 0 — 336 server tests @ 95.02%, 20 deploy checks, 66 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:41:46Z
+
+Eighth Terva review (221, head 2c0b242, run f086a9f3-b7d5-435c-a2ba-2d90edb0bed2, Actions run #342/id 9128, request review-fixes-7): the bare-path query/fragment finding resolved; one new high finding, accepted and fixed:
+- high span-data query/fragment: both span scrubbers only used scrub_url for an allowlisted URL key, and sent any other '/' -starting value through redact_path, which keeps a query or fragment. Both now run every string span-data value through scrub_url/scrubUrl, which redacts a bearer segment and drops query and fragment for a bare path, an absolute URL, or plain text alike; the now-redundant URL-key allowlist was removed on both surfaces. Tests added on both surfaces for a query and fragment under a non-URL key such as path.
+Quality gate re-run: exit 0 — 337 server tests @ 95.11%, 20 deploy checks, 67 frontend tests, build.
