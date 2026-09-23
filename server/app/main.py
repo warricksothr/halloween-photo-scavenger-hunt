@@ -16,18 +16,20 @@ import os
 import secrets
 import sqlite3
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx2
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import (
     auth,
     cache,
     csrf,
+    diagnostics,
     errors,
     events,
     evidence,
@@ -125,6 +127,10 @@ def create_app(
         read_conn = db_module.connect(db_path)
         app.state.db = conn
         app.state.read_db = read_conn
+        # Kept for the readiness probe: disk_usage needs the path, and
+        # uptime is measured from boot (app/diagnostics.py).
+        app.state.db_path = Path(db_path)
+        app.state.started_at = time.monotonic()
         # Sync endpoints share one writer. Race-sensitive mutation
         # handlers hold this reentrant lock for the full request, then
         # acquire it again around their transaction blocks.
@@ -247,6 +253,15 @@ def create_app(
             0
         ]
         return {"status": "ok", "schema_version": version}
+
+    # Readiness lives under /api/admin so it is not a public fingerprint:
+    # it names the build and counts photos and live clients, which is for
+    # the operator, not a stranger. The deploy smoke logs in first.
+    @app.get("/api/admin/readyz")
+    def readyz(
+        request: Request, _: str = Depends(auth.require_admin)
+    ) -> dict[str, object]:
+        return diagnostics.snapshot(request)
 
     if static_dir is not None and Path(static_dir).is_dir():
         _mount_spa(app, Path(static_dir))

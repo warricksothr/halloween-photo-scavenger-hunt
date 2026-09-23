@@ -115,6 +115,11 @@ login_json="$(curl --fail --silent --show-error \
     "$base_url/api/admin/login")"
 printf '%s' "$login_json" | "$python" -c 'import json, sys; assert json.load(sys.stdin)["ok"] is True'
 
+ready_json="$(curl --fail --silent --show-error \
+    --cookie "$admin_jar" --cookie-jar "$admin_jar" \
+    "$base_url/api/admin/readyz")"
+printf '%s' "$ready_json" | "$python" -c 'import json, sys; body = json.load(sys.stdin); assert body["status"] == "ok" and body["db_writable"] is True and body["schema_version"] >= 1'
+
 event_json="$(curl --fail --silent --show-error \
     --cookie "$admin_jar" --cookie-jar "$admin_jar" \
     --header 'Content-Type: application/json' \

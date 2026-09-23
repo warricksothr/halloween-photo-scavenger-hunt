@@ -97,6 +97,13 @@ class SseBroker:
         with self._lock:
             self._subscribers.discard(sub)
 
+    def subscriber_count(self) -> int:
+        """Live subscription count for the readiness snapshot. Safely
+        callable from the threadpool (a sync endpoint), so it takes the
+        same lock as every other touch of the set."""
+        with self._lock:
+            return len(self._subscribers)
+
     def _deliver(self, sub: _Subscriber, name: str, payload: dict) -> None:
         """Loop-side hand-off: the queue is asyncio, so only the loop may
         touch it. A full queue drops the newest delta and says so; the

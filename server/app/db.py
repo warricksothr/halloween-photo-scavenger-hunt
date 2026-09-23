@@ -108,6 +108,31 @@ def reader(request: Request) -> sqlite3.Connection:
     return request.app.state.read_db
 
 
+def writer_is_writable(request: Request) -> bool:
+    """Prove the writer connection can open a write transaction.
+
+    ``BEGIN IMMEDIATE`` takes the write lock at once, so a read-only file,
+    a full disk, or a conflicting connection surfaces here rather than on
+    the next mutation. The transaction is rolled back immediately — this
+    is a probe, not a write. Lives here because only this module and
+    ``main`` may name the writer connection (ADR 0013).
+    """
+    conn: sqlite3.Connection = request.app.state.db
+    try:
+        with request.app.state.db_lock:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.rollback()
+    except sqlite3.Error:
+        # A failed BEGIN can leave no transaction, but a half-open one
+        # would poison later statements on the shared connection.
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            pass
+        return False
+    return True
+
+
 def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """Open a connection with the schema's required pragmas applied.
 

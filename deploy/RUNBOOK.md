@@ -19,6 +19,14 @@ systemctl --user status arkham-hunt   # active (running)
 curl -s https://<host>/api/health     # {"status":"ok",...}
 ```
 
+When health is green but something feels off, log in and read the deeper
+probe — it reports writer access, disk free, photo count, and live SSE
+clients, all in one call:
+
+```sh
+curl -s -b admin.jar https://<host>/api/admin/readyz   # db_writable, disk, sse_subscribers, release
+```
+
 ## 1. Backup, and prove the restore
 
 A backup you have never restored is a rumor, not a backup.
