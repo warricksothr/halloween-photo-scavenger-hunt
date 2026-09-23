@@ -284,7 +284,14 @@ class TestUploadEndpoint:
 class TestDiskGuardrail:
     def test_low_disk_rejects_before_any_work(self, admin, client, monkeypatch):
         _party(admin, client)
-        monkeypatch.setattr(storage, "has_room", lambda *a, **k: False)
+        # Let the middleware's check (declared body only) pass so the
+        # route's own guard — the one that also accounts for the
+        # derivative — is the branch under test.
+        monkeypatch.setattr(
+            storage,
+            "has_room",
+            lambda path, extra_bytes, minimum: extra_bytes < MAX_DERIVATIVE_BYTES,
+        )
 
         resp = _upload(client, make_jpeg())
         assert resp.status_code == 507, resp.text

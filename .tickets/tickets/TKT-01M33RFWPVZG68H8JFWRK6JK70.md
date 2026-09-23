@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T13:03:32Z
+updated_at: 2026-09-23T13:05:53Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -125,3 +125,18 @@ an upload through when there is room; bounds a chunked upload by the cap;
 ignores non-upload requests. The route happy-path test asserts a check
 carrying at least `MAX_DERIVATIVE_BYTES`. ADR 0023, `docs/progress.md`
 updated to the two-layer story.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T13:05:53Z
+
+### r2 fix note
+
+Terva r2: r1's two findings resolved; one medium — the low-disk endpoint
+test no longer exercised the route guard, because the unconditional
+`has_room -> False` patch now short-circuits in the middleware first.
+
+Accepted. `test_low_disk_rejects_before_any_work` now patches `has_room`
+to pass the middleware's declared-length check and fail the route's check
+(which carries `MAX_DERIVATIVE_BYTES`), so the 507/no-row/no-file
+assertions cover the post-parse branch. The middleware's own
+reject-before-read behaviour is covered by the unit tests in
+`test_storage.py`.
