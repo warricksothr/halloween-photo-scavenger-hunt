@@ -39,10 +39,14 @@ const playerSnapshot = {
 
 class FakeEventSource {
   static instances = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
 
   constructor(url) {
     this.url = url;
     this.closed = false;
+    this.readyState = FakeEventSource.CONNECTING;
     this.listeners = new Map();
     FakeEventSource.instances.push(this);
   }
@@ -59,8 +63,19 @@ class FakeEventSource {
     }
   }
 
+  open() {
+    this.readyState = FakeEventSource.OPEN;
+    this.onopen?.();
+  }
+
+  fail(readyState = FakeEventSource.CONNECTING) {
+    this.readyState = readyState;
+    this.onerror?.();
+  }
+
   close() {
     this.closed = true;
+    this.readyState = FakeEventSource.CLOSED;
   }
 }
 
@@ -137,6 +152,71 @@ describe('store', () => {
     expect(delta).toHaveBeenCalledWith('submission_new', { submission_id: 'sub-1' });
     expect(mocks.api.snapshot).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+
+  it('refetches the snapshot when a dropped stream reconnects', async () => {
+    const updated = { ...playerSnapshot, event: { ...playerSnapshot.event, status: 'closed' } };
+    mocks.api.snapshot
+      .mockResolvedValueOnce(playerSnapshot)
+      .mockResolvedValueOnce(updated);
+    await refresh();
+
+    const stream = FakeEventSource.instances[0];
+    stream.open(); // the first open: the boot snapshot is already fresh
+    expect(mocks.api.snapshot).toHaveBeenCalledTimes(1);
+
+    stream.fail(); // transient drop: EventSource retries on its own
+    stream.open(); // reconnect
+
+    await vi.waitFor(() => expect(getState().snapshot).toEqual(updated));
+    expect(mocks.api.snapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it('rebuilds a stream the browser gave up on and refetches', async () => {
+    const updated = { ...playerSnapshot, event: { ...playerSnapshot.event, status: 'closed' } };
+    mocks.api.snapshot
+      .mockResolvedValueOnce(playerSnapshot)
+      .mockResolvedValueOnce(updated);
+    await refresh();
+
+    const first = FakeEventSource.instances[0];
+    first.open();
+    first.fail(FakeEventSource.CLOSED); // fatal: the browser stopped retrying
+    expect(first.closed).toBe(true);
+
+    await vi.waitFor(
+      () => expect(FakeEventSource.instances).toHaveLength(2),
+      { timeout: 2000 },
+    );
+    await vi.waitFor(() => expect(getState().snapshot).toEqual(updated), {
+      timeout: 2000,
+    });
+  });
+
+  it('closes the stream when a resync enters the error phase', async () => {
+    vi.useFakeTimers();
+    mocks.api.snapshot
+      .mockResolvedValueOnce(playerSnapshot)
+      .mockResolvedValue({
+        error: 'network_error',
+        message: 'No connection.',
+        network: true,
+      });
+    await refresh();
+
+    const stream = FakeEventSource.instances[0];
+    stream.open();
+    expect(stream.closed).toBe(false);
+
+    // A delta-triggered resync exhausts its retries and lands on error.
+    stream.emit('verdict', { submission_id: 'sub-1' });
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(getState().phase).toBe('error');
+    expect(stream.closed).toBe(true);
+    vi.useRealTimers();
   });
 
   it('logs out, closes SSE, and removes state and delta subscriptions', async () => {

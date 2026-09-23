@@ -46,6 +46,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — A dead SSE stream rebuilds, and a terminal phase closes
+  it.** TKT-01M33RFWTTQ3P7Y6RRT94BK19P. `store.startStream` handled a
+  transient drop (the browser retries, and `onopen` refetches) but did
+  nothing when EventSource gave up (`readyState CLOSED`), so the client
+  went silent with a stale snapshot; and a resync that landed on the
+  `error` phase left the stream open. `onerror` now rebuilds a dead
+  stream through `refresh()` on a short ladder — snapshot first, then a
+  fresh stream (design.md "Realtime") — and `stopStream()` runs on every
+  terminal transition and clears any pending rebuild. The stale-response
+  guard (`refreshGeneration`, from `a628add`) still makes the latest
+  request win; its out-of-order test stays the pin.
 - **2026-09-23 — The blocking half of an upload and the SSE session
   lookup run off the event loop.** TKT-01M33RFWQM9HYPK702FCAXGWNX.
   `POST /api/evidence` was `async def` and did its reader checks, the
