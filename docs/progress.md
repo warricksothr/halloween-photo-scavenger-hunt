@@ -46,6 +46,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-22 — The console edits each event's riddles.**
+  TKT-01M33S9CZT5MVQQS7ED4S6J2TR. The Riddles tab picks an event, then lists
+  its riddles in sort order with Edit, ↑/↓, and Delete on each row and an add
+  box that appends past the last order. A move renumbers only the rows whose
+  order changed, which also normalises duplicates because `sort_order` has no
+  unique constraint. Edits patch `text` alone so a concurrent reorder is not
+  clobbered, and the board stays editable after the round opens (the audit log
+  keeps before/after text). Deleting asks for confirmation, and a refusal from
+  the API — submissions reference the riddle — shows the server's reason and
+  keeps the row.
+
 - **2026-09-22 — The console manages events, with codes and QR.**
   TKT-01M33S9CYNR73WKND2707WKEAY. The Events tab lists events and drives the
   lifecycle with the one action each status allows — lobby → Open, open →
