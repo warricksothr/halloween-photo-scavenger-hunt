@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWY6Q15S7JF417RQXH5Y
 title: Add frontend lint/typecheck and SSE reconnect coverage
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/frontend-lint-sse-tests
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: e8e12d28b60c62d70fea792640f38584ac85170f
-  session: null
-  claimed_at: 2026-09-23T17:07:29Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T17:31:56Z
+updated_at: 2026-09-23T17:36:23Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -44,9 +37,9 @@ There is no frontend lint or typecheck step, no automated test of the SSE reconn
 
 ## Acceptance criteria
 
-- [ ] A lint/typecheck command runs in the frontend test script and CI.
-- [ ] A test fires error then open on the fake EventSource and asserts a snapshot refetch.
-- [ ] E2e selectors use accessible roles or text, not fragile class names.
+- [x] A lint/typecheck command runs in the frontend test script and CI.
+- [x] A test fires error then open on the fake EventSource and asserts a snapshot refetch.
+- [x] E2e selectors use accessible roles or text, not fragile class names.
 
 ## Implementation plan
 
@@ -92,3 +85,35 @@ run the moderator join still 401s — `POST /api/mod/join/{code}` requires an
 OIDC moderator and `web/e2e/test-server.py` configures no OIDC. The selector
 changes were exercised up to the moderator step in that temporary run; the
 drawer label/alt and standings list roles are covered by the new unit tests.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T17:36:22Z
+
+Reviewed head `acb9fe56da6f4d56d591def37788e85de180819a`, base
+`e8e12d28b60c62d70fea792640f38584ac85170f`, PR #38. Terva request
+`frontend-lint-r1`, run `75bcbc4a-4748-400b-9878-1d78c724f088` — clean. Quality
+gate success in 2m45s. Merged at `72f5d262747a9c97d6f985ae40b54acec485561d`.
+
+Blocker left open for the e2e specs themselves: `game-loop.spec.js` and
+`readme-screenshots.spec.js` still cannot run end to end. They predate CSRF
+(TKT-01M37F8TCTVKWBXDSSTB8ZM96), and after arming admin CSRF the moderator
+join 401s — `POST /api/mod/join/{code}` needs an OIDC moderator and
+`web/e2e/test-server.py` configures no OIDC. The selector changes were
+exercised up to the moderator step in a temporary CSRF-armed run; the drawer
+label/alt and the standings list roles are covered by the new unit tests.
+
+## Summary
+
+Added `web/eslint.config.js` (ESLint 10 flat config) and made
+`npm --prefix web test` run `npm run lint` before Vitest, so the frontend step
+of `scripts/check-quality.sh` and CI fail on a lint error. Fixed the first
+pass (unused `responseId` initializer, unused `modEvent` prop, missing
+`c.error` effect dep, service-worker globals). Replaced the e2e specs'
+class-name selectors with accessible roles and text: riddle tiles and
+evidence photos by accessible name, drawer file input `aria-label` and
+thumbnail `alt` (new `screens.drawer.addLabel`/`photoAlt` copy), standings
+board as `role="list"` of `role="listitem"` rows, and the screenshot frame as
+`data-testid="app-frame"`. Added unit coverage for the drawer label/alt and
+the live standings list roles. Merged as PR #38 at
+`72f5d262747a9c97d6f985ae40b54acec485561d`; frontend suite 136 tests. The
+browser specs still cannot run end to end — that stays with
+TKT-01M37F8TCTVKWBXDSSTB8ZM96 (CSRF plus the OIDC moderator gap).
