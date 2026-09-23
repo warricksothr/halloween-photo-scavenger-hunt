@@ -5,7 +5,7 @@
 // not in the entry bundle and nothing is reported. Second, the app keeps
 // credentials in the URL — /j/<code>, /m/<code>, /t/<token> and the API
 // equivalents — so the same path redaction the server uses runs on every
-// event, transaction and breadcrumb on the way out (ADR 0017).
+// event, transaction and breadcrumb on the way out (ADR 0018).
 //
 // The last request id from a response header is attached as a tag, which
 // is what ties a browser error to its line in the server log (ADR 0016).

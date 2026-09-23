@@ -181,8 +181,20 @@ def _scrub_data(value: Any) -> Any:
 def scrub_breadcrumb(
     breadcrumb: dict[str, Any], hint: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Scrub a breadcrumb's URL fields and message in place-safe fashion."""
+    """Scrub a breadcrumb's URL fields and message in place-safe fashion.
+
+    A navigation breadcrumb carries the URL it navigated to at the top
+    level as well as inside its ``data``, so both levels are scrubbed:
+    the credential sits in the path, and ``headers``/``cookies`` on a
+    breadcrumb are the same credential-bearing pair the request scrub
+    drops. ``data`` is the crumb's payload, not a drop target, so it is
+    recursed into instead.
+    """
     crumb = dict(breadcrumb)
+    if isinstance(crumb.get("url"), str):
+        crumb["url"] = scrub_url(crumb["url"])
+    for key in ("headers", "cookies", "env", "query_string"):
+        crumb.pop(key, None)
     data = crumb.get("data")
     if isinstance(data, dict):
         crumb["data"] = _scrub_data(dict(data))

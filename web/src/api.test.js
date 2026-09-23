@@ -81,6 +81,7 @@ describe('api client', () => {
       error: 'bad_credentials',
       message: 'Wrong username or password.',
       status: 401,
+      requestId: null,
     });
 
     fetchMock.mockResolvedValueOnce(response({ status: 401, body: {} }));

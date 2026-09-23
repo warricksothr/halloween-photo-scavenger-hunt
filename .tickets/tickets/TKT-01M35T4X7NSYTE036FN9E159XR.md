@@ -29,12 +29,12 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:18:13Z
+updated_at: 2026-09-23T02:34:40Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
 updated_by:
-  id: agent:opencode/glitchtip-integration
+  id: agent:opencode/session
   name: ""
 extensions: {}
 ---
@@ -92,27 +92,18 @@ this change.
 
 ## Implementation plan
 
-1. Dependencies: add `sentry-sdk[fastapi]` to `server/pyproject.toml` and
-   `@sentry/browser` to `web/package.json`; regenerate `server/uv.lock` and the
-   hash-pinned `server/requirements.lock` together.
-2. Server: `server/app/errors.py` — read `ARKHAM_ERROR_DSN`,
-   `ARKHAM_TRACES_SAMPLE_RATE`, `ARKHAM_ENVIRONMENT`, `ARKHAM_RELEASE`; init a
-   Sentry client with `send_default_pii=False` and the scrubbers; expose
-   `capture_exception` that tags the request id. Inert (no client) without a DSN.
-   Reuse the redaction rules in `app/logging.py`.
-3. Wire `server/app/main.py`: initialize before `FastAPI(...)` so the
-   integration patches the route handler factory, and call `capture_exception`
-   from the global `_internal_error` handler.
-4. Web: `web/src/errors.js` with a lazy `import('@sentry/browser')`, the mirror
-   of the server scrubbers, `reportError`, and a last-request-id tag; record the
-   header in `web/src/api.js`; initialize in `web/src/main.jsx`.
-5. Deploy: allow the GlitchTip origin in the nginx CSP `connect-src` and update
-   the guard test; add the DSN env to `deploy/arkham-hunt.service`, `compose.yml`
-   and the `Containerfile` web build arg.
-6. Tests: `server/tests/test_errors.py` and `web/src/errors.test.js` covering the
-   inert path, scrubbers and request-id tagging. Write ADR 0017, update
-   `docs/progress.md` and `deploy/RUNBOOK.md`.
-7. Gate: `bash scripts/check-quality.sh`.
+Merge current main (1b62f37) into the branch and reconcile the duplicate server/app/errors.py.
+
+main gained its own server/app/errors.py (TKT-01M33S9CX): error-events-only reporting with a Scrubber class that deep-scrubs the DSN's own key/secret out of every string, fail-closed urlsplit in URL scrubbing, and a malformed-DSN guard that warns without naming the DSN. This branch's errors.py adds traces (before_send_transaction, ErrorConfig, sample rate) plus scrub_text/_scrub_data and bind_request_id. Both tag current_request_id and drop frame vars.
+
+Approach:
+1. Keep this branch's module shape (ErrorConfig, traces, scrub_text/_scrub_data, bind_request_id, endpoint transaction style) and fold in main's Scrubber as an additional deep net: _dsn_secrets + _scrub_strings over dict keys/values/lists/tuples/sets, driven from scrub_event/scrub_breadcrumb/scrub_transaction.
+2. Adopt main's fail-closed urlsplit (ValueError -> REDACTED) and malformed-DSN guard in init_error_reporting (warn, never name the DSN, return False).
+3. main.py: keep this branch's init ordering and bind_request_id tagging, but preserve main's log_unhandled_exception call and JSON 500 body with request_id from _internal_error; reconcile the two so the handler both logs/scubs the traceback and lets the Sentry ASGI middleware report (bind_request_id tags before re-raise).
+4. logging.py: take main's bearer_secrets/_request_secrets/_scrub_secrets/log_unhandled_exception and body buffering; keep this branch's redact_path/current_request_id.
+5. Reconcile pyproject/uv.lock/requirements.lock (sentry-sdk stays), test_errors.py (union of both test sets, adapted), docs/progress.md, and drop the deleted draft ticket file.
+
+Gate: bash scripts/check-quality.sh must pass. Then commit the merge, push, and re-dispatch a Terva review.
 
 ## Notes
 
@@ -239,3 +230,11 @@ Quality gate re-run: exit 0 — 342 server tests @ 95.08%, 20 deploy checks, 75 
 Fifteenth Terva review (229, head d3870c7, run b863e8e0-9397-4f2c-b01f-6c9023230f55, Actions run #356/id 9195, request review-fixes-14): both prior findings resolved; one new high finding, accepted and fixed:
 - high host-only URL query/fragment: the browser ABSOLUTE_URL matcher used [^/]*, so for https://host?token=SECRET (no path) the query was captured into origin and rest was empty, leaving the query unscrubbed. The authority now ends at the first /, ?, or # ([^/?#]*), so the query/fragment lands in rest and is dropped. Tests on both surfaces: a host-only URL with user-info and a query, and one with a fragment. The server already handled this (urlsplit splits netloc from query); the test locks the parity.
 Quality gate re-run: exit 0 — 343 server tests @ 95.08%, 20 deploy checks, 76 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T02:21:39Z
+
+Sixteenth Terva review (run 9d2b4d8f-168a-4cf8-aeee-d3d1f4ac0093, request review-fixes-15, Actions run #358/id 9200, head fd13ecf, base 1b62f37): clean — review 229's host-only-URL finding resolved and no concrete correctness bug is evident. This is a clean full review, so it updates the maintained PR summary comment (issue comment 10326) rather than posting to the reviews API; the reviews-API absence for fd13ecf is expected. All findings across reviews 209-229 are now resolved. Quality gate at this head: exit 0 — 343 server tests @ 95.08%, 20 deploy checks, 76 frontend tests, build.
+
+**agent:opencode/session** at 2026-09-23T02:34:40Z
+
+Merged origin/main (1b62f37e) into the branch; merge commit df08673. Conflicts reconciled: errors.py (kept ErrorConfig/tracing/branch query-drop policy per ADR 0018, folded in main's Scrubber DSN deep-scrub + fail-closed urlsplit), logging.py/main.py (both), web api.js (request-id + reportUnauthorized), main.jsx (isAdminPath + bootReportThenRefresh), api.test.js. Hardened scrub_breadcrumb to scrub the top-level url and drop headers/cookies/env/query_string, matching main's navigation-breadcrumb finding. Renamed the ADR to 0018. bash scripts/check-quality.sh exits 0: 384 server tests @ 95%+, 20 deploy checks, 81 frontend tests, build.

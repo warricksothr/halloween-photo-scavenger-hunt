@@ -1,4 +1,4 @@
-# 0017. Self-hosted GlitchTip for error and trace reporting
+# 0018. Self-hosted GlitchTip for error and trace reporting
 
 Date: 2026-09-22
 Status: accepted
