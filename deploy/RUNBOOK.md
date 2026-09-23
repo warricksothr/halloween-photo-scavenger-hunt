@@ -186,6 +186,8 @@ ARKHAM_OIDC_SCOPES=openid profile email groups
 # ARKHAM_OIDC_MODERATOR_GROUP=arkham-moderator
 # Only if the callback URL cannot be derived from the request:
 # ARKHAM_OIDC_REDIRECT_URI=https://<host>/api/auth/oidc/callback
+# Optional — standing token for scripted admin access (see below):
+# ARKHAM_ADMIN_API_TOKEN=<random secret>
 ```
 
 `ARKHAM_OIDC_SCOPES` must list every scope the provider emits, including
@@ -216,6 +218,26 @@ party — it just disables the SSO button.
   typed when the hash was generated — keep it in a password manager, not
   on the host. Use the form if Authentik is unreachable.
 
+### Scripted access: the admin API token
+
+For a script that has no browser — a smoke test, a seeding script, a CI
+check — set `ARKHAM_ADMIN_API_TOKEN` to a random secret and send it as
+`Authorization: Bearer <token>`. The request then needs no cookie jar and
+no CSRF pair, because a header credential is not the ambient cookie CSRF
+protects against. Unset it and nothing changes; the password and SSO
+paths are untouched.
+
+Generate one with `openssl rand -hex 32`. Treat it like the password
+hash: env only, never committed, and **not** a session — the token does
+not expire when the process restarts and cannot be revoked from the UI.
+To rotate it, edit the file and `systemctl --user restart arkham-hunt`.
+Keep it out of shell history and off the host where you can.
+
+```sh
+curl -s -H "Authorization: Bearer $ARKHAM_ADMIN_API_TOKEN" \
+  https://<host>/api/admin/events
+```
+
 ### Troubleshooting OIDC
 
 | Symptom | Check |
@@ -238,6 +260,7 @@ party — it just disables the SSO button.
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |
 | Nothing in GlitchTip | `ARKHAM_ERROR_DSN` / `VITE_ERROR_DSN` are set and the app was restarted/rebuilt; the CSP `connect-src` includes the GlitchTip origin |
 | No SSO button / `503 oidc_disabled` | See §6 — the issuer/client/secret trio is incomplete or the service was not restarted |
+| Script's `Authorization: Bearer` gets 401 | `ARKHAM_ADMIN_API_TOKEN` is set and the service was restarted after editing the env file; the header is exactly `Bearer <token>` |
 
 ## Error reporting (GlitchTip)
 

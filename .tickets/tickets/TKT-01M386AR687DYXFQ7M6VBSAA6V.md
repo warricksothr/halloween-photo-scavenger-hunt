@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M386AR687DYXFQ7M6VBSAA6V
 title: Admin API token for scripted access (env-configured bearer)
 type: task
-status: draft
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -18,10 +18,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:opencode/t3code-0691bbb1
+  branch: t3code/deploy-targets-convention
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
+  commit: c0c1b9b7d3b18b676f91a9b448d2ecd979c54218
+  session: null
+  claimed_at: 2026-09-23T22:48:10Z
+  expires_at: null
 archive: null
 created_at: 2026-09-23T22:31:39Z
-updated_at: 2026-09-23T22:36:52Z
+updated_at: 2026-09-23T23:00:30Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -119,3 +126,66 @@ CSRF (and then 401), never pass.
 - [ ] A wrong or absent token with no cookie still gets CSRF (unsafe) or 401, never a pass.
 - [ ] The token never appears in logs or error responses (a test asserts the configured value is absent from the recorded log output for a token-authenticated request).
 - [ ] Docs updated: runbook and the service-unit env comment; the token is env-only and rotatable by restart.
+
+## Implementation plan
+
+### Approach
+
+One env var, one comparison, one skip. No storage, no minting, no expiry.
+
+1. **Config.** Add `ARKHAM_ADMIN_API_TOKEN` read in `create_app`'s lifespan
+   next to `admin_config` (`main.py:149`), stored on
+   `app.state.admin_api_token`. Unset or empty → `None`, feature off, zero
+   behavior change. Read once at startup like `session_ttl`, so it is a
+   process setting.
+
+2. **Resolution.** `current_admin` (`auth.py:103`) gains a bearer branch: when
+   the cookie path finds no live session, check
+   `Authorization: Bearer <token>` against `app.state.admin_api_token` with
+   `secrets.compare_digest`. On match return a sentinel (`"api-token"`) so the
+   existing `-> str | None` contract holds and `require_admin` (`:120`) is
+   unchanged. A missing configured token makes the branch a no-op, so the
+   bearer header cannot authenticate when the feature is off.
+
+3. **CSRF.** A bearer-authenticated request carries a header credential, not an
+   ambient cookie, so the double-submit check is meaningless for it. Add a
+   helper — one definition, used by both the middleware and `auth` — that
+   answers "is this request a valid token request". `CsrfMiddleware.__call__`
+   (`csrf.py:100`) skips `verify()` only when that helper is true. A bad or
+   absent token fails the helper and still hits `verify()` → 403, then the
+   route's 401. The header must start with the literal `Bearer ` and the
+   remainder must match; anything else is not a token request.
+
+4. **No logging.** The request-id logging lives elsewhere; the token never
+   enters a log line or an error body because nothing formats the
+   `Authorization` header. A test locks that in: configure a distinctive token,
+   make a token-authenticated request, assert the value appears in neither the
+   response body nor captured log output.
+
+### Tests
+
+- Feature off: no token configured, `Authorization: Bearer x` gets 401 on an
+  admin route and still 403 on an unsafe method with no CSRF pair.
+- Feature on: a mutating admin route (create event) succeeds with the bearer
+  token and no cookie, no CSRF header.
+- Wrong token with no cookie: 403 (unsafe, CSRF) or 401 (safe), never a pass.
+- Constant-time compare is by construction (`compare_digest`); the test proves
+  only the outcome.
+- Token value absent from logs and the response body.
+
+### Docs
+
+`deploy/RUNBOOK.md` gets the env var beside the admin credential, noting it is
+a standing credential, env-only, and rotated by editing the env file and
+restarting. `deploy/arkham-hunt.service`'s env comment block gains the name.
+`deploy/CONTAINER.md` mentions it in the env list.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T22:55:47Z
+
+PR #44, head f791e6527e4bbc9bcf36ff1b16d4b76ffaf7f3fc, base main. Terva review requested (request-id admin-api-token-r1). Gate green: 478 server tests, 96% coverage, 23 deploy checks, web tests and build. Behavior tests proven to fail on pre-fix code (4 failed with the app changes stashed).
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T23:00:30Z
+
+Terva r1 (run 7c3c21be, request admin-api-token-r1) returned one medium: the CSRF exemption was path-agnostic, so the admin token could skip CSRF on any unsafe route. Accepted and fixed in 76b193216d99795e9627ddc7bcaff8d820ac34bc via auth.is_admin_api_path (boundary match on /api/admin). Regression test fails pre-fix (non-admin POST got past the gate). Re-review requested as admin-api-token-r2.

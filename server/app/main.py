@@ -148,6 +148,9 @@ def create_app(
         app.state.db_lock = metrics.MeteredLock(threading.RLock(), app.state.metrics)
         app.state.admin_config = admin_config
         app.state.admin_sessions = {}  # in-memory; auth.py explains why
+        # Optional standing token for scripted admin access (auth.py).
+        # Read once here so it is a process setting; unset means off.
+        app.state.admin_api_token = auth.configured_api_token()
         # Session lifetime for every kind of session (auth.py). Read once
         # here so the env var is a process setting, not a per-request one.
         app.state.session_ttl = auth.configured_session_ttl()
