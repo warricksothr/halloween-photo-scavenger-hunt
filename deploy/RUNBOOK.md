@@ -58,11 +58,11 @@ directory (an unmounted mount point).
 4. Print two QR codes — the **join link** (`https://<host>/j/<code>`)
    for players and the **mod link** (`https://<host>/m/<code>`) for
    moderators. The codes appear only in the create response.
-5. Check free disk before opening: `df -h ~/arkham/data` and
+5. Check free disk before opening: `df -h ~/arkham/data /tmp` and
    `du -sh ~/arkham/data/photos/originals`. Uploads refuse below 256 MiB
-   free (`ARKHAM_MIN_FREE_BYTES` to change the floor, ADR 0023), and a
-   full disk breaks SQLite writes too — so clear space now, not
-   mid-round.
+   free on the data volume **and** on the multipart spool filesystem
+   (`ARKHAM_MIN_FREE_BYTES` to change the floor, ADR 0023), and a full
+   disk breaks SQLite writes too — so clear space now, not mid-round.
 6. Press **open** only when players are physically present.
 
 ## 3. Full smoke walkthrough (do this with a second phone)

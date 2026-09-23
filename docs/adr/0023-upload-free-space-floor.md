@@ -23,12 +23,16 @@ Two layers enforce the floor, because a check in the route handler alone
 runs too late. `StorageGuardMiddleware` sits outermost and, for a `POST`
 to `/api/evidence`, compares the declared `Content-Length` (or the app's
 request cap when the body is chunked) against the floor **before** the
-body is read — Starlette parses the multipart form and can spool a part
-to a temporary file on the same filesystem, so a handler-level check
-would let a full disk consume body bytes first. The route's own check
-then runs after the bounded body read and before any Pillow work, and
-accounts for what the upload will write, not just the body: the original
-plus `images.MAX_DERIVATIVE_BYTES`, an upper bound on the re-encoded
+body is read. It checks two filesystems, not one: the photos volume, and
+the multipart spool filesystem (`TMPDIR`, or the system temp directory),
+because Starlette can spool a part past its memory threshold to a temp
+file that does not share a filesystem with the data volume — in the
+container recipe `/tmp` sits on the root filesystem while the photos live
+on a mount. A handler-level check would let a full disk on either consume
+body bytes first. The route's own check then runs after the bounded body
+read and before any Pillow work, and accounts for what the upload will
+write, not just the body: the original plus
+`images.MAX_DERIVATIVE_BYTES`, an upper bound on the re-encoded
 derivative. Below the floor either layer answers
 `507 {"error":"storage_full"}` with a message that tells the player to
 fetch the host.

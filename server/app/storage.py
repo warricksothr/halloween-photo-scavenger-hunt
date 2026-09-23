@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 from starlette.responses import JSONResponse
@@ -80,11 +81,12 @@ class StorageGuardMiddleware:
 
     A route dependency (``UploadFile``) is parsed before the handler runs,
     and Starlette spools a multipart part past its memory threshold to a
-    temporary file — on the same filesystem the guardrail exists to
-    protect. Checking in the handler therefore cannot keep the promise
-    "refuse before any work". This sits outermost and answers 507 from
-    the declared ``Content-Length`` alone, so a full disk costs no body
-    bytes.
+    temporary file. That temp file does not necessarily share a filesystem
+    with the photos directory — in the container recipe the data volume is
+    a mount while ``/tmp`` sits on the root filesystem — so this checks
+    **both**: the declared length must fit on the photos volume *and* on
+    the spool filesystem (``TMPDIR``, or the system temp directory). A
+    full disk on either refuses before any body bytes are read.
 
     A chunked request declares no length, and reading the body to learn it
     would defeat the point; the app's request cap is the bound instead.
@@ -97,11 +99,13 @@ class StorageGuardMiddleware:
         photos_dir: Path,
         min_free_bytes: int,
         max_bytes: int,
+        spool_dir: Path | None = None,
     ) -> None:
         self.app = app
         self.photos_dir = photos_dir
         self.min_free_bytes = min_free_bytes
         self.max_bytes = max_bytes
+        self.spool_dir = spool_dir or Path(tempfile.gettempdir())
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (
@@ -114,7 +118,11 @@ class StorageGuardMiddleware:
 
         declared = _content_length(scope)
         extra = declared if declared is not None else self.max_bytes
-        if not has_room(self.photos_dir, extra, self.min_free_bytes):
+        directories = {self.photos_dir, self.spool_dir}
+        if any(
+            not has_room(directory, extra, self.min_free_bytes)
+            for directory in directories
+        ):
             response = JSONResponse(
                 status_code=507,
                 content={"error": "storage_full", "message": STORAGE_FULL_MESSAGE},

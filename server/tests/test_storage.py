@@ -136,7 +136,36 @@ def test_middleware_bounds_a_chunked_upload_by_the_request_cap(tmp_path, monkeyp
         _scope(),
         [{"type": "http.request", "body": b"x", "more_body": False}],
     )
-    assert seen == [777]
+    # Checked against both the photos volume and the spool filesystem.
+    assert seen == [777, 777]
+
+
+def test_middleware_rejects_when_only_the_spool_filesystem_is_full(
+    tmp_path, monkeypatch
+):
+    spool = tmp_path / "tmp"
+    spool.mkdir()
+    monkeypatch.setattr(
+        storage,
+        "has_room",
+        lambda path, extra, minimum: path != spool,
+    )
+    downstream = _Downstream()
+    middleware = storage.StorageGuardMiddleware(
+        downstream,
+        photos_dir=tmp_path,
+        min_free_bytes=0,
+        max_bytes=100,
+        spool_dir=spool,
+    )
+
+    sent = _call_middleware(
+        middleware,
+        _scope(content_length=10),
+        [{"type": "http.request", "body": b"0123456789", "more_body": False}],
+    )
+    assert sent[0]["status"] == 507
+    assert downstream.called is False
 
 
 def test_middleware_ignores_other_requests(tmp_path, monkeypatch):

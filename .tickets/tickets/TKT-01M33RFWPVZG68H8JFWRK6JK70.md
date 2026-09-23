@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T13:05:53Z
+updated_at: 2026-09-23T13:10:01Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -140,3 +140,19 @@ to pass the middleware's declared-length check and fail the route's check
 assertions cover the post-parse branch. The middleware's own
 reject-before-read behaviour is covered by the unit tests in
 `test_storage.py`.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T13:10:01Z
+
+### r3 fix note
+
+Terva r3: r2's finding resolved; one high — the pre-parse guard checked
+only the photos volume, but Starlette spools a multipart part to the
+process temp directory (`TMPDIR`, usually `/tmp`), which need not share a
+filesystem with the data volume (in the container recipe it does not).
+
+Accepted. `StorageGuardMiddleware` now requires room on **both** the
+photos volume and the spool filesystem, refusing 507 from the declared
+length before any body bytes are read. New test
+`test_middleware_rejects_when_only_the_spool_filesystem_is_full` proves
+the spool side alone is enough to reject. ADR 0023, `docs/progress.md`,
+and `deploy/RUNBOOK.md` (check `/tmp` too) updated.
