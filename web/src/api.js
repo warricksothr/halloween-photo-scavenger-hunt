@@ -5,8 +5,6 @@
 // and then hand the fresh snapshot back to the store. Errors follow
 // docs/impl/api.md: {"error": code, "message": human string}.
 
-import { beginRequest, recordRequestId } from './errors';
-
 // A fetch can stay pending indefinitely on a dead connection, which no
 // amount of retry logic can reach. Bound the whole exchange — headers *and*
 // body — so a hung connection turns into the same error shape a rejection
@@ -50,11 +48,9 @@ async function send(path, options = {}) {
     isForm ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
   );
   // The id of THIS response, carried on the result so a caller reports
-  // under its own request rather than a shared global another in-flight
-  // request may have overwritten. beginRequest() clears the global for the
-  // SDK's own auto-capture, which cannot receive a per-call id.
+  // under its own request. There is no shared global to overwrite, so
+  // concurrent requests cannot cross-tag.
   let responseId = null;
-  beginRequest();
   try {
     const resp = await fetch(path, {
       headers,
@@ -65,7 +61,6 @@ async function send(path, options = {}) {
     // The request id is the join key to this request's server log line and
     // error report, so a browser error can name the same request (ADR 0016).
     responseId = resp.headers?.get?.('X-Request-ID') ?? null;
-    recordRequestId(responseId);
     if (resp.status === 401 && !reportUnauthorized) {
       // Not joined (or session revoked) — the store routes to the join
       // screen; it is not an error from the player's point of view.

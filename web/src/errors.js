@@ -7,8 +7,13 @@
 // equivalents — so the same path redaction the server uses runs on every
 // event, transaction and breadcrumb on the way out (ADR 0018).
 //
-// The last request id from a response header is attached as a tag, which
-// is what ties a browser error to its line in the server log (ADR 0016).
+// A request id from a response header is attached as a tag when a caller
+// reports an error explicitly and hands the id over (an API result carries
+// its own), which is what ties a browser error to its line in the server
+// log (ADR 0016). There is no module-global id: an auto-captured error has
+// no single request to point at, and a shared global would attach whichever
+// response settled most recently under concurrency — a wrong correlation,
+// worse than none.
 import { redactPath } from './redact';
 
 const DSN = import.meta.env.VITE_ERROR_DSN;
@@ -20,29 +25,8 @@ const RELEASE = import.meta.env.VITE_ERROR_RELEASE || undefined;
 
 const DROPPED_REQUEST_KEYS = ['headers', 'cookies', 'data', 'env', 'query_string'];
 
-let lastRequestId = null;
 let sentry = null;
 let started = false;
-
-// api.js clears the id as a request begins and records the response id on
-// the way back, so a request that never got headers (a network failure)
-// reports with no id rather than the previous request's — the tag is a
-// correlation, and a wrong one is worse than none.
-export function beginRequest() {
-  lastRequestId = null;
-}
-
-// api.js records the header here; the tag reads it at send time, so an
-// event carries the id of the request that was in flight when it fired.
-// An absent header clears the id: the identity of this response is
-// unknown, and the previous request's id must not stand in for it.
-export function recordRequestId(id) {
-  lastRequestId = id || null;
-}
-
-export function lastRequestIdForTest() {
-  return lastRequestId;
-}
 
 // The authority ends at the first `/`, `?`, or `#`, so a host-only URL
 // (https://host?token=SECRET) does not swallow its query into the origin.
@@ -204,19 +188,13 @@ export function scrubEvent(event) {
       values: cleaned.breadcrumbs.values.map(scrubBreadcrumb),
     };
   }
-  const tags = { ...(cleaned.tags || {}) };
-  // An explicit null request id means the caller knows this failure is not
-  // correlated (a network error with no response), so the shared global
-  // must not be attached; reportError marks that case with a context the
-  // event carries to here.
-  const contexts = { ...(cleaned.contexts || {}) };
-  const uncorrelated = Boolean(contexts.arkham_uncorrelated);
-  delete contexts.arkham_uncorrelated;
-  cleaned.contexts = contexts;
-  if (lastRequestId && !uncorrelated) {
-    tags.request_id = tags.request_id || lastRequestId;
-  }
-  cleaned.tags = tags;
+  // A request id is attached only when the caller set one explicitly
+  // (reportError tags it, and the tag travels here). The module-global is
+  // deliberately NOT used as a fallback: it holds whichever response
+  // settled most recently, so under concurrent requests it would tag an
+  // auto-captured error with a different request's id. No id is better
+  // than the wrong one.
+  cleaned.tags = { ...(cleaned.tags || {}) };
   return cleaned;
 }
 
@@ -277,22 +255,16 @@ export async function initErrorReporting() {
 }
 
 // Report an error the app caught itself — a rejected boot, a failed
-// mutation — with the failing request id attached when there is one. The
-// id is passed explicitly when the caller has it (an API result carries
-// its own), because the module-global is shared by concurrent requests;
-// it falls back to the global for errors that have no request of their
-// own.
+// mutation — with the failing request id attached when one is passed. The
+// id is always supplied by the caller when it exists (an API result
+// carries its own); the module-global is never consulted, because it is
+// shared by concurrent requests and would mis-tag the error. An absent id
+// means the error simply carries none.
 export function reportError(error, context = {}, requestId = undefined) {
   if (!sentry) return;
-  const id = requestId === undefined ? lastRequestId : requestId;
   sentry.withScope((scope) => {
-    if (id) {
-      scope.setTag('request_id', id);
-    } else if (requestId === null) {
-      // An explicit null says "do not correlate this error", which is
-      // different from "use the shared global"; mark it so beforeSend does
-      // not reintroduce another request's id.
-      scope.setContext('arkham_uncorrelated', { value: true });
+    if (requestId) {
+      scope.setTag('request_id', requestId);
     }
     // setContext takes a named object, so the scalar fields go in as one
     // "app" context rather than as a context per field — primitives do not

@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:39:51Z
+updated_at: 2026-09-23T02:43:43Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -246,3 +246,7 @@ Pushed 4e13a87 (merge df08673 + breadcrumb/ADR fix). Head 4e13a87b78e6, base 1b6
 **agent:opencode/session** at 2026-09-23T02:39:51Z
 
 Review 230 (head 4e13a87, request review-fixes-16, run a9bb17bf, Actions id 9207) raised two findings: (high) browser scrubBreadcrumb left top-level url/sensitive keys unscrubbed; (medium) initErrorReporting never ran on /admin. Both accepted and fixed in 521aa40: mirrored the server top-level breadcrumb scrub in web/src/errors.js, added an AdminBoot wrapper that boots the reporter idempotently for the admin route, with a browser breadcrumb regression test and web/src/main.test.jsx. Gate exit 0 (384 server, 20 deploy, 83 frontend, build). Pushed 521aa40, requested review-fixes-17 (dispatch 204).
+
+**agent:opencode/session** at 2026-09-23T02:43:43Z
+
+Review 231 (head 521aa40, request review-fixes-17, run 25712a4a, Actions id 9215): both prior findings resolved; new high finding — _scrub_data recursed only into dict/list, so tuples/sets in breadcrumb/span data bypassed scrub_text (the DSN pass does not cover application bearer paths). Accepted and fixed in cbe7ba3: recurse into tuples/sets/frozensets server-side and Set/Map browser-side, returning a list, with regression tests on both surfaces. Gate exit 0. Pushed, requested review-fixes-18 (dispatch 204).

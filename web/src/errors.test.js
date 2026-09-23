@@ -102,10 +102,9 @@ describe('error reporting', () => {
     vi.doMock('@sentry/browser', () => sentryMock);
   });
 
-  it('reports under an explicit request id over the shared global', async () => {
+  it('reports under an explicit request id', async () => {
     const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
     await errors.initErrorReporting();
-    errors.recordRequestId('req-global');
 
     const scope = { setTag: vi.fn(), setContext: vi.fn() };
     sentryMock.withScope.mockImplementation((fn) => fn(scope));
@@ -115,38 +114,27 @@ describe('error reporting', () => {
     expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-own');
   });
 
-  it('records the last request id and attaches it as a tag', async () => {
+  it('never tags an auto-captured event with a request id', async () => {
+    // Concurrent requests make any shared id ambiguous, so an event the
+    // SDK captured on its own (no explicit report) carries no request_id
+    // rather than the id of whichever response settled last.
     const errors = await loadErrors();
-    errors.recordRequestId('req-123');
 
     const event = errors.scrubEvent({ tags: {} });
 
-    expect(event.tags.request_id).toBe('req-123');
+    expect(event.tags.request_id).toBeUndefined();
   });
 
-  it('does not attach the global id to an explicitly uncorrelated error', async () => {
+  it('leaves an event untagged when no request id is passed', async () => {
     const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
     await errors.initErrorReporting();
-    errors.recordRequestId('req-old');
 
-    // reportError with an explicit null marks the scope; a concurrent
-    // request then moves the shared global before beforeSend runs.
-    const contexts = {};
-    const scope = {
-      setTag: vi.fn(),
-      setContext: vi.fn((key, value) => {
-        contexts[key] = value;
-      }),
-    };
+    const scope = { setTag: vi.fn(), setContext: vi.fn() };
     sentryMock.withScope.mockImplementation((fn) => fn(scope));
 
     errors.reportError(new Error('network'), { op: 'state' }, null);
-    errors.recordRequestId('req-new');
 
     expect(scope.setTag).not.toHaveBeenCalled();
-    const event = errors.scrubEvent({ contexts });
-    expect(event.tags.request_id).toBeUndefined();
-    expect(event.contexts.arkham_uncorrelated).toBeUndefined();
   });
 
   it('scrubs a credential path out of a request URL', async () => {
@@ -492,15 +480,14 @@ describe('error reporting', () => {
     expect(event.user.ip_address).toBeUndefined();
   });
 
-  it('reports a caught error with the request id tagged', async () => {
+  it('reports a caught error with the app context and the caller id', async () => {
     const errors = await loadErrors({ dsn: 'https://key@glitchtip.example/1' });
     await errors.initErrorReporting();
-    errors.recordRequestId('req-123');
 
     const scope = { setTag: vi.fn(), setContext: vi.fn() };
     sentryMock.withScope.mockImplementation((fn) => fn(scope));
 
-    errors.reportError(new Error('boom'), { op: 'boot' });
+    errors.reportError(new Error('boom'), { op: 'boot' }, 'req-123');
 
     expect(scope.setTag).toHaveBeenCalledWith('request_id', 'req-123');
     expect(scope.setContext).toHaveBeenCalledWith('app', { op: 'boot' });

@@ -61,6 +61,14 @@ covered too. The web scrubbers are the mirror of the server's in
 `web/src/redact.js`. `send_default_pii=False` and the IP is dropped from `user`
 as well.
 
+**A browser error is correlated only by an id the caller passes.** The api
+result carries its own request id, and the store hands that to `reportError`,
+which tags the scope. No module-global id is kept: it would hold whichever
+response settled most recently, so under concurrent requests an auto-captured
+error would be tagged with a different request's id, and a wrong correlation is
+worse than an absent one. An error with no request of its own simply carries no
+id.
+
 **Transaction names use the route, not the path.** Both integrations are
 configured with `transaction_style="endpoint"`. The default, `"url"`, would
 name a transaction `GET /api/join/<code>` and put the code in the title of a

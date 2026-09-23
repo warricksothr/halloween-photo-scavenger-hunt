@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./api', () => ({ api: mocks.api }));
 vi.mock('./theme', () => ({ loadTheme: mocks.loadTheme }));
 vi.mock('./errors', () => ({
-  recordRequestId: vi.fn(),
   reportError: mocks.reportError,
 }));
 

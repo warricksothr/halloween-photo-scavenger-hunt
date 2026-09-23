@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from './api';
-import { lastRequestIdForTest } from './errors';
 
 function response({ status = 200, body = {}, json = true, requestId } = {}) {
   return {
@@ -227,39 +226,30 @@ describe('api client', () => {
     );
   });
 
-  it('records the response X-Request-ID for error reports', async () => {
+  it('carries the response X-Request-ID on an error result', async () => {
+    // The error result owns the id; the store hands it to reportError, so
+    // a browser error correlates without any shared module state.
     globalThis.fetch.mockResolvedValue(
-      response({ body: {}, requestId: 'req-123' }),
+      response({
+        status: 502,
+        body: { error: 'upstream', message: 'Bad gateway.' },
+        requestId: 'req-123',
+      }),
     );
 
-    await api.snapshot();
-
-    expect(lastRequestIdForTest()).toBe('req-123');
+    await expect(api.snapshot()).resolves.toMatchObject({
+      status: 502,
+      requestId: 'req-123',
+    });
   });
 
-  it('clears a stale request id when the next request fails', async () => {
-    globalThis.fetch.mockResolvedValueOnce(
-      response({ body: {}, requestId: 'req-123' }),
-    );
-    await api.snapshot();
-    expect(lastRequestIdForTest()).toBe('req-123');
+  it('reports a network failure with a null request id', async () => {
+    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
-    globalThis.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    await api.snapshot();
-
-    expect(lastRequestIdForTest()).toBeNull();
-  });
-
-  it('clears the request id when a response carries no header', async () => {
-    globalThis.fetch.mockResolvedValueOnce(
-      response({ body: {}, requestId: 'req-123' }),
-    );
-    await api.snapshot();
-
-    globalThis.fetch.mockResolvedValueOnce(response({ body: {} }));
-    await api.snapshot();
-
-    expect(lastRequestIdForTest()).toBeNull();
+    await expect(api.snapshot()).resolves.toMatchObject({
+      network: true,
+      requestId: null,
+    });
   });
 
   it('returns the second csrf_failed rather than retrying forever', async () => {
