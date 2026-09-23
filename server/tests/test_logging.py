@@ -674,6 +674,46 @@ def test_a_raw_escaped_json_body_is_scrubbed(tmp_path, caplog):
     assert "RuntimeError: kaboom" in text
 
 
+def test_a_multipart_body_drops_the_exception_message(tmp_path, caplog):
+    """A body format the scrubber does not read loses the message."""
+    app = create_app(
+        tmp_path / "multipart.db",
+        admin_config=("admin", hash_password("pw")),
+        cookie_secure=False,
+        photos_dir=tmp_path / "photos",
+        static_dir=None,
+    )
+
+    @app.post("/api/team/invites/{token}/upload-boom")
+    async def upload_boom(request: Request):
+        form = await request.form()
+        try:
+            raise RuntimeError(f"note={form['note']}")
+        finally:
+            # A spooled upload left open trips pytest's unraisable check in
+            # a later test, so close it the way the app would.
+            await form.close()
+
+    caplog.set_level(logging.INFO)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        arm_csrf(c, app)
+        caplog.clear()
+        resp = c.post(
+            "/api/team/invites/SUPERSECRETCODE/upload-boom",
+            files={"note": ("note.txt", b"topsecret", "text/plain")},
+        )
+
+    assert resp.status_code == 500
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "unhandled_exception"
+    ]
+    assert len(records) == 1
+    assert records[0].message_included is False
+    assert "topsecret" not in _rendered(caplog)
+
+
 def test_query_string_is_redacted(client, caplog):
     caplog.set_level(logging.INFO)
     caplog.clear()

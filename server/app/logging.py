@@ -499,15 +499,18 @@ class RequestLogMiddleware:
         # and to a bound, and the bytes are consumed only on the failure
         # path below — a request that succeeds pays nothing but the copy.
         media = _media_type(scope)
+        parsed_media = media in _PARSED_MEDIA
         body = bytearray()
         truncated = False
+        seen = 0
 
         async def receiving() -> Message:
-            nonlocal truncated
+            nonlocal truncated, seen
             message = await receive()
-            if media in _PARSED_MEDIA and message["type"] == "http.request":
+            if message["type"] == "http.request":
                 chunk = message.get("body", b"")
-                if chunk:
+                seen += len(chunk)
+                if parsed_media and chunk:
                     room = _BUFFERED_BODY_BYTES - len(body)
                     if len(chunk) > room:
                         truncated = True
@@ -539,12 +542,19 @@ class RequestLogMiddleware:
             # in the buffer now. If the buffer is short, or the body did
             # not parse, the app saw something the scrubber did not, so
             # the message is logged without.
-            body_secrets = _body_secrets(media, bytes(body))
-            if body_secrets is None:
-                state["safe_traceback"] = True
+            if not parsed_media:
+                # A media type ``_body_secrets`` does not read, such as a
+                # multipart upload. The app can quote a field it parsed
+                # itself, and there is no scrub set for it, so any body at
+                # all drops the message.
+                state["safe_traceback"] = bool(seen)
             else:
-                carried.extend(body_secrets)
-                state["safe_traceback"] = truncated
+                body_secrets = _body_secrets(media, bytes(body))
+                if body_secrets is None:
+                    state["safe_traceback"] = True
+                else:
+                    carried.extend(body_secrets)
+                    state["safe_traceback"] = truncated
             raise
         finally:
             _log_request(scope, request_id, path, status, started)

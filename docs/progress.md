@@ -51,7 +51,9 @@ when the increment runs and its tests pass.
   and `Cookie` headers and buffers a JSON or form body; those values are
   used to redact the log line and are never written to it. A body larger
   than the buffer, or one that does not parse, loses the exception
-  message rather than risk a value the scrub set never held. A query
+  message rather than risk a value the scrub set never held, and so does
+  any other body format — a multipart upload the scrubber does not parse
+  drops the message, while a body-less request keeps it. A query
   string or form body also adds its raw, still-encoded text beside the
   decoded values, because a route can quote the bytes it read, and a JSON
   body with a number, boolean, or null drops the message too, since no
@@ -62,7 +64,7 @@ when the increment runs and its tests pass.
   cannot be reintroduced by a later secret. There is no length floor on a
   candidate, so a four-digit PIN is scrubbed like any token, and a cookie
   contributes both its raw header and the value the framework unquotes.
-  337 server tests pass; coverage 95.37%.
+  338 server tests pass; coverage 95.35%.
 
 - **2026-09-22 — Optional OIDC login for admins and moderators.** S9CT,
   TKT-01M33S9CT. Merged as PR #17 (`bba0d7d40`). `server/app/oidc.py`

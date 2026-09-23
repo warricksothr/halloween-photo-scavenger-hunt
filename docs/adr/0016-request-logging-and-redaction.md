@@ -110,10 +110,11 @@ on so pytest's `caplog` still sees records.
 - Redaction is a list of prefixes, so a new code-carrying route must be added to
   `_CODE_PREFIXES`. The `redact_path` tests make the omission visible, but the
   list is not derived from the routers.
-- The exception scrubber reads the body of a JSON or form request. A multipart
-  body is not parsed, so a value that reached the app only in a multipart part
-  and then into a `raise` message would still be logged; the API's one multipart
-  route uploads a photo, and binary is not mined for strings. There is no length
+- The exception scrubber reads the body of a JSON or form request. Any other
+  body format fails closed: the middleware counts every body byte, and a
+  request that carried a body it did not parse logs its traceback without the
+  exception message, because the app may have quoted a value the scrubber
+  never saw. A body-less request keeps its message. There is no length
   floor on a candidate: a four-digit PIN is as much a secret as a session token,
   and a short value that appears in the message is replaced wherever it falls,
   even if that touches an ordinary word. Cookies are collected twice — the raw
