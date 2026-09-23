@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T18:54:31Z
+updated_at: 2026-09-23T18:54:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -111,3 +111,17 @@ Shape:
 - `web/src/screens/AdminHost.test.jsx`: list, confirm-gate, reflect the
   reversal, surface an error.
 - `web/src/screens/Admin.test.jsx`: the Host actions tab mounts the panel.
+
+## Summary
+
+The host console now has its strike panel. `GET /api/admin/events/{id}/players`
+returns each player with their derived restriction and full strike history
+(reversed strikes included), and `web/src/screens/AdminHost.jsx` drives it:
+pick an event, pick a player, read the ladder standing, and reverse a strike
+behind a two-step confirm with an optional reason. The reversal refetches, so
+the row records `reversed_at` and the restriction drops through
+`derive_restriction` (ADR 0001) — the RUNBOOK step 7 is now a screen.
+
+Both acceptance criteria are met: the admin sees history and reverses, and
+the reversal confirms then reflects the result. `bash scripts/check-quality.sh`
+is green (server 466 passed, 95.81% branch coverage; web 144 tests; build OK).
