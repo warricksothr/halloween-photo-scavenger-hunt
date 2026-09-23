@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M38763PP35VGKNG7C9GARP5T
 title: Local-only deployment-target notes directory
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/deploy-targets-convention
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 4fc45b25c642429698fd414d89df85a6f09a34a7
-  session: null
-  claimed_at: 2026-09-23T22:46:40Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T22:46:36Z
-updated_at: 2026-09-23T22:46:40Z
+updated_at: 2026-09-23T23:00:42Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -71,3 +64,27 @@ stay generic and correct while host truth travels with the checkout.
 - The first note, `kobal.md`, captures the live deployment: paths, container
   commands, the systemd-vs-container translation table, debugging recipes, and
   the host's ground rules.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T23:00:42Z
+
+Terva r1 (run 297d8071, request deploy-targets-r1): one medium — the root fallback covered only four extensions, so the README's 'stays untracked even if the inner .gitignore is removed' claim was false for extensionless/other/nested files. Fixed in 0b68c8725982861782035d9eeea0d57427d04e76 (root ignores the directory, whitelists the two tracked files). r2 clean.
+
+## Summary
+
+A local-only home for deployment-target notes.
+
+deploy/targets/ takes one note per environment. The README states the
+convention; the inner .gitignore ignores everything but itself and the
+README; and the root .gitignore ignores the directory and whitelists the
+same two files. Either rule alone keeps a note out of the repository, and
+kobal.md is verified ignored by both. The host note is intentionally not
+committed.
+
+Terva r1 found the root fallback listed four extensions while the README
+claimed any target file stayed untracked without the inner rule — false
+for an extensionless, other-extension, or nested file. Fixed by ignoring
+the directory at the root too; r2 was clean.
+
+Merge ed895c9023d2109826a4d28c363d03357eebf4aa (PR #43).
