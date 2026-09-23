@@ -212,6 +212,54 @@ def test_runbook_requests_the_groups_scope():
     assert "ARKHAM_OIDC_SCOPES=openid profile email groups" in runbook
 
 
+def test_smoke_container_arms_csrf_and_sends_the_header():
+    """The smoke's curl calls must satisfy the double-submit CSRF check.
+
+    CSRF is safe-by-default (ADR 0015): every method outside GET/HEAD/OPTIONS
+    is challenged, so the login and every later mutation 403s without a
+    matching `arkham_csrf` cookie and `X-CSRF-Token` header. The smoke calls
+    `curl --fail`, so a miss aborts the whole run. This is static — nobody
+    wants a container runtime in the unit suite.
+
+    Every unsafe curl invocation (one carrying `--data`, `--form`, or an
+    explicit `--request POST`) must therefore send `X-CSRF-Token`, and each
+    jar must be armed by a safe GET before it is first used.
+    """
+    script = (REPO_ROOT / "scripts" / "smoke-container.sh").read_text()
+
+    # Bound each curl invocation at the next non-continuation line. The
+    # script uses trailing backslashes, so a call is a maximal run of
+    # `curl ... \` lines ending without a backslash. A call may be wrapped
+    # in a substitution (`x="$(curl ...`), so match `curl` after any prefix
+    # rather than only at the start of a line.
+    calls: list[str] = []
+    current: list[str] = []
+    for line in script.splitlines():
+        if current or re.search(r"\bcurl\b", line):
+            current.append(line)
+            if not line.rstrip().endswith("\\"):
+                calls.append("\n".join(current))
+                current = []
+
+    unsafe_markers = ("--data", "--form", "--request POST")
+    seen = 0
+    for call in calls:
+        if not any(marker in call for marker in unsafe_markers):
+            continue
+        seen += 1
+        assert "X-CSRF-Token:" in call, "unsafe curl call missing CSRF header:\n" + call
+
+    # Guard the parser itself: the script has several unsafe calls, and a
+    # silent parse failure would make this test vacuous.
+    assert seen >= 4, f"expected to find the smoke's unsafe calls, found {seen}"
+
+    # Each jar is armed with a safe GET before its first unsafe call. The
+    # helper is the only place that reads the planted cookie, so requiring
+    # it for both jars keeps the handshake from being inlined incorrectly.
+    assert 'arm_csrf "$admin_jar"' in script
+    assert 'arm_csrf "$player_jar"' in script
+
+
 def _write_stub(path: Path, body: str) -> None:
     path.write_text(f"#!/bin/sh\n{body}")
     path.chmod(0o755)

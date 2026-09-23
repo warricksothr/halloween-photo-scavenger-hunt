@@ -107,10 +107,32 @@ json_value() {
     "$python" -c 'import json, sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"
 }
 
+# CSRF is a signed double-submit token (ADR 0015): the server plants the
+# arkham_csrf cookie on a safe request, and every unsafe request must echo
+# that same value in X-CSRF-Token. Arm each jar with one safe GET and read
+# the token back before the first POST.
+csrf_from_jar() {
+    grep -w "$1" "$2" | awk '{print $NF}' | tail -n 1
+}
+
+arm_csrf() {
+    local jar="$1" cookie
+    curl --fail --silent --show-error --cookie-jar "$jar" -o /dev/null \
+        "$base_url/api/health"
+    cookie="$(csrf_from_jar arkham_csrf "$jar")"
+    if [[ -z "$cookie" ]]; then
+        printf 'no arkham_csrf cookie after safe GET (jar %s)\n' "$jar" >&2
+        exit 1
+    fi
+}
+
 printf 'logging in as disposable admin\n'
+arm_csrf "$admin_jar"
+admin_csrf="$(csrf_from_jar arkham_csrf "$admin_jar")"
 login_json="$(curl --fail --silent --show-error \
-    --cookie-jar "$admin_jar" \
+    --cookie "$admin_jar" --cookie-jar "$admin_jar" \
     --header 'Content-Type: application/json' \
+    --header "X-CSRF-Token: $admin_csrf" \
     --data "{\"username\":\"$admin_user\",\"password\":\"$admin_password\"}" \
     "$base_url/api/admin/login")"
 printf '%s' "$login_json" | "$python" -c 'import json, sys; assert json.load(sys.stdin)["ok"] is True'
@@ -123,6 +145,7 @@ printf '%s' "$ready_json" | "$python" -c 'import json, sys; body = json.load(sys
 event_json="$(curl --fail --silent --show-error \
     --cookie "$admin_jar" --cookie-jar "$admin_jar" \
     --header 'Content-Type: application/json' \
+    --header "X-CSRF-Token: $admin_csrf" \
     --data '{"name":"Container Smoke"}' \
     "$base_url/api/admin/events")"
 event_id="$(printf '%s' "$event_json" | json_value id)"
@@ -131,16 +154,21 @@ join_code="$(printf '%s' "$event_json" | json_value join_code)"
 curl --fail --silent --show-error \
     --cookie "$admin_jar" --cookie-jar "$admin_jar" \
     --header 'Content-Type: application/json' \
+    --header "X-CSRF-Token: $admin_csrf" \
     --data '{"text":"Find the smoke signal","sort_order":1}' \
     "$base_url/api/admin/events/$event_id/riddles" >/dev/null
 curl --fail --silent --show-error --request POST \
     --cookie "$admin_jar" --cookie-jar "$admin_jar" \
+    --header "X-CSRF-Token: $admin_csrf" \
     "$base_url/api/admin/events/$event_id/open" >/dev/null
 
 printf 'joining player over plain HTTP\n'
+arm_csrf "$player_jar"
+player_csrf="$(csrf_from_jar arkham_csrf "$player_jar")"
 join_json="$(curl --fail --silent --show-error \
-    --cookie-jar "$player_jar" \
+    --cookie "$player_jar" --cookie-jar "$player_jar" \
     --header 'Content-Type: application/json' \
+    --header "X-CSRF-Token: $player_csrf" \
     --data '{"display_name":"Smoke Player","device_label":"smoke phone"}' \
     "$base_url/api/join/$join_code")"
 printf '%s' "$join_json" | "$python" -c 'import json, sys; assert json.load(sys.stdin)["event"]["status"] == "open"'
@@ -151,6 +179,7 @@ photo_path="$work/smoke.jpg"
 "$python" -c 'from PIL import Image; import sys; Image.new("RGB", (32, 32), (30, 90, 140)).save(sys.argv[1], "JPEG")' "$photo_path"
 photo_json="$(curl --fail --silent --show-error \
     --cookie "$player_jar" \
+    --header "X-CSRF-Token: $player_csrf" \
     --form "photo=@$photo_path;type=image/jpeg" \
     "$base_url/api/evidence")"
 printf '%s' "$photo_json" | "$python" -c 'import json, sys; assert json.load(sys.stdin)["id"]'
