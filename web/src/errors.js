@@ -136,6 +136,14 @@ function scrubData(value) {
 function scrubBreadcrumb(crumb) {
   if (!crumb || typeof crumb !== 'object') return crumb;
   const cleaned = { ...crumb };
+  // A navigation breadcrumb carries the URL it navigated to at the top
+  // level as well as inside its data, so the redaction and drop happen
+  // on both. `data` is the crumb's payload, not a drop target, so it is
+  // recursed into below rather than deleted here.
+  if (typeof cleaned.url === 'string') cleaned.url = scrubUrl(cleaned.url);
+  for (const key of DROPPED_REQUEST_KEYS) {
+    if (key !== 'data') delete cleaned[key];
+  }
   if (typeof cleaned.message === 'string') {
     cleaned.message = scrubText(cleaned.message);
   }

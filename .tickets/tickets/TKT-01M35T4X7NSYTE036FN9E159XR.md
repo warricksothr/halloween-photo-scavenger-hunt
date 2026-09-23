@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T02:34:40Z
+updated_at: 2026-09-23T02:35:58Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -238,3 +238,7 @@ Sixteenth Terva review (run 9d2b4d8f-168a-4cf8-aeee-d3d1f4ac0093, request review
 **agent:opencode/session** at 2026-09-23T02:34:40Z
 
 Merged origin/main (1b62f37e) into the branch; merge commit df08673. Conflicts reconciled: errors.py (kept ErrorConfig/tracing/branch query-drop policy per ADR 0018, folded in main's Scrubber DSN deep-scrub + fail-closed urlsplit), logging.py/main.py (both), web api.js (request-id + reportUnauthorized), main.jsx (isAdminPath + bootReportThenRefresh), api.test.js. Hardened scrub_breadcrumb to scrub the top-level url and drop headers/cookies/env/query_string, matching main's navigation-breadcrumb finding. Renamed the ADR to 0018. bash scripts/check-quality.sh exits 0: 384 server tests @ 95%+, 20 deploy checks, 81 frontend tests, build.
+
+**agent:opencode/session** at 2026-09-23T02:35:58Z
+
+Pushed 4e13a87 (merge df08673 + breadcrumb/ADR fix). Head 4e13a87b78e6, base 1b62f37e0a45. Requested Terva review request-id=review-fixes-16 (dispatch 204) for this unreviewed head.

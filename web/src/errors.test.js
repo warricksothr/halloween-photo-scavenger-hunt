@@ -389,6 +389,37 @@ describe('error reporting', () => {
     expect(data.keep).toBe('fine');
   });
 
+  it('redacts a top-level breadcrumb URL and drops its sensitive keys', async () => {
+    // A navigation breadcrumb carries the URL it navigated to at the top
+    // level, not only inside `data`, and its own headers/cookies — the
+    // same fields scrubRequest drops. Only the `data` payload is recursed
+    // into rather than deleted.
+    const errors = await loadErrors();
+
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [
+          {
+            category: 'navigation',
+            url: 'https://hunt.example/m/MODCODE?invite=tok123',
+            query_string: 'invite=tok123',
+            headers: { Cookie: 'arkham_player=SESSIONVALUE' },
+            cookies: { arkham_player: 'SESSIONVALUE' },
+            env: { SECRET: 'leak' },
+            data: { to: '/j/JOINCODE' },
+          },
+        ],
+      },
+    });
+
+    const crumb = event.breadcrumbs.values[0];
+    expect(crumb.url).toBe('https://hunt.example/m/<redacted>');
+    for (const key of ['headers', 'cookies', 'env', 'query_string']) {
+      expect(crumb[key]).toBeUndefined();
+    }
+    expect(crumb.data.to).toBe('/j/<redacted>');
+  });
+
   it('redacts a credential inside an absolute URL in a breadcrumb message', async () => {
     const errors = await loadErrors();
 

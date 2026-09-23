@@ -26,9 +26,9 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // /admin is the one exception, and the path decides before the store
 // exists: the host console is a separate document (a fresh page load, no
 // client-side router), so it must not boot the player store or pull in a
-// theme pack. App stays hook-free — the hooks live in PlayerApp — so the
-// switch cannot break the rules of hooks. The match is by path segment:
-// `/administrator` is a player path, not the console.
+// theme pack. App stays hook-free — the hooks live in the two branches —
+// so the switch cannot break the rules of hooks. The match is by path
+// segment: `/administrator` is a player path, not the console.
 function isAdminPath(pathname) {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
@@ -39,9 +39,19 @@ function bootReportThenRefresh() {
   initErrorReporting().then(refresh, refresh);
 }
 
+// The admin console is a separate document, so it does not boot the
+// player store — but it must still report its own errors, and the
+// reporter boot is the same idempotent call the player path makes.
+function AdminBoot() {
+  useEffect(() => {
+    initErrorReporting();
+  }, []);
+  return <AdminScreen />;
+}
+
 function App() {
   if (isAdminPath(window.location.pathname)) {
-    return <AdminScreen />;
+    return <AdminBoot />;
   }
   return <PlayerApp />;
 }
