@@ -7,7 +7,6 @@ tickets, and the next fix pass overwrites it.
 | Epic | Title | Status |
 |---|---|---|
 | [TKT-01M24GA0PMGWEM80RBS502FGVY](draft/TKT-01M24GA0PMGWEM80RBS502FGVY.md) | Prepare the first live event and future themes | draft |
-| [TKT-01M33RFWDB1XFYCBPC0920QTAQ](tickets/TKT-01M33RFWDB1XFYCBPC0920QTAQ.md) | Harden the backend and evidence pipeline | ready |
 | [TKT-01M33RFWE1TGCC61P6NJX0NMG0](draft/TKT-01M33RFWE1TGCC61P6NJX0NMG0.md) | Make the PWA resilient and deploy-safe | draft |
 | [TKT-01M33RFWERCGE04CK7F44NP313](draft/TKT-01M33RFWERCGE04CK7F44NP313.md) | Harden deployment and operations | draft |
 | [TKT-01M33RFWFF6S1F67VAQ969PDFF](draft/TKT-01M33RFWFF6S1F67VAQ969PDFF.md) | Reconcile documentation and process with the built system | draft |
