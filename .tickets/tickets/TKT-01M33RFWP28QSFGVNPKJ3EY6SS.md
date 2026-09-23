@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:41:00Z
+updated_at: 2026-09-23T12:45:01Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -103,3 +103,20 @@ one explicit `BEGIN`. The explicit `BEGIN` is required because Python's
 sqlite3 only opens an implicit transaction for DML, so a file's
 `CREATE TABLE` would otherwise autocommit. New test
 `test_migration_with_transaction_control_is_refused`; ADR 0022 rewritten.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:45:01Z
+
+### Review r2 finding and fix
+
+`request:harden-migrations-r2` (run `6cf1e659-4573-45e6-bf65-5558fa8d966a`,
+Actions run #437) confirmed the r1 transaction-control finding resolved,
+then found one medium: `_statements` appended a whole line at a time, so
+two statements on one line (`CREATE TABLE a(id); CREATE TABLE b(id);`)
+became one list element and `conn.execute` rejected it — a regression from
+`executescript`, which accepted that layout. Accepted.
+
+Splitting is now per character: a `;` ends a statement when
+`sqlite3.complete_statement` says the buffer is complete, so two
+statements on one line stay two. New test
+`test_two_statements_on_one_line_are_both_applied`; ADR 0022 notes the
+per-statement split.

@@ -213,16 +213,18 @@ def _statements(sql: str) -> list[str]:
 
     ``sqlite3.complete_statement`` understands quoted strings, comments,
     and the ``BEGIN ... END`` body of a ``CREATE TRIGGER``, so this splits
-    on top-level semicolons without mis-reading any of them. A trailing
-    comment or blank line is not a statement and is dropped; a trailing
-    fragment that is not a complete statement is an error, because running
-    it would silently ignore the file's last statement.
+    on top-level semicolons without mis-reading any of them. Splitting is
+    per character, not per line: two statements on one line are two
+    statements, and handing both to ``Connection.execute`` would fail. A
+    trailing comment or blank line is not a statement and is dropped; a
+    trailing fragment that is not a complete statement is an error, because
+    running it would silently ignore the file's last statement.
     """
     statements: list[str] = []
     buffer = ""
-    for line in sql.splitlines(keepends=True):
-        buffer += line
-        if sqlite3.complete_statement(buffer):
+    for char in sql:
+        buffer += char
+        if char == ";" and sqlite3.complete_statement(buffer):
             statements.append(buffer)
             buffer = ""
     if _without_comments(buffer).strip():

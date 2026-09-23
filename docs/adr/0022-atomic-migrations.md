@@ -56,7 +56,9 @@ Two details are load-bearing:
   file with `sqlite3.complete_statement`, which understands quoted
   strings, comments, and a `CREATE TRIGGER ... BEGIN ... END` body, so a
   trigger is one statement and the split is not fooled by a semicolon
-  inside either.
+  inside either. Splitting is per statement, not per line, so two
+  statements that share a line remain two statements — the layout
+  `executescript` accepted.
 
 Because the transaction is the runner's, a file that contains its own
 transaction control is **refused before execution**. `_statements` reads

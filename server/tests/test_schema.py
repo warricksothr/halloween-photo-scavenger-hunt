@@ -55,6 +55,34 @@ def test_a_trigger_body_is_one_statement_not_transaction_control():
     assert db_module._first_keyword(statements[1]) == "create"
 
 
+def test_two_statements_on_one_line_are_both_applied(tmp_path, monkeypatch):
+    """Splitting is per statement, not per line: executescript accepted two
+    statements on one line, so the replacement has to as well."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    (migrations / "0001_init.sql").write_text(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (\n"
+        "    version INTEGER PRIMARY KEY,\n"
+        "    applied_at INTEGER NOT NULL\n"
+        ");\n"
+        "CREATE TABLE one (id INTEGER PRIMARY KEY);"
+        " CREATE TABLE two (id INTEGER PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(db_module, "MIGRATIONS_DIR", migrations)
+
+    conn = db_module.connect(tmp_path / "oneline.db")
+    try:
+        assert db_module.apply_migrations(conn) == [1]
+        names = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert {"one", "two"} <= names
+    finally:
+        conn.close()
+
+
 def test_failed_migration_leaves_no_partial_state(tmp_path, monkeypatch):
     """A migration and its version row are one transaction, so a crash
     mid-file leaves neither the schema change nor the record. The next
