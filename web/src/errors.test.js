@@ -246,6 +246,24 @@ describe('error reporting', () => {
     expect(data.query_string).toBeUndefined();
   });
 
+  it('scrubs a bearer path embedded in prose in span and breadcrumb data', async () => {
+    const errors = await loadErrors();
+
+    const transaction = errors.scrubTransaction({
+      spans: [{ data: { note: 'request to /api/join/SECRET failed' } }],
+    });
+    const event = errors.scrubEvent({
+      breadcrumbs: {
+        values: [{ message: 'x', data: { note: 'see /t/TOKEN now' } }],
+      },
+    });
+
+    expect(transaction.spans[0].data.note).toBe(
+      'request to /api/join/<redacted> failed',
+    );
+    expect(event.breadcrumbs.values[0].data.note).toBe('see /t/<redacted> now');
+  });
+
   it('redacts the credential in breadcrumb messages and data', async () => {
     const errors = await loadErrors();
 

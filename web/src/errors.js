@@ -123,9 +123,10 @@ function scrubData(value) {
     }
     return out;
   }
-  // scrubUrl redacts a bearer segment and drops a query or fragment
-  // wherever they sit, and leaves plain text alone.
-  return typeof value === 'string' ? scrubUrl(value) : value;
+  // A data string may be a bare URL, a bare path, or prose that embeds
+  // one; scrubText finds the path anywhere and redacts it, dropping any
+  // query or fragment with it.
+  return typeof value === 'string' ? scrubText(value) : value;
 }
 
 function scrubBreadcrumb(crumb) {

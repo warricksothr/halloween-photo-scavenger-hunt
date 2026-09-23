@@ -258,6 +258,27 @@ def test_scrub_transaction_drops_nested_sensitive_span_data():
     assert "query_string" not in data
 
 
+def test_scrub_span_and_breadcrumb_data_scrub_bearer_paths_in_prose():
+    # A data value can be prose that embeds a bearer path; scrub_url alone
+    # would leave it, because the value does not start with the path.
+    transaction = {"spans": [{"data": {"note": "request to /api/join/SECRET failed"}}]}
+    error = {
+        "breadcrumbs": {
+            "values": [{"message": "x", "data": {"note": "see /t/TOKEN now"}}]
+        }
+    }
+
+    cleaned = errors.scrub_transaction(transaction)
+    cleaned_error = errors.scrub_event(error)
+
+    assert cleaned["spans"][0]["data"]["note"] == (
+        "request to /api/join/<redacted> failed"
+    )
+    assert cleaned_error["breadcrumbs"]["values"][0]["data"]["note"] == (
+        "see /t/<redacted> now"
+    )
+
+
 def test_scrub_event_scrubs_top_level_message():
     event = {"message": "GET /api/join/SECRET failed"}
     cleaned = errors.scrub_event(event)

@@ -136,22 +136,24 @@ def scrub_text(text: str) -> str:
     return _URL_IN_TEXT.sub(_replace, text)
 
 
-def _drop_sensitive_keys(value: Any) -> Any:
-    """Recursively remove credential-bearing keys from arbitrary data.
+def _scrub_data(value: Any) -> Any:
+    """Recursively drop credential keys and scrub every string in data.
 
     A breadcrumb or span ``data`` mapping can nest the request under
-    ``request``/``response``, so a top-level pop is not enough; walk dicts
-    and lists and drop the key wherever it appears.
+    ``request``/``response``, so a top-level pass is not enough. A string
+    can be a bare URL, a bare path, or prose that embeds one, so it goes
+    through ``scrub_text``, which finds the path wherever it sits.
     """
     if isinstance(value, dict):
-        return {
-            key: _drop_sensitive_keys(item)
-            for key, item in value.items()
-            if key not in _SENSITIVE_KEYS
-        }
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in _SENSITIVE_KEYS:
+                continue
+            out[key] = _scrub_data(item)
+        return out
     if isinstance(value, list):
-        return [_drop_sensitive_keys(item) for item in value]
-    return value
+        return [_scrub_data(item) for item in value]
+    return scrub_text(value) if isinstance(value, str) else value
 
 
 def scrub_breadcrumb(
@@ -161,11 +163,7 @@ def scrub_breadcrumb(
     crumb = dict(breadcrumb)
     data = crumb.get("data")
     if isinstance(data, dict):
-        data = dict(data)
-        for key in ("url", "from", "to"):
-            if isinstance(data.get(key), str):
-                data[key] = scrub_url(data[key])
-        crumb["data"] = _drop_sensitive_keys(data)
+        crumb["data"] = _scrub_data(dict(data))
     if isinstance(crumb.get("message"), str):
         crumb["message"] = scrub_text(crumb["message"])
     return crumb
@@ -177,29 +175,8 @@ def _scrub_span(span: dict[str, Any]) -> dict[str, Any]:
         span["description"] = scrub_text(span["description"])
     data = span.get("data")
     if isinstance(data, dict):
-        # A span-data string may be a URL, a bare path, or opaque text, and
-        # the data can nest a request/response mapping. Drop the sensitive
-        # keys and scrub every string at any depth.
-        span["data"] = _scrub_span_data(dict(data))
+        span["data"] = _scrub_data(dict(data))
     return span
-
-
-def _scrub_span_data(value: Any) -> Any:
-    if isinstance(value, dict):
-        out: dict[str, Any] = {}
-        for key, item in value.items():
-            if key in _SENSITIVE_KEYS:
-                continue
-            if isinstance(item, str):
-                # scrub_url redacts a bearer segment and drops a query or
-                # fragment wherever they sit, and leaves plain text alone.
-                out[key] = scrub_url(item)
-            else:
-                out[key] = _scrub_span_data(item)
-        return out
-    if isinstance(value, list):
-        return [_scrub_span_data(item) for item in value]
-    return value
 
 
 def _scrub_exception_value(value: Any) -> Any:
