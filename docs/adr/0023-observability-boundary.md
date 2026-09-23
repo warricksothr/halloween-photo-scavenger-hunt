@@ -13,7 +13,7 @@ traces (ADR 0018). Then the readiness surface added two more: the
 reads (TKT-01M33S2WP).
 
 No single record says where each signal lives, so the boundary is only
-visible by reading four ADRs and a ticket. The risk is drift in both
+visible by reading three ADRs and two tickets. The risk is drift in both
 directions: someone adding a counter might reach for a time-series backend
 because "metrics go to a metrics system", or someone debugging a 500 might
 add a report where the log id already joins the pieces. This ADR names the
