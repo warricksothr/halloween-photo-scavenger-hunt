@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWP28QSFGVNPKJ3EY6SS
 title: Make migrations crash-safe instead of relying on idempotency
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/harden-migrations
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 83d1c28c5cbae145c2f2f9d7fb5d8f3303ac7515
-  session: null
-  claimed_at: 2026-09-23T12:30:02Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:48:33Z
+updated_at: 2026-09-23T12:51:15Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -136,3 +129,34 @@ Migration files are now read as `utf-8-sig`, and `_first_keyword` strips a
 leading `\ufeff` (and the trailing `;`) before matching, so the check does
 not depend on decoding. New test
 `test_bom_does_not_hide_transaction_control`; ADR 0022 updated.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:51:04Z
+
+### Review record
+
+PR #31, base `83d1c28`, merged head `b979741` (merge `401d5f1`).
+
+| round | request id | reviewed head | Actions run | outcome |
+| --- | --- | --- | --- | --- |
+| r1 | `harden-migrations-r1` | `59114a9` | [#427](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/427) (`7287881f-a4e5-44dc-8fdb-93c3856a58d0`) | 1 medium: transaction control documented but not enforced |
+| r2 | `harden-migrations-r2` | `07303bb` | [#437](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/437) (`6cf1e659-4573-45e6-bf65-5558fa8d966a`) | r1 resolved; 1 medium: two statements on one line not split |
+| r3 | `harden-migrations-r3` | `d972ebc` | [#441](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/441) (`5f7e9a92-049c-4a22-ac6f-24885a0d019b`) | r2 resolved; 1 medium: BOM bypasses keyword check |
+| r4 | `harden-migrations-r4` | `b979741` | [#443](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/443) (`d5151951-0b1c-4028-a1ec-81aeb3b2e089`) | clean |
+
+All three findings were accepted and fixed on the branch (each with a
+regression test); none was disputed or deferred.
+
+## Summary
+
+Landed on `main` in merge commit `401d5f1` (PR #31, head `b979741`,
+base `83d1c28`). `apply_migrations` no longer depends on every file being
+idempotent: the runner splits a file into statements with
+`sqlite3.complete_statement`, refuses a statement whose first keyword is
+transaction control (`BEGIN`/`COMMIT`/`END`/`ROLLBACK`/`SAVEPOINT`/
+`RELEASE`, BOM-tolerant), and executes the remaining statements plus the
+`schema_migrations` row inside one explicit `BEGIN`/`COMMIT` on the writer,
+rolling back on error. A crash mid-file leaves the version unrecorded and
+the file is retried on next boot; a file that tries to own the transaction
+fails before any statement runs. ADR 0022 rewritten; `docs/impl/schema.md`
+and `docs/progress.md` updated; 10 schema tests including three
+regressions from review. Full gate green (419 server tests).
