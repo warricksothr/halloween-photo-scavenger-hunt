@@ -136,22 +136,27 @@ Create these once in the Authentik admin UI:
 1. **Groups → Create.** Two groups whose names match the app's
    defaults: `arkham-admin` and `arkham-moderator`. Put your host account
    in the first and any moderator accounts in the second.
-2. **Applications → Create with Provider → OAuth2/OpenID Provider.**
-   - Client type: **Confidential**.
-   - Redirect URI (exact, both entries): `https://<host>/api/auth/oidc/callback`.
-   - Scopes: `openid profile email` (the app's defaults).
-3. **Property Mappings → Create → OAuth2 Provider scope mapping**
-   (type: Scope mapping) that emits the caller's group names, and add it
-   to the provider's **Advanced protocol settings → Scopes**. The app
-   reads a `groups` claim, so the mapping's expression must be:
+2. **Property Mappings → Create → OAuth2 Provider scope mapping**
+   (type: Scope mapping) that emits the caller's group names. Give it the
+   scope name **`groups`** (the app reads the `groups` claim, so the
+   mapping's expression must be):
 
    ```python
    return {"groups": [group.name for group in request.user.ak_groups.all()]}
    ```
 
-   Verify the name is exactly `groups`: without it every sign-in is
+   Verify the claim name is exactly `groups`: without it every sign-in is
    refused as `not_authorized`, because no role can be read from the
    token.
+3. **Applications → Create with Provider → OAuth2/OpenID Provider.**
+   - Client type: **Confidential**.
+   - Redirect URI (exact): `https://<host>/api/auth/oidc/callback`.
+   - **Advanced protocol settings → Scopes:** the three defaults
+     (`openid`, `profile`, `email`) **plus the `groups` mapping** you
+     created. Authentik emits a scope mapping only when its scope name is
+     in the requested scopes, so the app must ask for `groups` too (next
+     section) — otherwise the token carries no `groups` claim and every
+     login is refused as `not_authorized`.
 4. Copy the provider's **Client ID** and **Client secret**, and note the
    issuer URL — the application's `OpenID Configuration Issuer`, of the
    form `https://<authentik-host>/application/o/<slug>/` (keep the
@@ -164,19 +169,28 @@ window.
 ### App side
 
 Put these in `~/.config/arkham-hunt.env` (mode 0600, never committed —
-repo policy), then `systemctl --user restart arkham-hunt`:
+repo policy), then `systemctl --user restart arkham-hunt`. The file is a
+systemd `EnvironmentFile`, not a shell script: use **bare assignments, no
+`export`** — systemd silently skips a line it cannot read as
+`NAME=value`, and an exported line leaves SSO off with no error.
 
 ```sh
-export ARKHAM_OIDC_ISSUER=https://<authentik-host>/application/o/<slug>/
-export ARKHAM_OIDC_CLIENT_ID=<client id>
-export ARKHAM_OIDC_CLIENT_SECRET=<client secret>
+ARKHAM_OIDC_ISSUER=https://<authentik-host>/application/o/<slug>/
+ARKHAM_OIDC_CLIENT_ID=<client id>
+ARKHAM_OIDC_CLIENT_SECRET=<client secret>
+# Required when the groups mapping has its own scope name:
+ARKHAM_OIDC_SCOPES=openid profile email groups
 # Optional — these are the defaults:
-# export ARKHAM_OIDC_ADMIN_GROUP=arkham-admin
-# export ARKHAM_OIDC_MODERATOR_GROUP=arkham-moderator
-# export ARKHAM_OIDC_SCOPES="openid profile email"
+# ARKHAM_OIDC_ADMIN_GROUP=arkham-admin
+# ARKHAM_OIDC_MODERATOR_GROUP=arkham-moderator
 # Only if the callback URL cannot be derived from the request:
-# export ARKHAM_OIDC_REDIRECT_URI=https://<host>/api/auth/oidc/callback
+# ARKHAM_OIDC_REDIRECT_URI=https://<host>/api/auth/oidc/callback
 ```
+
+`ARKHAM_OIDC_SCOPES` must list every scope the provider emits, including
+the `groups` mapping from the Authentik step — the app's default
+(`openid profile email`) does not include it, and a scope the app does
+not request is a claim it never receives.
 
 `ARKHAM_OIDC_REDIRECT_URI` is usually unnecessary: behind nginx,
 uvicorn's `--proxy-headers` makes `request.base_url` the public URL, and
