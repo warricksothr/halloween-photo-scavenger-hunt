@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33RFWN88Y57BZ6ZFE4NEQND
 title: Expire admin and player sessions
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/harden-session-expiry
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: d0b81f99e27de480bb3604f151f914b07c986d75
-  session: null
-  claimed_at: 2026-09-23T12:09:21Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T12:18:51Z
+updated_at: 2026-09-23T12:29:49Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -113,3 +106,47 @@ non-API path.
 Docs: `docs/impl/schema.md` (TTL origin on both session tables),
 `docs/impl/api.md` (TTL + no-store), `docs/adr/0021-session-ttl.md`,
 `docs/progress.md`.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T12:29:49Z
+
+### Review history
+
+Reviewed head `b2565e822f7b0ee024080e0c6f44156fc88551f6`, base
+`d0b81f99e27de480bb3604f151f914b07c986d75`, PR #28. Three rounds, each a
+changed head:
+
+- `request:harden-session-expiry-r1` — run
+  `120876af-9a1d-4edf-918a-ad67215bcf26` (Actions run #414, id 9291),
+  review 244. One medium: `NoStoreMiddleware` matched any path starting
+  `/api`, so `/apiary` and `/api-docs` lost their caching. Accepted;
+  fixed in `bb3fe62` (`is_api_path` requires the `/api` segment, plus a
+  near-prefix test).
+- `request:harden-session-expiry-r2` — run
+  `23aa8d03-a1d4-4e8b-b8aa-5eb19d38b2d3` (Actions run #416, id 9294).
+  Confirmed r1 resolved; one medium: an unhandled exception is built by
+  `ServerErrorMiddleware` outside the middleware stack, so a 500 missed
+  the header. Accepted; fixed in `b2565e8` (the app's 500 handler stamps
+  API paths itself, plus a raising-endpoint test).
+- `request:harden-session-expiry-r3` — run
+  `a7498499-2e0a-46f9-8cd0-ce53bb565004`, head `b2565e8`. Clean: no
+  findings at the failure threshold.
+
+Merged the reviewed head `b2565e8` as `d6563d3`.
+
+## Summary
+
+Sessions now expire on a fixed TTL and every `/api` response is stamped
+`Cache-Control: no-store`. Merged as PR #28 (`b2565e8` → merge `d6563d3`).
+
+`auth.SESSION_TTL_SECONDS` (12h; `ARKHAM_SESSION_TTL_SECONDS` overrides)
+bounds admin, player, moderator, and OIDC identity sessions; expiry is
+checked on the reader and re-checked on the writer beside `revoked_at`
+(`_live_session_guard`, ADR 0013). All five credential cookies carry the
+matching `Max-Age`. `app/cache.py` adds a pure-ASGI `NoStoreMiddleware`
+for the whole `/api` surface, and the 500 handler stamps the header too
+because `ServerErrorMiddleware` builds that response outside the stack.
+
+`bash scripts/check-quality.sh` green: 415 server tests at 95.7% coverage,
+deploy checks, 106 web tests, production build. ADR 0021 records the
+fixed-not-sliding choice; `docs/impl/schema.md`, `docs/impl/api.md`, and
+`docs/progress.md` updated.
