@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T13:16:21Z
+updated_at: 2026-09-23T13:30:30Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -97,3 +97,10 @@ Docs: note the rule (async handlers offload blocking work) in
 `docs/impl/schema.md` or the API doc only if there is a natural home; the
 mechanism is a code concern, so the code comments carry it. Update
 `docs/progress.md`.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T13:30:30Z
+
+PR #33 opened (head 459d9673f21c026d65c19fcd3be667aacae0e854, base main).
+Requested Terva review, request id `async-blocking-r1`.

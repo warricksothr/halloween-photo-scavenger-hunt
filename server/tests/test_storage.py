@@ -1,6 +1,7 @@
 """Disk guardrail unit tests (ticket RFWPVZ)."""
 
 import asyncio
+import threading
 from collections import namedtuple
 
 import pytest
@@ -138,6 +139,30 @@ def test_middleware_bounds_a_chunked_upload_by_the_request_cap(tmp_path, monkeyp
     )
     # Checked against both the photos volume and the spool filesystem.
     assert seen == [777, 777]
+
+
+def test_middleware_checks_disk_off_the_event_loop(tmp_path, monkeypatch):
+    """``has_room`` stats the filesystem, so the ASGI middleware must run
+    it in the threadpool rather than on the loop (RFWQM9)."""
+    names = []
+    monkeypatch.setattr(
+        storage,
+        "has_room",
+        lambda path, extra, minimum: (
+            names.append(threading.current_thread().name) or True
+        ),
+    )
+    middleware = storage.StorageGuardMiddleware(
+        _Downstream(), photos_dir=tmp_path, min_free_bytes=0, max_bytes=100
+    )
+
+    _call_middleware(
+        middleware,
+        _scope(content_length=10),
+        [{"type": "http.request", "body": b"0123456789", "more_body": False}],
+    )
+
+    assert names and all("worker" in name.lower() for name in names), names
 
 
 def test_middleware_rejects_when_only_the_spool_filesystem_is_full(

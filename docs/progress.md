@@ -51,11 +51,14 @@ when the increment runs and its tests pass.
   `POST /api/evidence` was `async def` and did its reader checks, the
   disk guard, the writer transaction, and the two file writes on the
   loop; `GET /api/events/stream` resolved both session cookies (a read
-  plus a throttled `last_seen_at` write) there too. The upload handler
-  now awaits the body and hands the rest to `_store_upload` in the
-  threadpool (the Pillow pipeline no longer needs its own hop); the
-  stream resolves sessions through `_resolve_sessions`. Both regression
-  tests assert the work lands on an `AnyIO worker thread`, not the loop.
+  plus a throttled `last_seen_at` write) there too, and the ASGI
+  `StorageGuardMiddleware` ran its `statvfs` guardrail on the loop for
+  every upload. The upload handler now awaits the body and hands the
+  rest to `_store_upload` in the threadpool (the Pillow pipeline no
+  longer needs its own hop); the stream resolves sessions through
+  `_resolve_sessions`; the middleware's disk query goes through
+  `_any_directory_full`. Regression tests assert the work lands on an
+  `AnyIO worker thread`, not the loop.
 - **2026-09-23 — Uploads refuse below a free-space floor.**
   TKT-01M33RFWPVZG68H8JFWRK6JK70. `app/storage.py` gives uploads a
   free-space guardrail in two layers: `StorageGuardMiddleware` refuses a

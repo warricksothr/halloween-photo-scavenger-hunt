@@ -336,6 +336,6 @@ class TestOffTheEventLoop:
 
         monkeypatch.setattr(storage, "has_room", spy)
         assert _upload(client, make_jpeg()).status_code == 201
-        # The middleware's check runs on the loop; the route's own check
-        # lives in _store_upload, which must be a threadpool hop.
-        assert any("worker" in name.lower() for name in names), names
+        # Both the middleware's pre-body check and the route's own check
+        # stat the filesystem, so neither may run on the event loop.
+        assert names and all("worker" in name.lower() for name in names), names
