@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9D0Z4W4MH4AQZSCKCRX6
 title: "Build admin host actions: strike reversal and history"
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -19,17 +19,10 @@ dependencies:
   - TKT-01M33S9CXHQ7EYZTJ61K1Y4AW0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: t3code/admin-host-actions
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: ba6e2e1055c9362f5c30a0546c6eeb1f78688d69
-  session: null
-  claimed_at: 2026-09-23T18:47:25Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T18:54:49Z
+updated_at: 2026-09-23T19:04:57Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -111,6 +104,12 @@ Shape:
 - `web/src/screens/AdminHost.test.jsx`: list, confirm-gate, reflect the
   reversal, surface an error.
 - `web/src/screens/Admin.test.jsx`: the Host actions tab mounts the panel.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T19:04:55Z
+
+Terva review admin-host-actions-r2 clean on head f9848155e80b15f4927cb046962d0d693cf3f042; PR #40 merged as 20600ed0db0f1c5a6800f8de8f312af8458e4f7c. Round r1 found two medium/low issues (stale panel state on an expired admin session; a busy-guard test that never attempted a second reversal) — both fixed in f984815, with the expired-session tests proven to fail on the pre-fix code.
 
 ## Summary
 
