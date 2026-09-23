@@ -41,7 +41,7 @@ when the increment runs and its tests pass.
 
 - [x] Request-ID structured logging and path redaction (ADR 0016)
 - [x] Error and trace reporting to self-hosted GlitchTip (ADR 0018)
-- [x] Readiness/metrics surface (ADR 0021)
+- [x] Readiness/metrics surface (ADR 0023)
 - [ ] `?debug=1` diagnostics overlay
 
 ## Notes / blockers
