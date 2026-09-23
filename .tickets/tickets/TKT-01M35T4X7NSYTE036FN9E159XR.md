@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:23:51Z
+updated_at: 2026-09-23T01:26:27Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -165,3 +165,9 @@ Third Terva review (213, head de6cc5b, run 90a6c3c8-7112-4eee-adbb-99c9d84948f4,
 - medium SDK-import latch: initErrorReporting now imports the chunk in a try/catch, sets started only after the SDK is in hand, and swallows the failure so a later call retries and no rejection escapes; main.jsx wraps the chain as initErrorReporting().then(refresh, refresh) so a reporter-boot failure cannot block boot or surface as an unhandled rejection. Test: a first import that throws, then a second that succeeds, reporting goes live.
 - medium request-id race: the response X-Request-ID is now carried on each failure result (requestId) and reportFailure passes it explicitly to reportError (new third arg); the module-global remains only for the SDK's own auto-capture, which cannot receive a per-call id. Tests: api.test.js asserts the result carries null on network/headerless failures and the explicit id on error results; store.test.js asserts the failing result's own id reaches reportError, not the global.
 Quality gate re-run: exit 0 — 331 server tests @ 95.00%, 20 deploy checks, 63 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:26:27Z
+
+Fourth Terva review (216, head 9bb18eb, run 45db22db-0d74-4780-8aba-ae385604c885, Actions run #334/id 9064, request review-fixes-3): both findings from 213 resolved; one new high finding, accepted and fixed:
+- high top-level message leak: scrub_event now scrubs string-valued event['message'] (server) and cleaned.message (browser); tests on both surfaces place a credential in a top-level message and assert redaction.
+Quality gate re-run: exit 0 — 332 server tests @ 95.00%, 20 deploy checks, 64 frontend tests, build.
