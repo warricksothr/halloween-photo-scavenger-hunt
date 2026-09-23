@@ -208,4 +208,22 @@ export const api = {
       method: 'POST',
       body: { confirm },
     }),
+  // ── Admin riddle management (S9CZ) ──
+  // Same 401 contract as the event calls: a riddle workspace is only ever
+  // reached from a live console session.
+  adminRiddles: (eventId) => request(`/api/admin/events/${eventId}/riddles`),
+  adminCreateRiddle: (eventId, riddle) =>
+    request(`/api/admin/events/${eventId}/riddles`, {
+      method: 'POST',
+      body: riddle,
+    }),
+  adminPatchRiddle: (eventId, riddleId, patch) =>
+    request(`/api/admin/events/${eventId}/riddles/${riddleId}`, {
+      method: 'PATCH',
+      body: patch,
+    }),
+  adminDeleteRiddle: (eventId, riddleId) =>
+    request(`/api/admin/events/${eventId}/riddles/${riddleId}`, {
+      method: 'DELETE',
+    }),
 };

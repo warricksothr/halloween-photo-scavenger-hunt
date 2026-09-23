@@ -196,6 +196,60 @@ body:has(.admin-shell) {
   opacity: 0.45;
 }
 
+.admin-field-inline {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.admin-field-inline label {
+  margin: 0;
+}
+
+.admin-field-inline .admin-input {
+  width: auto;
+}
+
+/* Riddle rows: the green left border is the Riddler's channel in the
+   theme's language (THEME-NOTES), so a list of them reads as content. */
+.admin-riddle {
+  align-items: flex-start;
+  border-left: 3px solid var(--admin-accent);
+  border-top: 1px solid var(--admin-border);
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 10px 12px;
+}
+
+.admin-riddle-body {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-riddle textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.admin-order {
+  color: var(--admin-dim);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.admin-add-riddle {
+  border-top: 1px solid var(--admin-border);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.admin-actions .admin-btn[aria-label^='Move'] {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
 .admin-panel + .admin-panel {
   margin-top: 12px;
 }

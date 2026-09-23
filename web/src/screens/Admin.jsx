@@ -15,6 +15,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
 import { AdminEvents } from './AdminEvents';
+import { AdminRiddles } from './AdminRiddles';
 import '../admin.css';
 
 const NAV = [
@@ -85,15 +86,7 @@ export function AdminScreen() {
         ))}
       </nav>
       {tab === 'events' && <AdminEvents initialEvents={events} />}
-      {tab === 'riddles' && (
-        <div class="admin-panel">
-          <p>Riddle management arrives with the riddle editor.</p>
-          <p class="admin-note">
-            Until then, riddles are added through the API
-            (<code>POST /api/admin/events/&#123;id&#125;/riddles</code>).
-          </p>
-        </div>
-      )}
+      {tab === 'riddles' && <AdminRiddles />}
       {tab === 'host' && (
         <div class="admin-panel">
           <p>Host actions — strike reversal and player history — arrive next.</p>

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   api: {
     adminEvents: vi.fn(),
+    adminRiddles: vi.fn(),
     adminLogin: vi.fn(),
     adminLogout: vi.fn(),
   },
@@ -45,6 +46,22 @@ describe('admin console shell', () => {
       expect(screen.getByRole('button', { name: label })).toBeTruthy();
     }
     expect(screen.queryByLabelText('Password')).toBeNull();
+  });
+
+  it('opens the riddle editor on the Riddles tab', async () => {
+    mocks.api.adminEvents.mockResolvedValue([
+      { id: 'event-1', name: 'Gotham Halloween', status: 'open' },
+    ]);
+    mocks.api.adminRiddles.mockResolvedValue([
+      { id: 'r1', text: 'I guard the door.', sort_order: 0 },
+    ]);
+
+    render(<AdminScreen />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Riddles' }));
+
+    expect(await screen.findByText('I guard the door.')).toBeTruthy();
+    expect(mocks.api.adminRiddles).toHaveBeenCalledWith('event-1');
   });
 
   it('shows a failed password login instead of hanging', async () => {
