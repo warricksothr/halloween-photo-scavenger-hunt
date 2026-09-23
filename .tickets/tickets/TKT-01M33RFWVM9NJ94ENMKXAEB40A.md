@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-22T05:12:50Z
-updated_at: 2026-09-23T15:25:43Z
+updated_at: 2026-09-23T15:43:36Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -75,12 +75,47 @@ Plan:
   admin sheet, and stop `.field input:focus` from cancelling the outline for
   keyboard focus (keep the border colour as the pointer-focus cue).
 - AC3 — 200% zoom. The type scale is already rem-based and the viewport meta
-  already permits scaling, so the work is a regression guard: a test asserting
-  `index.html` keeps user scaling enabled and the sheets declare no fixed px
-  font-size on the root. No layout rewrite.
+  already permits scaling. A unit test (`web/src/zoom.test.js`) guards that
+  configuration, and a real browser-level test (`web/e2e/resize-text.spec.js`)
+  drives the built app at 200% text zoom, asserting no horizontal overflow and
+  that a tile is still keyboard-operable. No layout rewrite.
 
 Tests go in `web/src/screens/screens.test.jsx`: riddle tiles are buttons with a
 state-bearing name and fire `onOpenRiddle`; evidence tiles toggle `aria-pressed`
 and enable submit; the strike overlay exposes an alertdialog named by its
 heading, focuses the button on mount, keeps Tab on it, and restores focus on
 unmount.
+
+The e2e spec cannot run through `npm run test:e2e` today: `game-loop.spec.js`
+and `readme-screenshots.spec.js` POST without a CSRF token and fail at login
+(the middleware post-dates them). That breakage is tracked as
+TKT-01M37EYF3P32XRSYZN8SV9YB5W; the new spec arms CSRF itself and passes when
+run directly.
+
+## Notes
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:31:05Z
+
+Review request r1: PR #35
+(https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/35),
+head 75f0ef2b739da36a1378252e74e55d9a31d42586, base 50f7bfe3db5482ac5907fba39fac648ce83c921d,
+request-id riddle-a11y-r1, dispatched to terva-review.yml on main.
+
+**agent:opencode/t3code-0691bbb1** at 2026-09-23T15:43:36Z
+
+r1 finding (medium, `web/src/zoom.test.js:13`): the resize-text unit test did
+not exercise the 200% zoom it claimed to guard. Resolved by adding a real
+browser-level test, `web/e2e/resize-text.spec.js`, which drives the built app
+with the root font-size doubled (rem-based text zoom), asserts no horizontal
+overflow on the board and the detail screen, and activates a riddle tile by
+keyboard. The unit test is narrowed to a configuration guard and no longer
+claims the behavioural check.
+
+Verified passing:
+`PLAYWRIGHT_BROWSERS_PATH=/home/sothr/.cache/ms-playwright npx playwright test
+e2e/resize-text.spec.js --config=playwright.config.js` -> 1 passed.
+
+While running it I found the pre-existing e2e specs (`game-loop`,
+`readme-screenshots`) fail at admin login with 403 `csrf_failed`: they POST
+without a CSRF token, and the middleware post-dates them (`d486dd8`). Filed
+TKT-01M37EYF3P32XRSYZN8SV9YB5W; the new spec arms CSRF itself.
