@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:26:27Z
+updated_at: 2026-09-23T01:30:10Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -171,3 +171,9 @@ Quality gate re-run: exit 0 — 331 server tests @ 95.00%, 20 deploy checks, 63 
 Fourth Terva review (216, head 9bb18eb, run 45db22db-0d74-4780-8aba-ae385604c885, Actions run #334/id 9064, request review-fixes-3): both findings from 213 resolved; one new high finding, accepted and fixed:
 - high top-level message leak: scrub_event now scrubs string-valued event['message'] (server) and cleaned.message (browser); tests on both surfaces place a credential in a top-level message and assert redaction.
 Quality gate re-run: exit 0 — 332 server tests @ 95.00%, 20 deploy checks, 64 frontend tests, build.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:30:10Z
+
+Fifth Terva review (218, head d9072d3, run 40306654-c7c3-49c1-88e4-d455311d3b87, Actions run #336/id 9076, request review-fixes-4): the top-level message finding resolved; one new high finding, accepted and fixed:
+- high free-text redaction missed quoted/prefixed/multiline paths: scrub_text (server) and scrubText (browser) no longer split on whitespace and test each token's start. Both scan arbitrary text for a URL/path run (new _URL_IN_TEXT / URL_IN_TEXT regex), redact it in place, and peel back trailing sentence punctuation before restoring it. So 'request to `/api/join/SECRET` failed', url=/api/join/SECRET, and GET\n/api/join/SECRET\nfailed all redact the bearer and keep their surrounding text intact. Tests added on both surfaces for quoted, key-prefixed, and newline-separated paths.
+Quality gate re-run: exit 0 — 333 server tests @ 95.00%, 20 deploy checks, 65 frontend tests, build.
