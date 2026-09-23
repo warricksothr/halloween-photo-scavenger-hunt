@@ -46,7 +46,12 @@ export function AdminRiddles() {
       const result = await api.adminRiddles(eventId);
       if (!live || result?.unauthenticated) return;
       if (result?.error) setError(result.message);
-      else setRiddles(result);
+      else {
+        // A successful load clears the previous event's failure, or the old
+        // message would sit above the new event's valid rows.
+        setError(null);
+        setRiddles(result);
+      }
     })();
     return () => {
       live = false;
@@ -58,7 +63,9 @@ export function AdminRiddles() {
   async function fetchRiddles(targetId) {
     const result = await api.adminRiddles(targetId);
     if (result?.unauthenticated) return result;
-    if (!result?.error) setRiddles(result);
+    if (result?.error) return result;
+    setError(null);
+    setRiddles(result);
     return result;
   }
 
@@ -179,6 +186,7 @@ export function AdminRiddles() {
                 setRiddles([]);
                 setEditing(null);
                 setConfirming(null);
+                setError(null);
                 setEventId(e.target.value);
               }}
             >

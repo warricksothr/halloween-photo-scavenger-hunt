@@ -202,6 +202,33 @@ describe('admin riddle management', () => {
     ).toBeNull();
   });
 
+  it('clears a failed load when another event loads', async () => {
+    mocks.api.adminEvents.mockResolvedValue([
+      event,
+      { id: 'ev-2', name: 'Second Night', status: 'lobby' },
+    ]);
+    mocks.api.adminRiddles.mockImplementation((id) =>
+      id === 'ev-1'
+        ? Promise.resolve({
+            error: 'internal_error',
+            message: 'Could not load riddles.',
+            status: 500,
+          })
+        : Promise.resolve([riddle('r9', 'Second event riddle.', 0)]),
+    );
+
+    render(<AdminRiddles />);
+
+    expect(await screen.findByText('Could not load riddles.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Event'), {
+      target: { value: 'ev-2' },
+    });
+
+    expect(await screen.findByText('Second event riddle.')).toBeTruthy();
+    expect(screen.queryByText('Could not load riddles.')).toBeNull();
+  });
+
   it('points at the Events tab when there is no event yet', async () => {
     mocks.api.adminEvents.mockResolvedValue([]);
 
