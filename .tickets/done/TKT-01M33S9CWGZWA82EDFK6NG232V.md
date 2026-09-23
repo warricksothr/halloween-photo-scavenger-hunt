@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M33S9CWGZWA82EDFK6NG232V
 title: Gate the moderator link behind OIDC and record identity
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -20,17 +20,10 @@ dependencies:
   - TKT-01M33S9CTBFJTSEKX6QDA6N7P0
 blocks_on: none
 references: []
-claim:
-  actor: agent:opencode/t3code-0691bbb1
-  branch: null
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-0691bbb1
-  commit: 455f7639eab4a2a64ce2216150e7f7112e4c0536
-  session: null
-  claimed_at: 2026-09-23T05:00:18Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-22T05:26:46Z
-updated_at: 2026-09-23T05:26:04Z
+updated_at: 2026-09-23T05:28:19Z
 created_by:
   id: agent:opencode/review-system-design
   name: ""
@@ -258,3 +251,29 @@ redirected with no marker and the form could retry sign-in.
   `/mod?x=1&sso=not_moderator`.
 
 `bash scripts/check-quality.sh` passes: 402 server tests, 95.59% coverage.
+
+## Summary
+
+The mod link now selects the event; OIDC supplies the identity.
+
+Landed in `main` as `9d520528e7406951df25d17913e9f8b64e68abe9`, PR
+[#26](https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/26)
+merged from `t3code/mod-link-oidc` (base 455f763).
+
+`POST /api/mod/join/{mod_code}` runs `require_oidc_moderator` before the rate
+limit, records a `subject` on the moderator row (migration 0002, partial unique
+index on `(event_id, subject)`), derives the label from the identity, and writes
+a `moderator.joined` audit row naming that subject. A refusal on a moderator
+surface redirects back with `?sso=not_authorized` or `?sso=not_moderator` so the
+screen explains it instead of the browser landing on a JSON 401. The frontend
+reads the marker, redirects an anonymous visitor to OIDC, and routes `/m`,
+`/mod`, and their children in the join phase.
+
+Verification: `bash scripts/check-quality.sh` — 402 server tests at 95.59%
+coverage (90% floor), 20 deploy checks, 106 web tests, production build.
+
+Terva review: rounds r2–r5 on the PR head. Four medium findings, all in the
+redirect helper's URL handling, each fixed with a test:
+fragment vs. query, a stale `sso` shadowing the callback, and a bare `/mod`
+with a query not counting as a moderator surface. r5 returned no findings at
+the failure threshold on c2cded6, which is the merged head.
