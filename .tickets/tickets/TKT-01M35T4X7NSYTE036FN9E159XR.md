@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T00:20:16Z
-updated_at: 2026-09-23T01:15:29Z
+updated_at: 2026-09-23T01:18:31Z
 created_by:
   id: agent:opencode/glitchtip-integration
   name: ""
@@ -147,3 +147,14 @@ Addressed both reviews on head f8e946c. All five findings accepted:
 - reportError orphan (medium): web/src/store.js adds reportFailure() and calls it at all four caught-error paths (refresh snapshot, refresh modState, join, modJoin), reporting only 5xx/network (never a 4xx the player can act on). store.test.js asserts report on 500/503 and no report on 400.
 
 Quality gate: bash scripts/check-quality.sh exit 0 — 330 server tests @ 95.05%, 20 deploy checks, 57 frontend tests, production build. Bundle re-verified: no DSN → no Sentry chunk (56.09 kB entry); DSN → separate 447.71 kB lazy chunk, entry free of sentry references.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:15:41Z
+
+Re-requested Terva review after the fixes: request review-fixes-1, PR 20 head f047122 (base f8e946c parent; PR base still 4a28e2f on main). Dispatch HTTP 204. Polling for the Actions run and the posted review.
+
+**agent:opencode/glitchtip-integration** at 2026-09-23T01:18:31Z
+
+Second Terva review (211, head f047122, run c30e3edc-96d6-435d-abd6-0cc5ee5147b4, Actions run #323/id 9048, request review-fixes-1): both prior findings resolved. Two new findings, both accepted:
+- high exception-message leak: scrub_event now scrubs exception.values[*].value/type/module and logentry.message via scrub_text on server, and the browser mirror; tests place a credential in an exception message and a logentry on both surfaces.
+- medium stale request id: errors.js adds beginRequest() (clears id) and recordRequestId now clears on falsy; api.js calls beginRequest() before every fetch, so a request that never got headers reports with no id. HTTP failures still carry the response id (recorded before returning the error result). api.test.js asserts the stale id is cleared on a rejected fetch and on a header-less response.
+Quality gate re-run: exit 0 — 331 server tests @ 95.00%, 20 deploy checks, 60 frontend tests, build.
