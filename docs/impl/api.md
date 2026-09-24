@@ -291,7 +291,11 @@ GET    /api/admin/events/{id}/players   the host's reversal view: every
                                         player with their derived
                                         restriction and full strike history
                                         (reversed strikes included), so a
-                                        mis-tap can be found. Read-only.
+                                        mis-tap can be found. Each player
+                                        also carries `joined_at` and its
+                                        latest `device_label`, which the
+                                        console shows when two players share
+                                        a codename. Read-only.
 ```
 
 ### Leaderboard & recap (increment 9)

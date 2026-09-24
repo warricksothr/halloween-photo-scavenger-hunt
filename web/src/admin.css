@@ -424,6 +424,106 @@ body:has(.admin-shell) {
   margin-top: 8px;
 }
 
+/* Phone width (TKT-01M3AFZWB4RERA95SKVN0QVA6F). The console is laid out for
+   a laptop; on a phone every row that put content and controls side by side
+   squeezed the content, and the event picker's natural width pushed the
+   page sideways. Here each row stacks: content first, its controls on the
+   line below. The laptop layout above is untouched. */
+@media (max-width: 600px) {
+  .admin-header {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 14px 16px;
+  }
+
+  .admin-header h1 {
+    font-size: 1rem;
+  }
+
+  .admin-header .admin-btn {
+    white-space: nowrap;
+  }
+
+  .admin-main {
+    padding: 16px 12px;
+  }
+
+  .admin-panel {
+    padding: 14px 12px;
+  }
+
+  /* The heading keeps its row with a short control (Events + New event);
+     a picker drops to its own full-width line. */
+  .admin-panel-head {
+    flex-wrap: wrap;
+  }
+
+  .admin-field-inline {
+    align-items: stretch;
+    flex: 1 1 100%;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .admin-field-inline .admin-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Event rows: the name gets the full width, status and date sit under
+     it, and the actions take the next line. */
+  .admin-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .admin-event .admin-event-name {
+    flex-basis: 100%;
+  }
+
+  .admin-event .admin-row > .admin-actions,
+  .admin-riddle > .admin-actions,
+  .admin-strike > .admin-actions {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* Riddle and strike rows: number and text on one line, actions under
+     the text (indented past the number). */
+  .admin-riddle,
+  .admin-strike {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .admin-riddle > .admin-actions,
+  .admin-strike > .admin-actions {
+    padding-left: 32px;
+  }
+
+  .admin-riddle-body,
+  .admin-strike-body {
+    flex-basis: calc(100% - 44px);
+  }
+
+  .admin-reason {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .admin-add-riddle .admin-actions {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .admin-add-riddle .admin-btn {
+    white-space: nowrap;
+  }
+}
+
 /* The join QR print sheet: rendered on <body> through a portal, invisible
    on screen, and the only thing on the page when printed. */
 .admin-print-sheet {

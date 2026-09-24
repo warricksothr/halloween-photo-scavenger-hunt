@@ -47,6 +47,12 @@ creates its event through the admin API and uploads a synthetic in-memory PNG.
 Playwright keeps traces, screenshots, and videos for failures under
 `web/.playwright-results/`; that directory is ignored and must not be committed.
 
+`e2e/admin-phone.spec.js` is the admin console's layout check. At 390px it
+asserts that no tab scrolls sideways with a long event name, and that event
+and riddle controls sit under their content. At 1280px it asserts that they
+stay beside it. jsdom has no layout, so this is the only test that can catch
+a regression in `admin.css`'s phone-width block.
+
 Pass Playwright options after `--`, for example:
 
 ```sh

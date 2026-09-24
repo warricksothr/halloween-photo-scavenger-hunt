@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../api', () => ({ api: mocks.api }));
 
-import { AdminHost } from './AdminHost';
+import { AdminHost, playerLabels } from './AdminHost';
 
 const event = { id: 'ev-1', name: 'Gotham Halloween', status: 'open' };
 
@@ -227,5 +227,51 @@ describe('admin host actions', () => {
       ),
     ).toBeTruthy();
     expect(mocks.api.adminPlayers).not.toHaveBeenCalled();
+  });
+});
+
+// TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS: two guests can share a codename.
+describe('telling apart players who share a codename', () => {
+  const at = (h) => Date.UTC(2026, 8, 24, h, 29) / 1000;
+  const joinedLabel = (h) =>
+    new Date(at(h) * 1000).toLocaleString(undefined, {
+      month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+
+  it('leaves a unique codename bare', () => {
+    const labels = playerLabels([player({ id: 'a', display_name: 'Batman' })]);
+    expect(labels.get('a')).toBe('Batman');
+  });
+
+  it('adds when each joined and its device when a codename repeats', () => {
+    const labels = playerLabels([
+      player({ id: 'a', display_name: 'Robin', joined_at: at(4), device_label: "Drew's phone" }),
+      player({ id: 'b', display_name: 'Robin', joined_at: at(6), device_label: '' }),
+      player({ id: 'c', display_name: 'Toad', joined_at: at(5) }),
+    ]);
+    expect(labels.get('a')).toBe(`Robin · joined ${joinedLabel(4)} · Drew's phone`);
+    expect(labels.get('b')).toBe(`Robin · joined ${joinedLabel(6)}`);
+    expect(labels.get('c')).toBe('Toad');
+  });
+
+  it('numbers entries that would still read the same', () => {
+    const twin = { display_name: 'Robin', joined_at: at(4), device_label: 'phone' };
+    const labels = playerLabels([player({ id: 'a', ...twin }), player({ id: 'b', ...twin })]);
+    expect(labels.get('a')).toMatch(/ · #1$/);
+    expect(labels.get('b')).toMatch(/ · #2$/);
+  });
+
+  it('shows the labels in the player picker', async () => {
+    mocks.api.adminEvents.mockResolvedValue([event]);
+    mocks.api.adminPlayers.mockResolvedValue([
+      player({ id: 'a', display_name: 'Robin', joined_at: at(4), device_label: "Drew's phone", strikes: [] }),
+      player({ id: 'b', display_name: 'Robin', joined_at: at(6), device_label: 'Sam', strikes: [] }),
+    ]);
+    render(<AdminHost />);
+
+    expect(
+      await screen.findByRole('option', { name: `Robin · joined ${joinedLabel(4)} · Drew's phone` }),
+    ).toBeTruthy();
+    expect(screen.getByRole('option', { name: `Robin · joined ${joinedLabel(6)} · Sam` })).toBeTruthy();
   });
 });

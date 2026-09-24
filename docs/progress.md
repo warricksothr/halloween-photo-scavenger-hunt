@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The admin console works on a phone, and duplicate
+  codenames can be told apart.** TKT-01M3AFZWB4RERA95SKVN0QVA6F: under
+  600px the console no longer scrolls sideways. Panel pickers go full
+  width, and event, riddle and strike rows put their controls under the
+  content. TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS: the host's player picker labels
+  a repeated codename with when each player joined and its device.
+
 - **2026-09-24 — The moderator console has a Leave button.**
   TKT-01M3ADTENR10C2XR14P8Z8MNJW. On a phone, a host who joined as a
   moderator had no way back to the game. Leave console signs this browser
