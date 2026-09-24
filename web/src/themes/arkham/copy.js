@@ -61,6 +61,10 @@ export default {
       codePlaceholder: 'from the QR at the door',
       devicePlaceholder: "Sam's phone",
       submit: 'Join the Hunt',
+      // Rejoin (ADR 0031): games this device already joined.
+      resumeHeading: 'Open Cases',
+      resumeAs: (name) => `Return as ${name}`,
+      resumeOr: 'Or join another hunt:',
     },
     lobby: {
       headline: 'Stand By',

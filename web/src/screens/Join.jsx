@@ -4,9 +4,13 @@
 // from the projected fallback. The screen renders before any snapshot
 // exists, so its copy comes from the arkham pack by default — a player
 // hasn't joined an event yet, so there is no event theme to honor.
+//
+// Above the form it lists the live games this device already joined
+// (ADR 0031): a session ends after 12 hours, and a fresh join would be a
+// new player with an empty drawer, so rejoining is one tap instead.
 import { useEffect, useState } from 'preact/hooks';
 
-import { join } from '../store';
+import { join, resumableGames, resume } from '../store';
 import { DEFAULT_THEME, loadTheme } from '../theme';
 
 export function JoinScreen() {
@@ -16,11 +20,14 @@ export function JoinScreen() {
   const [typedCode, setTypedCode] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [games, setGames] = useState([]);
+  const [resumeError, setResumeError] = useState(null);
 
   // All hooks must run before any early return (hook order is fixed),
   // so the theme loads in an effect and the loading gate sits below.
   useEffect(() => {
     loadTheme(DEFAULT_THEME).then(setCopy);
+    resumableGames().then(setGames);
   }, []);
 
   // /j/<code> links put the code in the path; everything else types it.
@@ -41,6 +48,20 @@ export function JoinScreen() {
     // Success moves the store to 'ready'; the shell swaps screens.
   }
 
+  async function onResume(game) {
+    setBusy(true);
+    setResumeError(null);
+    const result = await resume(game.event_id);
+    if (result?.error) {
+      // The game closed or refused since the list loaded: say why, and
+      // drop it so the list only offers what can still be rejoined.
+      setResumeError(result.message);
+      setGames((current) => current.filter((g) => g.event_id !== game.event_id));
+      setBusy(false);
+    }
+    // Success moves the store to 'ready'; the shell swaps screens.
+  }
+
   const c = copy.screens.join;
 
   return (
@@ -48,6 +69,36 @@ export function JoinScreen() {
       <main style={{ flex: 1, padding: '32px 16px' }}>
         <h1 class="headline headline-rule" style={{ marginBottom: 8 }}>{c.headline}</h1>
         <p class="dim" style={{ marginBottom: 24 }}>{c.subtext}</p>
+
+        {games.length > 0 && (
+          <section aria-labelledby="resume-heading" style={{ marginBottom: 24 }}>
+            <h2 id="resume-heading" class="headline" style={{ fontSize: '1rem', marginBottom: 8 }}>
+              {c.resumeHeading}
+            </h2>
+            <div class="panel" style={{ padding: '0 16px' }}>
+              {games.map((game) => (
+                <button
+                  key={game.event_id}
+                  type="button"
+                  class="list-row"
+                  disabled={busy}
+                  onClick={() => onResume(game)}
+                >
+                  <span style={{ flex: 1 }}>{game.event_name}</span>
+                  <span class="dim">{c.resumeAs(game.display_name)}</span>
+                </button>
+              ))}
+            </div>
+            <p class="dim" style={{ marginTop: 16 }}>{c.resumeOr}</p>
+          </section>
+        )}
+
+        {resumeError && (
+          <div class="verdict-banner sev-red" style={{ marginBottom: 16 }}>
+            <div class="verdict-chip">!</div>
+            <div><p class="subtext">{resumeError}</p></div>
+          </div>
+        )}
 
         <form onSubmit={onSubmit}>
           {!joinCode && (

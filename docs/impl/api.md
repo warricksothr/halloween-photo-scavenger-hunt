@@ -183,12 +183,28 @@ POST   /api/join/{join_code}            { display_name, device_label? }
                                           player cookie + { event, player }
                                           (429 after repeated bad codes)
 POST   /api/logout                      revoke own session (logs session.revoked)
+                                        and this device's resume token for the event
+GET    /api/resume                      no session needed → { games: [{ event_id,
+                                          event_name, theme, status, display_name }] }
+                                          for this browser's resume cookies; clears
+                                          the cookie of a closed, purged or revoked game
+POST   /api/resume/{event_id}           → 201 player cookie + { event, player }, the
+                                          same player (logs player.resumed) |
+                                          404 not_resumable | 409 event_closed |
+                                          403 banned
 POST   /api/me/notice-ack               acknowledge the strike-1 interstitial
                                         (clears pending_notice in the snapshot)
 ```
 
 The join code never appears again after this call — the cookie is the
 credential from here on.
+
+Join, invite redeem and rejoin also set `arkham_resume_<event_id>`
+(HttpOnly, SameSite=Lax, `Path=/api`, 30-day max-age). When the session
+ends at the TTL, the join screen lists these games and one tap rejoins as
+the same player. A token stops working when the event closes, the player
+is banned, the player logs out on that device, or a moderator removes
+them (ADR 0031).
 
 ### Player state & play (increments 4–6)
 

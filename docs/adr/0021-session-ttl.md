@@ -1,7 +1,7 @@
 # 0021. Sessions expire on a fixed TTL; API responses are never cached
 
 Date: 2026-09-23
-Status: accepted
+Status: accepted; a device's way back into a live game is added by 0031
 
 ## Context
 

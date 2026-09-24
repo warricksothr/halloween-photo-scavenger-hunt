@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids, oidc, ratelimit, sse
+from app import auth, ids, oidc, ratelimit, resume, sse
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import hold_request_lock, locked_transaction, reader
@@ -836,6 +836,9 @@ def remove_member(
             " WHERE player_id = ? AND revoked_at IS NULL",
             (now, player_id),
         )
+        # And the rejoin list: a removal is how a moderator cuts off a
+        # lost phone before the event closes (ADR 0031).
+        resume.revoke_all(writer, player_id, now)
         log_action(
             writer,
             event_id=ctx.event_id,

@@ -39,6 +39,7 @@ from app import (
     oidc,
     players,
     ratelimit,
+    resume,
     sse,
     state,
     storage,
@@ -277,6 +278,7 @@ def create_app(
     app.include_router(events.router)
     app.include_router(oidc.router)
     app.include_router(players.router)
+    app.include_router(resume.router)
     app.include_router(state.router)
     app.include_router(evidence.router)
     app.include_router(submissions.router)

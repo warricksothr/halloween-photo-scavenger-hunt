@@ -46,6 +46,15 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — A returning phone can rejoin its game.**
+  TKT-01M3AB6H937Y7ET5M0HDR23NM4. A session still ends after 12 hours, but
+  each join now also leaves the device a per-event resume cookie that only
+  the server can read. The join screen lists the live games it names, and
+  one tap rejoins as the same player, with the same drawer, solves and
+  team. A closed or purged game drops off, a banned player cannot rejoin,
+  and logout, moderator removal and an invite switch revoke the cookie
+  (ADR 0031, amends 0021; schema version 4).
+
 - **2026-09-24 — Concurrent requests no longer corrupt the reader.**
   TKT-01M396FF6CS39ZYQ9HFTRPCDW7. Threads running the same SQL on the
   shared reader connection were handed the same cached statement, so a

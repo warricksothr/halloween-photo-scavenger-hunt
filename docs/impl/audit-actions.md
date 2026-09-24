@@ -27,6 +27,7 @@ Rules repeated from ADR 0004 so this file stands alone:
 | `riddle.edited`          | admin      | riddle       | `{ old_text, new_text, old_sort, new_sort, old_hints, new_hints }` | 2 |
 | `riddle.deleted`         | admin      | riddle       | `{ text }` (final copy for forensics)           | 2 |
 | `player.joined`          | player     | player       | `{ display_name, device_label }`                | 3 |
+| `player.resumed`         | player     | player       | `{ device_label }` (a rejoin from the list) | ADR 0031 |
 | `session.revoked`        | player/mod | session      | `{ reason: "logout" \| "moderator" }`           | 3, stretch |
 | `evidence.uploaded`      | player     | evidence_item| `{ riddle_tag, bytes, phash }`                  | 5 |
 | `evidence.quarantined`   | moderator  | evidence_item| `{ submission_id }`                             | 8 |

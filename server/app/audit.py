@@ -34,6 +34,8 @@ class Action(StrEnum):
     # Players & sessions (increment 3)
     PLAYER_JOINED = "player.joined"
     SESSION_REVOKED = "session.revoked"
+    # Rejoin (ADR 0031)
+    PLAYER_RESUMED = "player.resumed"
     # Evidence (increments 5, 8)
     EVIDENCE_UPLOADED = "evidence.uploaded"
     EVIDENCE_QUARANTINED = "evidence.quarantined"
