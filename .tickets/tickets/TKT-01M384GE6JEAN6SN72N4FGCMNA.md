@@ -35,7 +35,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:45:45Z
+updated_at: 2026-09-24T00:48:03Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -138,3 +138,7 @@ Terva review r2 on PR #46: request `demo-seeder-r2`, run `f552dc63-0455-43a1-82a
 Terva review r3 on PR #46: request `demo-seeder-r3`, run `363bb8b2-8fc0-4cc8-88e9-6c64c8534c65` (Actions run #582), review id 298. Reviewed head 1f636b8d34d800cb006e6229b7b4290b8f8bf04f against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. CI Quality passed on that head. The review marked r2 finding 1 resolved. It still lists r2 finding 2 (the duplicate-check race) as present, and that finding stays declined as recorded in the r2 note.
 
 - **Medium: a transport failure on the open call does not prove the event stayed in the lobby. Accepted, fixed in 4e9539a.** The recovery message no longer claims a status. It says the codes were never printed, so no player can join the event whatever its status, which is true in every case. A new test lets the real open commit and then raises ReadTimeout. It checks that the event is open and the message does not say "lobby", and it fails with the fix stashed. ADR 0025 and the RUNBOOK are reworded to match.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T00:48:03Z
+
+Terva review r4 on PR #46: request `demo-seeder-r4`, run `7889d59d-61ca-47a6-a752-55166638f7ae` (Actions run #584). It is clean: no findings at the failure threshold. Reviewed head fc02a084c50198225777f82e3076334e5538052c against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. The review marked r3 finding 1 resolved. CI Quality passed on the same head (run #585). The PR is mergeable. It has not been merged yet; merging waits on the user. This note is committed locally only, so the reviewed head stays the PR head.
