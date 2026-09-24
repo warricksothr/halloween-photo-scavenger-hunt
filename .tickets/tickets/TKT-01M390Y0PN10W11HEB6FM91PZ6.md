@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T21:20:20Z
+updated_at: 2026-09-24T21:26:22Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -52,11 +52,11 @@ Pin the header and the tab bar together in one sticky bar at the top of every pl
 
 ## Acceptance criteria
 
-- [ ] The header (event, codename, Switch Case) and the tab bar are pinned together at the top of every in-game player screen and stay on screen while a long screen scrolls; the lobby pins its header.
-- [ ] Nothing overflows horizontally at 390px, and the pinned bar does not cover the first line of any screen.
+- [x] The header (event, codename, Switch Case) and the tab bar are pinned together at the top of every in-game player screen and stay on screen while a long screen scrolls; the lobby pins its header.
+- [x] Nothing overflows horizontally at 390px, and the pinned bar does not cover the first line of any screen.
 - [ ] In the installed app (black-translucent status bar) the bar sits below the status bar, via viewport-fit=cover and the top safe-area inset.
-- [ ] Unit and e2e tests cover the pinned bar; the quality gate and the full e2e suite pass.
-- [ ] An ADR records top versus bottom placement; docs/ui.md and docs/progress.md are updated.
+- [x] Unit and e2e tests cover the pinned bar; the quality gate and the full e2e suite pass.
+- [x] An ADR records top versus bottom placement; docs/ui.md and docs/progress.md are updated.
 - [ ] Drew confirms on an iPhone, in Safari and installed, that tabs and Switch Case are reachable without scrolling.
 
 ## Implementation plan
@@ -67,3 +67,9 @@ Pin the header and the tab bar together in one sticky bar at the top of every pl
 - Check other sticky or fixed elements (strike notice overlay, detail screens) for collisions with the bar.
 - Tests: main.test.jsx for the bar's content; an e2e spec at 390x844 that scrolls a long board and asserts the tabs and Switch Case stay in the viewport, plus no overflow. Run the whole e2e suite, since the readme-screenshot and resize-text specs measure layout.
 - Docs: ADR 0034, ui.md, progress.md.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:26:22Z
+
+Built on t3code/top-controls, PR #57 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/57): head 658fb057854eb5f60c8879a835bd3a4cc363ef5e, base a10abbaa9c61b152d8028a73e41b3bc71ca90970. Terva review requested as pr57-top-controls-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/696. Quality gate passes locally; npm run test:e2e passes 7/7 including the new top-controls spec. AC5: there is no docs/ui.md and no other doc described the tab placement, so ADR 0034 and progress.md are the record. AC3 (the bar clears the installed app's status bar) is implemented with viewport-fit=cover and env(safe-area-inset-top) but can only be seen on a real iPhone, so it stays unticked with AC6 for Drew's check.
