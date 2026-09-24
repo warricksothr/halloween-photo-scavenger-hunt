@@ -38,7 +38,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
   // The latest links request. Each click bumps it, so a slow response for
   // an event the host has since moved off (or closed) is dropped instead
   // of reopening the wrong event's links.
-  const linksRequest = useRef(0);
+  const linksRequestRef = useRef(0);
 
   async function reload() {
     const result = await api.adminEvents();
@@ -99,14 +99,14 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
   }
 
   async function toggleLinks(item) {
-    const request = ++linksRequest.current;
+    const request = ++linksRequestRef.current;
     if (linksFor?.id === item.id) {
       setLinksFor(null);
       return;
     }
     setError(null);
     const result = await api.adminEventCodes(item.id);
-    if (request !== linksRequest.current) return;
+    if (request !== linksRequestRef.current) return;
     if (result?.unauthenticated) {
       // Same contract as reload: a dead session hands the view back.
       await reload();
