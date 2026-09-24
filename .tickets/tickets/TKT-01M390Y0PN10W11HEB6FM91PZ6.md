@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T21:26:22Z
+updated_at: 2026-09-24T21:38:51Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -73,3 +73,12 @@ Pin the header and the tab bar together in one sticky bar at the top of every pl
 **agent:claude-code/t3code-bf267378** at 2026-09-24T21:26:22Z
 
 Built on t3code/top-controls, PR #57 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/57): head 658fb057854eb5f60c8879a835bd3a4cc363ef5e, base a10abbaa9c61b152d8028a73e41b3bc71ca90970. Terva review requested as pr57-top-controls-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/696. Quality gate passes locally; npm run test:e2e passes 7/7 including the new top-controls spec. AC5: there is no docs/ui.md and no other doc described the tab placement, so ADR 0034 and progress.md are the record. AC3 (the bar clears the installed app's status bar) is implemented with viewport-fit=cover and env(safe-area-inset-top) but can only be seen on a real iPhone, so it stays unticked with AC6 for Drew's check.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:38:51Z
+
+Terva reviews on PR #57 (base a10abbaa9c61b152d8028a73e41b3bc71ca90970):
+- pr57-top-controls-1, run 696: discarded as superseded. My bookkeeping commit b79a1c0 moved the PR head during the run. That was a mistake: ticket commits go to main, not the PR branch.
+- pr57-top-controls-2, run 698, head b79a1c0: one medium finding. The e2e spec measured overflow only after leaving the board. Accepted and fixed in 63a107f, which measures on the board and again on Standings.
+- pr57-top-controls-3, run 700, head 63a107f: the medium is resolved. One low finding: the lobby's pinned header was untested. Accepted and fixed in 41222b5 with a lobby unit test.
+- pr57-top-controls-4, run 702 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/702), head 41222b5172c9d5b3de9db2a6d2c75c4a7a4360f7: clean, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/57#issuecomment-12514.
+CI "Quality / Fast quality gate" passes on 41222b5. The local gate passes, and npm run test:e2e passed 7/7 on the feature commit; the top-controls spec was rerun after the fix. Waiting on Drew to authorize the merge; AC3 and AC6 are his iPhone checks.
