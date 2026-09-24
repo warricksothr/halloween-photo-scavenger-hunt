@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M393JKCAXV2J3DY1219MYXFG
 title: Let the host join an event's moderator console
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -23,17 +23,10 @@ references:
     path: null
   - ref: adr:0020
     path: docs/adr/0020-moderator-link-selects-event-oidc-identity.md
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/host-moderates
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: a7804f68b9accfa5f52df25d5eb23fd58387de48
-  session: null
-  claimed_at: 2026-09-24T07:02:46Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T07:02:45Z
-updated_at: 2026-09-24T07:17:15Z
+updated_at: 2026-09-24T07:36:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -61,7 +54,7 @@ Fix it on the host side: the host can join an event's moderator console through 
 - [x] A host signed in with the local break-glass password can do the same, under a fixed host identity.
 - [x] A plain SSO moderator still joins as before; anyone else, and the admin API token, is still refused.
 - [x] An ADR amends ADR 0020, and api.md and progress.md match.
-- [ ] Verified on kobal: the host reaches the demo event's moderator console.
+- [x] Verified on kobal: the host reaches the demo event's moderator console.
 
 ## Implementation plan
 
@@ -120,3 +113,11 @@ PR #48, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 **agent:claude-code/t3code-bf267378** at 2026-09-24T07:17:15Z
 
 AC1 (the SSO host joins as themselves) and AC2 (the password host joins under local:<username>) are ticked on the strength of server tests that go through the real routes, plus the local browser run for AC2. AC5, the live check on kobal, is still open for Drew.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:36:49Z
+
+AC5 verified on kobal on 2026-09-24 from Drew's screenshot of the live demo event's moderator console. The header reads 'The Riddler's Halloween — Demo Event — Moderator'. The queue shows 2 pending submissions (Robin and Toad on riddle #8, with Toad's flagged 'Shared?'), and both rows read 'DREW SHORT IS VIEWING', which is the claim label taken from Drew's Authentik display name. So the Authentik host joined the event's queue under their own identity, as ADR 0027 intends. The screenshot was not stored, because it contains player photos.
+
+## Summary
+
+Shipped in PR #48 (merge 7d94385), live on kobal on 2026-09-24. The host can join any event's moderator console through its mod link. An Authentik admin sign-in now also carries the person's identity, and the host joins under it. A host on the local password joins as local:<admin username>. The admin API token cannot join, and provider subjects in the reserved local: namespace are refused. ADR 0027 amends ADR 0020. Verified on kobal: Drew's Authentik host session moderated the demo event's queue as 'Drew Short'.
