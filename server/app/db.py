@@ -16,7 +16,8 @@ Conventions from docs/impl/schema.md:
   guarded by ``db_lock``, and ``app.state.read_db`` is the reader
   (ADR 0013). WAL isolates connections, not statements, so an unlocked
   read on the writer could observe another request's open transaction.
-  Reads outside a locked write transaction go through ``reader()``.
+  Reads outside a locked write transaction go through ``reader()``, which
+  runs one statement at a time under ``read_lock`` (ADR 0030).
 - The DB path lives outside the repo (``data/`` by default, gitignored)
   so the database never travels with the code. Tests override the path
   with a temp-file database via the app factory. ``:memory:`` is rejected:
@@ -29,8 +30,9 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -98,14 +100,72 @@ def _revalidate_session(request: Request, conn: sqlite3.Connection) -> None:
         guard(conn)
 
 
-def reader(request: Request) -> sqlite3.Connection:
-    """The reader connection for handler SELECTs (ADR 0013).
+class ReadRows:
+    """The rows of one finished SELECT, shaped like the cursor callers use.
+
+    Handlers only ever call ``fetchone``, ``fetchall``, or iterate, so that
+    is all this offers; anything else on the reader is a bug to surface.
+    """
+
+    __slots__ = ("_rows", "_next")
+
+    def __init__(self, rows: list[sqlite3.Row]) -> None:
+        self._rows = rows
+        self._next = 0
+
+    def fetchone(self) -> sqlite3.Row | None:
+        if self._next >= len(self._rows):
+            return None
+        row = self._rows[self._next]
+        self._next += 1
+        return row
+
+    def fetchall(self) -> list[sqlite3.Row]:
+        rest = self._rows[self._next :]
+        self._next = len(self._rows)
+        return rest
+
+    def __iter__(self) -> Iterator[sqlite3.Row]:
+        while (row := self.fetchone()) is not None:
+            yield row
+
+
+class SerializedReader:
+    """The shared reader connection, one statement at a time (ADR 0030).
+
+    Sync handlers run on the threadpool, and sqlite3 hands every thread
+    running the same SQL the same cached prepared statement: one thread's
+    ``execute`` resets the statement another is stepping, which surfaced as
+    ``InterfaceError`` (a 500) or a missing session row (a 401). So each
+    ``execute`` holds ``lock`` until its rows are read in full. Reading them
+    all also means no half-read cursor keeps a statement open and pins the
+    reader to an old snapshot.
+
+    Lock order: this lock is always the innermost. Nothing holding it takes
+    ``db_lock``, so a writer that reads while holding ``db_lock`` cannot
+    deadlock against it.
+    """
+
+    __slots__ = ("_conn", "_lock")
+
+    def __init__(self, conn: sqlite3.Connection, lock: threading.Lock) -> None:
+        self._conn = conn
+        self._lock = lock
+
+    def execute(self, sql: str, params: Sequence[object] | dict = ()) -> ReadRows:
+        with self._lock:
+            return ReadRows(self._conn.execute(sql, params).fetchall())
+
+
+def reader(request: Request) -> SerializedReader:
+    """The reader connection for handler SELECTs (ADR 0013, ADR 0030).
 
     A SELECT here reads the last committed WAL snapshot, never another
     request's open transaction on the writer. Never write through it —
     writes go through ``locked_transaction``, which yields the writer.
     """
-    return request.app.state.read_db
+    state = request.app.state
+    return SerializedReader(state.read_db, state.read_lock)
 
 
 def writer_is_writable(request: Request) -> bool:
@@ -164,9 +224,11 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     # check_same_thread=False: FastAPI runs sync endpoints in a worker
     # threadpool, so a connection created during lifespan (main thread)
-    # would otherwise refuse to run queries there. Both connections are
-    # safe at party scale — WAL serializes the single writer, and the GIL
-    # serializes calls into the sqlite3 module itself.
+    # would otherwise refuse to run queries there. That flag only turns
+    # the guard off; it makes nothing safe. The GIL does not serialize a
+    # statement across calls, so each shared connection needs its own
+    # lock: ``db_lock`` for the writer, ``read_lock`` for the reader
+    # (ADR 0030).
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")

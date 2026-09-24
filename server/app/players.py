@@ -9,7 +9,6 @@ player row and session, in one transaction with its audit row.
 
 from __future__ import annotations
 
-import sqlite3
 import time
 
 from fastapi import APIRouter, Depends, Request
@@ -44,7 +43,7 @@ def join(join_code: str, body: JoinBody, request: Request):
     if reservation is None:
         return ratelimit.retry_response(wait)
 
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE join_code = ?", (join_code,)
     ).fetchone()

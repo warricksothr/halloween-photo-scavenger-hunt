@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
-import sqlite3
 import threading
 import time
 from collections.abc import Iterator
@@ -134,6 +133,9 @@ def create_app(
         read_conn = db_module.connect(db_path)
         app.state.db = conn
         app.state.read_db = read_conn
+        # One statement at a time on the reader: concurrent threads on one
+        # sqlite3 connection corrupt each other's statements (ADR 0030).
+        app.state.read_lock = threading.Lock()
         # Kept for the readiness probe: disk_usage needs the path, and
         # uptime is measured from boot (app/diagnostics.py).
         app.state.db_path = Path(db_path)
@@ -285,7 +287,7 @@ def create_app(
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:
-        conn: sqlite3.Connection = db_module.reader(request)
+        conn = db_module.reader(request)
         version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[
             0
         ]

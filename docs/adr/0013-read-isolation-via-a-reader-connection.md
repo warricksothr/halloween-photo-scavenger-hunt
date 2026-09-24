@@ -1,7 +1,7 @@
 # 0013. Isolate reads on a dedicated reader connection
 
 Date: 2026-09-22
-Status: accepted
+Status: accepted; the "GIL serializes the reader" claim is corrected by 0030
 
 ## Context
 
