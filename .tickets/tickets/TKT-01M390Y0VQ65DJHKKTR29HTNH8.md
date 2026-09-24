@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:49:48Z
+updated_at: 2026-09-24T22:53:28Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -70,3 +70,7 @@ Drew decided 2026-09-24: the iPhone 'Add to Home Screen' hint goes on the join s
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:49:48Z
 
 Scope note: besides the iPhone hint, Chrome's beforeinstallprompt (Android and desktop Chrome) now becomes an Install button in the same panel, because Drew asked how to encourage installing in general and it cost one event listener. AC2 (the icon checked on a real iPhone) is left unticked: the PNG is served and linked, verified by e2e, but only a device shows the home-screen result.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:53:28Z
+
+PR #60 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/60), branch t3code/install-hint from main, head 6a4620faec2dfbda090a3e016e7a3bb7a0b6b008, base db6f6f5. Terva pr60-install-hint-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/721 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/60#issuecomment-12615). Its only finding, rated medium this time, is that the PR carries no .tickets change. Declined, as on every PR here: ticket-store changes are committed directly to main. Because it was rated medium, the terva status reads failure, and there is no code finding behind it. CI Fast quality gate passes on 6a4620f; local gate passes; npm run test:e2e 10/10. Awaiting Drew's merge authorization.
