@@ -15,7 +15,9 @@ parent: null
 origin: null
 dependencies: []
 blocks_on: none
-references: []
+references:
+  - ref: pr:51
+    path: null
 claim:
   actor: agent:claude-code/t3code-bf267378
   branch: t3code/reader-race
@@ -26,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:53:29Z
-updated_at: 2026-09-24T13:21:13Z
+updated_at: 2026-09-24T13:30:25Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -147,3 +149,7 @@ Promoted to ready by Drew ('Let's address that fairly critical race issue'). Bot
 **agent:claude-code/t3code-bf267378** at 2026-09-24T13:21:13Z
 
 Fix implemented: db.reader() returns a SerializedReader (read_lock; execute reads every row with fetchall under the lock). Both regression tests pass after the fix; the full gate passes (532 server tests, 96.15% coverage). The one test that identified the reader by identity (test_upload_after_a_strike_commits_is_rejected) now uses isinstance. The 35 false 'conn: sqlite3.Connection = reader(request)' annotations were dropped; this is a type-hint change only. ADR 0030 written; ADR 0013 status points to it.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T13:30:25Z
+
+PR #51 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/51), base b3cb6a0. Terva r1: reader-race-r1, run 2f64bc13 (Actions #642), review 416 on afe546f. It had two low findings. Accepted: the worker-alive assertion, fixed in aa4fa57. Declined: the .tickets change, which lives in base b3cb6a0. Reply is comment 11838. r2: reader-race-r2, run 730c1213 (Actions #645), clean on head aa4fa57, base b3cb6a0, comment 11839. CI passed. Merged as 58a2909 and deployed to kobal: container healthy, schema_version 3, 300 concurrent /api/health requests all 200, no InterfaceError in the logs. The kobal ledger note is committed. AC6 (the console's first load shows every thumbnail on kobal) waits for Drew's check.
