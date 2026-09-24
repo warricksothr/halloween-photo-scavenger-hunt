@@ -85,6 +85,23 @@ describe('game navigation (ADR 0036)', () => {
     expect(probe.nav).toMatchObject({ tab: 'drawer', returnTo: 'r-1' });
   });
 
+  it('after a reload, Back retraces the same entries the browser would', async () => {
+    const first = mount();
+    act(() => first.probe.go({ tab: 'riddles', riddle: 'r-1' }));
+    act(() => first.probe.go({ tab: 'standings' }));
+    first.view.unmount();
+
+    const { probe } = mount();
+    expect(probe.nav).toMatchObject({ tab: 'standings' });
+    await act(async () => {
+      const popped = new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
+      probe.back();
+      await popped;
+    });
+    // The swipe lands here too: the entry before Standings.
+    expect(probe.nav).toMatchObject({ tab: 'riddles', riddle: 'r-1' });
+  });
+
   it('with nothing pushed, Back goes up a level instead of leaving', () => {
     window.history.replaceState(
       { arkhamNav: { event: 'ev-1', tab: 'drawer', riddle: null, returnTo: 'r-1', depth: 0 } },

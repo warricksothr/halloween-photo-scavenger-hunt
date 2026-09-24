@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/preact';
+import { act, fireEvent, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -162,6 +162,36 @@ describe('app entry', () => {
     fireEvent.click(tabs[2]);
     await waitFor(() => expect(tabs[2].getAttribute('aria-current')).toBe('page'));
     expect(tabs[0].getAttribute('aria-current')).toBeNull();
+  });
+
+  it('starts another game on its board, not on the last game\'s tab (ADR 0036)', async () => {
+    const game = (id) => ({
+      phase: 'ready',
+      role: 'player',
+      snapshot: {
+        event: { id, status: 'open', name: id },
+        me: { display_name: 'Robin', restriction: {} },
+      },
+      copy: {
+        screens: { header: { switchGame: 'SWITCH_SENTINEL' } },
+        tabs: { riddles: 'Riddles', drawer: 'Drawer', team: 'Team', standings: 'Standings' },
+      },
+    });
+    let listener;
+    mocks.subscribe.mockImplementation((fn) => { listener = fn; return () => {}; });
+    mocks.getState.mockReturnValue(game('ev-a'));
+
+    await import('./main.jsx');
+
+    fireEvent.click(await screen.findByText('Team'));
+    await waitFor(() =>
+      expect(screen.getByText('Team').closest('a').getAttribute('aria-current')).toBe('page'));
+    // Preact runs effects after paint; the store subscription is one.
+    await waitFor(() => expect(listener).toBeTypeOf('function'));
+    act(() => listener(game('ev-b')));
+    await waitFor(() =>
+      expect(screen.getByText('Riddles').closest('a').getAttribute('aria-current')).toBe('page'));
+    mocks.subscribe.mockImplementation(() => () => {});
   });
 
   it('pins the lobby header at the top, with no tabs yet', async () => {

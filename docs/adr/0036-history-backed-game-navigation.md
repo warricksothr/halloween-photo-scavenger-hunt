@@ -37,9 +37,15 @@ drawer should return to. It also keeps a depth count and the event id.
 - **The first entry** the game shows is marked with `replaceState`.
   Back from it leaves the game the way the browser normally would, so
   the player is never trapped.
-- **After a reload** there is no pushed entry to go back to, so Back
-  goes up a level: from the drawer to the riddle that opened it, from a
-  riddle to the board. A reload also restores the screen from the entry.
+- **A reload** restores the screen from the current entry. The entries
+  before it survive a reload, so Back still retraces them, in the app
+  and by swipe alike. On the game's **first** entry, which has no game
+  screen before it, the in-app Back goes up a level instead of leaving:
+  from the drawer to the riddle that opened it, from a riddle to the
+  board.
+- **One game at a time.** The shell is keyed by event id, so another
+  game mounts a fresh navigation state rather than inheriting a tab or
+  a drawer return target.
 - **Other entries are ignored.** An entry from another game or from
   before the game (its event id differs, or it has none) restores the
   board. So after Switch Case, stale entries cannot open a riddle that

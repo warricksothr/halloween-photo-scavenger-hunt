@@ -33,9 +33,10 @@ function write(method, nav) {
   window.history[method]({ ...(window.history.state ?? {}), [KEY]: nav }, '');
 }
 
-// Where Back goes when there is no pushed entry to return to, as after a
-// reload: the drawer returns to the riddle that opened it, a riddle to the
-// board.
+// Where Back goes from the game's first entry, which has nothing in the
+// game before it (for instance a reload or a link that restored a riddle
+// or the drawer there): the drawer returns to the riddle that opened it,
+// a riddle to the board.
 function parent(nav) {
   if (nav.tab === 'drawer' && nav.returnTo) {
     return { ...nav, tab: 'riddles', riddle: nav.returnTo, returnTo: null };
@@ -43,6 +44,8 @@ function parent(nav) {
   return home(nav.event);
 }
 
+// GameShell is keyed by event, so a game switch mounts this hook afresh
+// rather than carrying one game's screen into another.
 export function useGameNav(event) {
   const [nav, setNav] = useState(() => current(event) ?? home(event));
   // A photo to select when the riddle it was taken for opens again.

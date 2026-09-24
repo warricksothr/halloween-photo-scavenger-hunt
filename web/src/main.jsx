@@ -148,7 +148,10 @@ function PlayerApp() {
       </div>
     );
   }
-  return <GameShell snapshot={snapshot} copy={copy} />;
+  // Keyed by event: a different game mounts a fresh shell, so no screen,
+  // drawer return target or selection carries over from the last one
+  // (ADR 0036).
+  return <GameShell key={snapshot.event.id} snapshot={snapshot} copy={copy} />;
 }
 // Back to the landing page's Open Cases with this game still listed there
 // (ADR 0033): how a player picks another event without waiting out the
