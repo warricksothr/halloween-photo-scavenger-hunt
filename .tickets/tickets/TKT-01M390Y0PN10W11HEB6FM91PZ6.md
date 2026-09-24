@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T21:38:51Z
+updated_at: 2026-09-24T21:51:01Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -82,3 +82,7 @@ Terva reviews on PR #57 (base a10abbaa9c61b152d8028a73e41b3bc71ca90970):
 - pr57-top-controls-3, run 700, head 63a107f: the medium is resolved. One low finding: the lobby's pinned header was untested. Accepted and fixed in 41222b5 with a lobby unit test.
 - pr57-top-controls-4, run 702 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/702), head 41222b5172c9d5b3de9db2a6d2c75c4a7a4360f7: clean, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/57#issuecomment-12514.
 CI "Quality / Fast quality gate" passes on 41222b5. The local gate passes, and npm run test:e2e passed 7/7 on the feature commit; the top-controls spec was rerun after the fix. Waiting on Drew to authorize the merge; AC3 and AC6 are his iPhone checks.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:51:01Z
+
+Merged by Drew's authorization as PR #57, merge commit 9bd91733ac855b8703e00914f710782530ba20a6 (reviewed head 41222b5 plus a ticket-only commit 005807f; CI green on 005807f). Deployed to kobal 2026-09-24 with ARKHAM_RELEASE=9bd9173: container healthy, /api/health ok at schema 4, the live theme chunk carries the sticky .top-bar rule and index.html has viewport-fit=cover. Recorded on ledger TKT-01M35GMW0WGM82J0VV8V8NGVSP. AC3 and AC6 wait on Drew's iPhone check.
