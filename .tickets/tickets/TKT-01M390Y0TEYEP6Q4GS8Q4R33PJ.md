@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0TEYEP6Q4GS8Q4R33PJ
 title: Stop offering a photo that is pending on another riddle
 type: bug
-status: ready
+status: in-progress
 status_reason: null
 priority: high
 due_on: null
@@ -19,10 +19,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/photo-one-riddle
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 2551a4b49afc29e9523d8538b8cf36a938748c4f
+  session: null
+  claimed_at: 2026-09-24T22:08:10Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:08:03Z
+updated_at: 2026-09-24T22:14:59Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -58,9 +65,13 @@ Decide the rule first, then record it in design.md and an ADR. The decision need
 
 ## Acceptance criteria
 
-- [ ] design.md and an ADR state whether one evidence item may be pending, or verified, on more than one riddle for the same team.
-- [ ] The server enforces that rule and returns a clear 409 for a violating submission.
-- [ ] The riddle page's picker shows an in-use photo as unavailable, with the riddle it is attached to, or hides it, as the rule decides.
+- [x] design.md and an ADR state whether one evidence item may be pending, or verified, on more than one riddle for the same team.
+- [x] The server enforces that rule and returns a clear 409 for a violating submission.
+- [x] The riddle page's picker shows an in-use photo as unavailable, with the riddle it is attached to, or hides it, as the rule decides.
+
+## Implementation plan
+
+Server: in POST /api/submissions, after the strike-3 gate and inside the locked writer transaction, refuse a photo with a pending or verified submission on another riddle (409 evidence_in_use with riddle_id and status). Leave a same-riddle pending double tap to the existing partial unique index. No new unique index: kobal may already hold a reused photo, and the migration would fail. The snapshot's submissions gain evidence_item_id. Client: RiddleDetail derives photo→submission for pending/verified and renders those picker tiles disabled, dimmed, labelled 'Scanning · Riddle n' (pulsing) or 'Solved · Riddle n'; a 409 from a teammate race is explained by riddle number. Docs: design.md rule, api.md 409 and snapshot field, ADR 0035, progress.md. Tests: server rule tests, picker unit tests, e2e/photo-one-riddle.spec.js.
 
 ## Notes
 
