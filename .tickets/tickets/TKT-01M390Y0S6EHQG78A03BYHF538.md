@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0S6EHQG78A03BYHF538
 title: Return from the drawer to the riddle with the new photo selected
 type: task
-status: ready
+status: in-progress
 status_reason: null
 priority: high
 due_on: null
@@ -17,10 +17,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/back-navigation
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 4e2e2d941c2d912f5acb0723a005f05b13e248d6
+  session: null
+  claimed_at: 2026-09-24T22:19:09Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:08:03Z
+updated_at: 2026-09-24T22:27:16Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -47,9 +54,13 @@ Reported by Drew on 2026-09-24 on iPhone Safari. Three related gaps in the loop 
 
 ## Acceptance criteria
 
-- [ ] Opening the drawer from a riddle shows a way back to that riddle.
-- [ ] A photo taken from a riddle is uploaded with that riddle's aim tag, and the player returns to the riddle with it selected, ready to submit.
-- [ ] The riddle page offers a new photo whether or not the drawer already holds photos.
+- [x] Opening the drawer from a riddle shows a way back to that riddle.
+- [x] A photo taken from a riddle is uploaded with that riddle's aim tag, and the player returns to the riddle with it selected, ready to submit.
+- [x] The riddle page offers a new photo whether or not the drawer already holds photos.
+
+## Implementation plan
+
+Rides on TKT-01M390Y0QY's history model (ADR 0036). The riddle's 'take a photo' actions push the drawer with returnTo. DrawerScreen shows '← Back to Riddle n' (history Back) and a line naming the riddle, uploads with api.upload(file, returnTo) so the aim tag is set, and on success calls returnWith(id): Back to the riddle, which remounts with initialSelected set to the new photo. RiddleDetail always shows 'Take a new photo' under the picker. The game-loop and README screenshot specs follow the new flow.
 
 ## Notes
 

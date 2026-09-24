@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0QYSZFA925774TT83PQ
 title: Make browser back and edge swipe navigate inside the app
 type: bug
-status: ready
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -16,10 +16,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/back-navigation
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 4e2e2d941c2d912f5acb0723a005f05b13e248d6
+  session: null
+  claimed_at: 2026-09-24T22:19:09Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:08:03Z
+updated_at: 2026-09-24T22:27:16Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -49,9 +56,13 @@ As a result, the edge swipe and the browser's Back button leave the app, or do n
 
 ## Acceptance criteria
 
-- [ ] Opening a riddle or switching tabs adds a history entry; browser Back and the iOS edge swipe return to the previous screen within the app.
-- [ ] Back from the first in-app screen does not trap the user, and /j/<code> links still join.
-- [ ] An ADR records the navigation approach.
+- [x] Opening a riddle or switching tabs adds a history entry; browser Back and the iOS edge swipe return to the previous screen within the app.
+- [x] Back from the first in-app screen does not trap the user, and /j/<code> links still join.
+- [x] An ADR records the navigation approach.
+
+## Implementation plan
+
+web/src/nav.js useGameNav: the screen (tab, riddle, returnTo, depth, event) lives in history.state under one key; the URL never changes. go() pushes an entry (not for the screen already showing), popstate restores, the in-app Back calls history.back() when the game pushed the entry and otherwise goes up a level (drawer→its riddle→board). The first entry is marked with replaceState so Back from it leaves the game normally. Entries from another game or from before the game restore the board; a vanished riddle is replaced without an entry. GameShell drives tabs, riddle and drawer from it. ADR 0036; tests in nav.test.jsx and e2e/back-navigation.spec.js (real Back/Forward, reload, Back from the first screen).
 
 ## Notes
 
