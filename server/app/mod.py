@@ -200,6 +200,28 @@ def _open_flags(conn: sqlite3.Connection, event_id: str) -> dict[str, dict]:
     return {r["entity_id"]: json.loads(r["details"]) for r in rows}
 
 
+def _with_match(conn: sqlite3.Connection, flag: dict | None) -> dict | None:
+    """A queue flag plus what the console needs to show the match side by
+    side: the matched photo's mod-scoped URL and a label for its team (the
+    team name, or its first member for an unnamed team, as the roster
+    does). The audit row keeps only ids, so this is resolved per read."""
+    if flag is None:
+        return None
+    team = conn.execute(
+        "SELECT t.name,"
+        "       (SELECT display_name FROM player WHERE team_id = t.id"
+        "        ORDER BY created_at, id LIMIT 1) AS first_member"
+        " FROM team t WHERE t.id = ?",
+        (flag.get("other_team_id"),),
+    ).fetchone()
+    label = (team["name"] or team["first_member"]) if team else None
+    return {
+        **flag,
+        "other_photo_url": f"/api/mod/evidence/{flag['other_evidence_id']}/photo",
+        "other_team_label": label,
+    }
+
+
 @router.get("/queue")
 def queue(
     request: Request, ctx: auth.ModeratorContext = Depends(auth.require_moderator)
@@ -246,7 +268,7 @@ def queue(
                 if r["claimed_by"]
                 else None
             ),
-            "flag": flags.get(r["evidence_id"]),
+            "flag": _with_match(conn, flags.get(r["evidence_id"])),
         }
         for r in rows
     ]

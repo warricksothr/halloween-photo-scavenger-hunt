@@ -1,0 +1,371 @@
+/* Moderator console layout (ADR 0029). Layout only: every colour, font
+   and border comes from the active theme pack's variables, so a second
+   pack restyles the console without touching this file. Scoped under
+   .mod-console and .mod-frame so nothing leaks into the player screens.
+
+   Three widths:
+   - under 700px, a phone: one column, queue then review then decision,
+     exactly the order the console always had;
+   - 700–1099px, a tablet: the queue in a rail, the review and decision
+     stacked in one scrolling column beside it;
+   - 1100px and up, a desktop: queue | photo | decision, each column
+     scrolling on its own so the verdict buttons stay in view. */
+
+.mod-console {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 16px;
+  padding: 16px;
+  min-height: 0;
+}
+
+.mod-rail,
+.mod-review-inner,
+.mod-decide,
+.mod-decision,
+.mod-teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mod-title {
+  font-size: 1rem;
+}
+
+.mod-count {
+  margin-left: auto;
+  font-family: var(--font-num);
+}
+
+.mod-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.mod-console .mod-switch .btn[aria-pressed='true'] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+/* ── Queue ───────────────────────────────────────────────────────── */
+
+.mod-queue {
+  padding: 4px 16px;
+}
+
+.mod-queue-row.is-open {
+  box-shadow: inset 3px 0 0 var(--cyan);
+  padding-left: 8px;
+}
+
+.mod-thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.mod-queue-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.mod-queue-who {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.mod-queue-when {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.mod-queue-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  justify-content: flex-end;
+}
+
+.mod-tag {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+}
+
+.mod-tag-alert {
+  color: var(--alert);
+}
+
+.mod-tag-amber {
+  color: var(--amber);
+}
+
+/* ── Review ──────────────────────────────────────────────────────── */
+
+.mod-riddle {
+  border-left: 3px solid var(--green);
+  padding: 10px 14px;
+}
+
+.mod-riddle-label {
+  color: var(--green);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mod-riddle-text {
+  margin-top: 4px;
+}
+
+.mod-photo {
+  margin: 0;
+  min-width: 0;
+}
+
+.mod-photo figcaption {
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+
+.mod-photo.is-alert figcaption {
+  color: var(--alert);
+}
+
+.mod-photo-button {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: zoom-in;
+  display: block;
+  padding: 0;
+  width: 100%;
+}
+
+.mod-photo-button img {
+  border-radius: var(--radius);
+  display: block;
+  width: 100%;
+  object-fit: contain;
+}
+
+.mod-photo-button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.mod-compare {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* ── Decision ────────────────────────────────────────────────────── */
+
+/* The button modifiers below are prefixed with .mod-console on purpose.
+   The theme pack's stylesheet is injected at runtime, after this one, so
+   anything short of three classes ties with the theme's .btn.secondary
+   and loses on order: the canned lines came out uppercase and full
+   width, and the retry buttons cyan. */
+
+.mod-retry-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mod-console .btn.mod-btn-amber {
+  border-color: var(--amber);
+  color: var(--amber);
+  font-size: 0.7rem;
+  padding: 10px 4px;
+}
+
+.mod-console .btn.mod-btn-alert {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+
+.mod-console .btn.mod-btn-small {
+  font-size: 0.7rem;
+  padding: 6px 12px;
+  width: auto;
+}
+
+.mod-console .btn.mod-btn-tiny {
+  font-size: 0.68rem;
+  padding: 4px 10px;
+  width: auto;
+}
+
+.mod-flag-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mod-canned {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-console .btn.mod-canned-line {
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  padding: 6px 12px;
+  text-align: left;
+  text-transform: none;
+  width: auto;
+}
+
+.mod-section {
+  border-top: 1px dashed var(--border-dim);
+  padding-top: 12px;
+}
+
+.mod-subhead {
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.mod-list-panel {
+  padding: 4px 16px;
+}
+
+.mod-small-row {
+  font-size: 0.8rem;
+}
+
+.mod-team-head {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  padding-top: 8px;
+  text-transform: uppercase;
+}
+
+.mod-conduct-note {
+  font-size: 0.75rem;
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* On a phone the empty main area says nothing the queue does not. */
+.mod-placeholder {
+  display: none;
+}
+
+/* ── Full-size photo ─────────────────────────────────────────────── */
+
+.mod-lightbox {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 50;
+}
+
+.mod-lightbox img {
+  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.mod-console .btn.mod-lightbox-close {
+  width: auto;
+}
+
+/* ── Tablet: a queue rail beside one scrolling review column ─────── */
+
+@media (min-width: 700px) {
+  .frame.mod-frame {
+    height: 100vh;
+    height: 100dvh;
+    max-width: none;
+    min-height: 0;
+  }
+
+  .mod-console {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .mod-rail,
+  .mod-detail,
+  .mod-main {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The rail is narrow: tags go on their own line under the name. */
+  .mod-queue-row {
+    flex-wrap: wrap;
+  }
+
+  .mod-queue-tags {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-left: 56px;
+  }
+
+  .mod-placeholder {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+  }
+
+  .mod-photo.is-single .mod-photo-button img {
+    max-height: 60vh;
+  }
+}
+
+/* ── Desktop: queue | photo | decision ───────────────────────────── */
+
+@media (min-width: 1100px) {
+  .mod-console {
+    grid-template-columns: 300px minmax(0, 1fr) 380px;
+  }
+
+  /* The review and decision become grid columns of their own. */
+  .mod-detail {
+    display: contents;
+  }
+
+  .mod-review,
+  .mod-decide {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .mod-main {
+    grid-column: 2 / -1;
+  }
+
+  .mod-photo.is-single .mod-photo-button img {
+    max-height: calc(100vh - 220px);
+    max-height: calc(100dvh - 220px);
+  }
+
+  .mod-compare .mod-photo-button img {
+    max-height: calc(100vh - 260px);
+    max-height: calc(100dvh - 260px);
+  }
+}

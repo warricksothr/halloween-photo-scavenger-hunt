@@ -430,6 +430,17 @@ class TestDuplicateFlagResolution:
         assert flag is not None
         assert flag["distance"] == 0
         assert flag["other_evidence_id"] == p["evidence_id"]
+        # What the console's side-by-side compare needs (ADR 0029): the
+        # matched photo, served to this moderator, and whose it is.
+        assert flag["other_photo_url"] == f"/api/mod/evidence/{p['evidence_id']}/photo"
+        assert flag["other_team_label"] == "Batman"
+        assert mod.get(flag["other_photo_url"]).status_code == 200
+        # An unflagged item carries no match at all.
+        _submit(client, p["riddle_ids"][0], p["evidence_id"])
+        items = {
+            i["player"]["display_name"]: i for i in mod.get("/api/mod/queue").json()
+        }
+        assert items["Batman"]["flag"] is None
 
     def test_resolve_unknown_flag_404_and_bad_resolution_422(self, admin, client):
         p = _party(admin, client)
