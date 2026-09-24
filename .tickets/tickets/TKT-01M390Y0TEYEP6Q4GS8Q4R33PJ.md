@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:14:59Z
+updated_at: 2026-09-24T22:19:08Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -78,3 +78,7 @@ Server: in POST /api/submissions, after the strike-3 gate and inside the locked 
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
 
 Drew decided 2026-09-24: one riddle per photo within a team. A photo pending or accepted (verified) on one riddle cannot be submitted to another; once its submission is rejected or withdrawn it is free again. The server enforces it, so one photo never scores twice. In the riddle's picker an in-use photo stays visible but greyed out and not selectable, labelled with its riddle ('pending on' pulsing, or 'solved'). Promoted to ready as batch 1 of the next work.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:19:08Z
+
+PR #58 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/58), branch t3code/photo-one-riddle, head 4e2e2d941c2d912f5acb0723a005f05b13e248d6, base 0067bc4. Terva pr58-photo-one-riddle-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/712: clean (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/58#issuecomment-12565). Its one low finding, no .tickets change in the PR, is declined: this repository commits ticket-store changes directly to main. CI Fast quality gate passes on 4e2e2d9; local gate passes; npm run test:e2e 8/8. Awaiting Drew's merge authorization.
