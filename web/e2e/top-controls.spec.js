@@ -37,6 +37,12 @@ async function inView(page, locator) {
   return box !== null && box.y >= 0 && box.y + box.height <= height;
 }
 
+async function horizontalOverflow(page) {
+  return page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+}
+
 test('the header and tabs stay pinned at the top of a long board', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/j/${event.join_code}`);
@@ -65,13 +71,11 @@ test('the header and tabs stay pinned at the top of a long board', async ({ page
   expect(await inView(page, switchCase)).toBe(true);
   expect(await inView(page, standings)).toBe(true);
   expect((await bar.boundingBox()).y).toBe(0);
+  // Measured on the board itself, the screen this spec fills past the fold.
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 
   // A tab works from there without scrolling back.
   await standings.click();
   await expect(standings).toHaveAttribute('aria-current', 'page');
-
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
