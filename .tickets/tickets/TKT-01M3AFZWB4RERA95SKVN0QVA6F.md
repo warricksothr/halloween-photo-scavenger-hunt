@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AFZWB4RERA95SKVN0QVA6F
 title: Make the admin console usable at phone width
 type: task
-status: draft
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -16,10 +16,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/admin-mobile
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 4454e64f95b28d7102dc3c42e3b0f74638db6e4c
+  session: null
+  claimed_at: 2026-09-24T20:01:55Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T19:58:58Z
-updated_at: 2026-09-24T19:58:58Z
+updated_at: 2026-09-24T20:05:31Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -48,3 +55,14 @@ Add a narrow breakpoint (under about 600px) to `admin.css`:
 - let the header wrap.
 
 Keep the laptop layout as it is. Verify at 390px and 1280px in headless Chromium, as the console work did.
+
+## Acceptance criteria
+
+- [ ] At 390px no admin tab scrolls sideways, including with a long event name.
+- [ ] Event, riddle and strike rows show their content at full width with the controls below it, and the header and pickers fit the screen.
+- [ ] The laptop layout is unchanged.
+- [ ] Deployed to kobal, and Drew checks the console on his phone.
+
+## Implementation plan
+
+One @media (max-width: 600px) block in web/src/admin.css; the laptop rules above it are unchanged. It does the following: the header wraps; admin-main and panel padding shrink; panel heads wrap, and inline fields become a full-width column with min-width 0 (the event picker was what pushed the page sideways); rows wrap, with the event name on its own line and the actions on the next; riddle and strike rows keep the number and text on one line and put the actions under the text, indented past the number; the reversal reason and the Add to board row wrap. Verification: headless Chromium on the built app, with a long event name, 12 riddles and two Robins, at 390px and 1280px. Each tab (Events, Riddles, riddle edit, Host actions) is screenshotted, and document scrollWidth minus clientWidth is checked (0 everywhere).
