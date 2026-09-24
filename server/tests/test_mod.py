@@ -241,6 +241,9 @@ class TestQueue:
         assert mod_a.post(f"/api/mod/queue/{sub['id']}/claim").status_code == 200
         item = mod_b.get("/api/mod/queue").json()[0]
         assert item["claimed_by"]["label"] == "Oracle"
+        # When, so the console can tell a live viewer from a stale claim.
+        assert abs(item["claimed_by"]["claimed_at"] - time.time()) < 60
+        assert 0 <= item["claimed_by"]["claim_age"] < 60
 
         # The claim never blocks: mod B can re-claim and, crucially,
         # still verdict (ADR 0002). The latest viewer owns the claim.

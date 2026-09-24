@@ -274,7 +274,11 @@ GET    /api/mod/queue                   → pending subs, oldest first, with
                                           name, else first member's
                                           display name) for the side-by-
                                           side compare (ADR 0029); an
-                                          unflagged item has `flag: null`
+                                          unflagged item has `flag: null`.
+                                          `claimed_by` is null or
+                                          { id, label, claimed_at,
+                                          claim_age } (ADR 0038; the age
+                                          spares the client a clock sync)
 POST   /api/mod/queue/{sub_id}/claim    soft claim (advisory; ADR 0002)
 POST   /api/mod/queue/{sub_id}/verdict  { verdict, flavor_text? }
                                         conditional UPDATE WHERE status =
