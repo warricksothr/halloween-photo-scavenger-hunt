@@ -229,9 +229,16 @@ def test_admin_group_mints_admin_session(oidc_client, stub):
     assert response.status_code == 303
     assert response.headers["location"] == "/admin"
     assert oidc_client.cookies.get(auth.COOKIE_NAME)
-    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
     # The minted cookie is a real admin session, not just a Set-Cookie.
     assert oidc_client.get("/api/admin/events").status_code == 200
+    # The host also carries their identity, so they can moderate as
+    # themselves (ADR 0027).
+    identity = oidc_client.app.state.oidc_identities[
+        oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME)
+    ]
+    assert identity.role == "admin"
+    assert identity.subject == "user-1"
+    assert identity.name == "Ada Lovelace"
 
 
 def test_moderator_group_mints_identity_session(oidc_client, stub):
@@ -283,17 +290,33 @@ def test_mod_link_refusal_returns_to_the_screen(oidc_client, stub):
     assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
 
 
-def test_host_following_a_mod_link_is_told_not_a_moderator(oidc_client, stub):
-    """The host is signed in as host; the mod screen needs to say so rather
-    than loop back into a sign-in they already completed."""
+def test_a_provider_subject_in_the_local_namespace_is_refused(oidc_client, stub):
+    """``local:`` belongs to the password host (ADR 0027). A provider
+    subject there would share that host's moderator row, so the callback
+    refuses it before minting anything."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [MODERATOR_GROUP]
+    stub.claims["sub"] = "local:admin"
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_token"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+
+
+def test_host_following_a_mod_link_returns_to_it_signed_in(oidc_client, stub):
+    """ADR 0027: the host moderates too, so a host who followed a mod link
+    goes straight back to it, holding both the admin session and their
+    identity, and the screen's join attempt then succeeds."""
     _, query = start_login(oidc_client, next_path="/m/MODCODE1")
     stub.nonce = query["nonce"][0]
     stub.claims["groups"] = [ADMIN_GROUP]
     response = callback(oidc_client, query)
     assert response.status_code == 303
-    assert response.headers["location"] == "/m/MODCODE1?sso=not_moderator"
+    assert response.headers["location"] == "/m/MODCODE1"
     assert oidc_client.cookies.get(auth.COOKIE_NAME)
-    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME)
     assert oidc_client.get("/api/admin/events").status_code == 200
 
 
@@ -318,13 +341,13 @@ def test_bare_mod_path_with_a_query_still_counts_as_a_mod_surface(oidc_client, s
     assert response.headers["location"] == "/mod?x=1&sso=not_authorized"
 
 
-def test_bare_mod_path_with_a_query_marks_the_host(oidc_client, stub):
+def test_bare_mod_path_with_a_query_returns_the_host_unmarked(oidc_client, stub):
     _, query = start_login(oidc_client, next_path="/mod?x=1")
     stub.nonce = query["nonce"][0]
     stub.claims["groups"] = [ADMIN_GROUP]
     response = callback(oidc_client, query)
     assert response.status_code == 303
-    assert response.headers["location"] == "/mod?x=1&sso=not_moderator"
+    assert response.headers["location"] == "/mod?x=1"
 
 
 def test_bad_state_is_rejected(oidc_client, stub):
@@ -586,7 +609,7 @@ def test_uncorrelated_callback_leaves_the_transaction_cookie(oidc_client, stub):
 @pytest.mark.parametrize(
     ("requested", "expected"),
     [
-        ("/m/MODCODE1", "/m/MODCODE1?sso=not_moderator"),
+        ("/m/MODCODE1", "/m/MODCODE1"),
         ("/admin/events?tab=1", "/admin/events?tab=1"),
         ("//evil.example/steal", "/admin"),
         ("https://evil.example/steal", "/admin"),
@@ -625,9 +648,9 @@ def test_a_stale_sso_marker_does_not_shadow_the_callback(oidc_client, stub):
     screen explains the refusal instead of retrying sign-in."""
     _, query = start_login(oidc_client, next_path="/m/MODCODE1?sso=stale")
     stub.nonce = query["nonce"][0]
-    stub.claims["groups"] = [ADMIN_GROUP]
+    stub.claims["groups"] = ["some-other-group"]
     response = callback(oidc_client, query)
-    assert response.headers["location"] == "/m/MODCODE1?sso=not_moderator"
+    assert response.headers["location"] == "/m/MODCODE1?sso=not_authorized"
 
 
 def test_fragment_bearing_next_is_dropped_before_it_can_carry_a_marker(
@@ -752,41 +775,64 @@ def test_config_from_env_reads_overrides():
     assert config.redirect_uri == "https://app/api/auth/oidc/callback"
 
 
-def _identity_request():
+def _identity_request(*, headers=None, admin_token=None):
     return SimpleNamespace(
         cookies={},
+        headers=headers or {},
         app=SimpleNamespace(
             state=SimpleNamespace(
-                oidc_identities={}, session_ttl=auth.SESSION_TTL_SECONDS
+                oidc_identities={},
+                session_ttl=auth.SESSION_TTL_SECONDS,
+                admin_sessions={},
+                admin_config=("host-user", "unused-hash"),
+                admin_api_token=admin_token,
             )
         ),
     )
 
 
-def test_require_oidc_moderator_refuses_anonymous():
+def test_require_moderator_identity_refuses_anonymous():
     with pytest.raises(HTTPException) as exc:
-        oidc.require_oidc_moderator(_identity_request())
+        oidc.require_moderator_identity(_identity_request())
     assert exc.value.status_code == 401
 
 
-def test_require_oidc_moderator_refuses_admin_identity():
+@pytest.mark.parametrize("role", ["moderator", "admin"])
+def test_require_moderator_identity_accepts_moderator_and_host(role):
     request = _identity_request()
-    token = oidc.issue_identity(
-        request, subject="s", name="n", email=None, role="admin"
-    )
+    token = oidc.issue_identity(request, subject="s", name="n", email=None, role=role)
+    request.cookies[oidc.OIDC_COOKIE_NAME] = token
+    identity = oidc.require_moderator_identity(request)
+    assert (identity.subject, identity.role) == ("s", role)
+
+
+def test_require_moderator_identity_refuses_an_unknown_role():
+    request = _identity_request()
+    token = oidc.issue_identity(request, subject="s", name="n", email=None, role="x")
     request.cookies[oidc.OIDC_COOKIE_NAME] = token
     with pytest.raises(HTTPException):
-        oidc.require_oidc_moderator(request)
+        oidc.require_moderator_identity(request)
 
 
-def test_require_oidc_moderator_accepts_moderator_identity():
+def test_require_moderator_identity_names_the_password_host():
+    """The break-glass host has an admin cookie and no identity: they join
+    under a fixed subject that no identity provider can issue."""
     request = _identity_request()
-    token = oidc.issue_identity(
-        request, subject="s", name="n", email=None, role="moderator"
+    request.app.state.admin_sessions["host-cookie"] = int(time.time()) + 60
+    request.cookies[auth.COOKIE_NAME] = "host-cookie"
+    identity = oidc.require_moderator_identity(request)
+    assert identity.subject == "local:host-user"
+    assert identity.name == "host-user"
+    assert identity.role == "admin"
+
+
+def test_require_moderator_identity_refuses_the_admin_api_token():
+    request = _identity_request(
+        headers={"Authorization": "Bearer script-token"}, admin_token="script-token"
     )
-    request.cookies[oidc.OIDC_COOKIE_NAME] = token
-    identity = oidc.require_oidc_moderator(request)
-    assert identity.role == "moderator"
+    assert auth.current_admin(request) == auth.API_TOKEN_SENTINEL
+    with pytest.raises(HTTPException):
+        oidc.require_moderator_identity(request)
 
 
 def test_unknown_identity_token_is_refused():

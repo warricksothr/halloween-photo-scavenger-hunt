@@ -1,7 +1,7 @@
 # 0020. The moderator link selects an event; OIDC supplies the identity
 
 Date: 2026-09-23
-Status: accepted
+Status: accepted; the host refusal is superseded by 0027
 
 ## Context
 

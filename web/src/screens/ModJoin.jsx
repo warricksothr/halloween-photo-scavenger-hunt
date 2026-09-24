@@ -1,13 +1,16 @@
 // Moderator join — the mod link's landing surface (increment 7, S9CW).
 //
-// The link selects the event; SSO supplies the identity. So the screen
-// has three jobs: send the browser to sign in when there is no moderator
-// session, explain a refused sign-in, and otherwise open the console for
-// the code. The code arrives in the URL (/m/<code>) or is typed at /mod.
+// The link selects the event; the sign-in supplies the person. So the
+// screen has three jobs: send the browser to sign in when nobody who may
+// moderate is signed in, explain a refused sign-in, and otherwise open the
+// console for the code. The code arrives in the URL (/m/<code>) or is
+// typed at /mod. The host moderates too (ADR 0027): their admin sign-in
+// is enough, so they never see a refusal here.
 import { useEffect, useState } from 'preact/hooks';
 
 import { oidcLoginUrl } from '../api';
 import { modJoin } from '../store';
+import { DEFAULT_THEME, loadTheme } from '../theme';
 
 // The callback bounces a refused mod-link sign-in back here with a
 // marker (api.md). Plain copy at the call site: the console is a work
@@ -16,10 +19,14 @@ const REFUSALS = {
   not_authorized: {
     body: 'That sign-in is not a moderator of this event. Use the account the host added to the moderator group.',
   },
-  not_moderator: {
-    body: 'You are signed in as the host. The moderator console needs a moderator account.',
-  },
 };
+
+// Codes are generated upper-case; the server matches exactly. A link
+// retyped in lower case, or a code pasted with a stray space, still has
+// to reach its event.
+function normalise(code) {
+  return code.trim().toUpperCase();
+}
 
 // Where the SSO round-trip should return, without the refusal marker.
 function signInNext() {
@@ -34,9 +41,13 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
   const [typedCode, setTypedCode] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // No session means no event theme yet, so the default pack styles the
+  // screen, as the player join screen does. Until its stylesheet is in,
+  // render the bare frame rather than flash unstyled markup.
+  const [styled, setStyled] = useState(false);
 
   const pathMatch = window.location.pathname.match(/^\/m\/([A-Za-z0-9]+)/);
-  const modCode = pathMatch ? pathMatch[1] : null;
+  const modCode = pathMatch ? normalise(pathMatch[1]) : null;
   const marker = new URLSearchParams(window.location.search).get('sso');
   const refusal = REFUSALS[marker] ?? null;
 
@@ -58,6 +69,14 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
   }
 
   useEffect(() => {
+    // A failed stylesheet load (a stale chunk after a deploy) still shows
+    // the screen, unstyled: a moderator who cannot sign in is worse than
+    // one who sees plain markup.
+    const show = () => setStyled(true);
+    loadTheme(DEFAULT_THEME).then(show, show);
+  }, []);
+
+  useEffect(() => {
     // A link that carried its code opens straight away for a signed-in
     // moderator. A refusal marker means we just came back from OIDC —
     // do not start another round.
@@ -65,6 +84,8 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
     // Re-run only when the link (or its marker) changes.
     // eslint-disable-next-line
   }, [modCode, marker]);
+
+  if (!styled) return <div class="frame" />;
 
   if (refusal) {
     return (
@@ -84,11 +105,6 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
               Sign in with another account
             </a>
           </p>
-          {marker === 'not_moderator' && (
-            <p>
-              <a href="/admin">Go to the host console</a>
-            </p>
-          )}
         </main>
       </div>
     );
@@ -111,7 +127,7 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              attempt(typedCode);
+              attempt(normalise(typedCode));
             }}
           >
             <div class="field" style={{ marginBottom: 20 }}>
@@ -127,7 +143,7 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
             <button
               class="btn"
               type="submit"
-              disabled={busy || !typedCode.trim()}
+              disabled={busy || !normalise(typedCode)}
             >
               {busy ? 'Opening…' : 'Open the console'}
             </button>

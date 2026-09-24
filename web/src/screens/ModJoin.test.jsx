@@ -7,10 +7,15 @@ const mocks = vi.hoisted(() => ({
   modJoin: vi.fn(),
   oidcLoginUrl: vi.fn((next) => `OIDC:${next}`),
   navigate: vi.fn(),
+  loadTheme: vi.fn(() => Promise.resolve({})),
 }));
 
 vi.mock('../api', () => ({ oidcLoginUrl: mocks.oidcLoginUrl }));
 vi.mock('../store', () => ({ modJoin: mocks.modJoin }));
+vi.mock('../theme', () => ({
+  DEFAULT_THEME: 'arkham',
+  loadTheme: mocks.loadTheme,
+}));
 
 import { ModJoinScreen } from './ModJoin';
 
@@ -46,15 +51,37 @@ describe('moderator join', () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
-  it('tells the host they are on the wrong surface, with a way back', async () => {
-    visit('/m/MODCODE1?sso=not_moderator');
-
+  it('loads the default theme so the screen is styled before any session', async () => {
+    visit('/mod');
     render(<ModJoinScreen navigate={mocks.navigate} />);
+    expect(mocks.loadTheme).toHaveBeenCalledWith('arkham');
+    expect(await screen.findByLabelText('Moderator code')).toBeTruthy();
+  });
 
-    expect(await screen.findByText(/signed in as the host/)).toBeTruthy();
-    const hostLink = screen.getByText('Go to the host console');
-    expect(hostLink.getAttribute('href')).toBe('/admin');
-    expect(mocks.modJoin).not.toHaveBeenCalled();
+  it('treats an old host marker as no refusal and joins, since the host moderates', async () => {
+    visit('/m/MODCODE1?sso=not_moderator');
+    mocks.modJoin.mockResolvedValue({});
+    render(<ModJoinScreen navigate={mocks.navigate} />);
+    await waitFor(() => expect(mocks.modJoin).toHaveBeenCalledWith('MODCODE1'));
+    expect(screen.queryByText(/signed in as the host/)).toBeNull();
+  });
+
+  it('upper-cases a code that arrives in the link', async () => {
+    visit('/m/modcode1');
+    mocks.modJoin.mockResolvedValue({ unauthenticated: true });
+    render(<ModJoinScreen navigate={mocks.navigate} />);
+    await waitFor(() => expect(mocks.modJoin).toHaveBeenCalledWith('MODCODE1'));
+  });
+
+  it('trims a typed code padded with spaces', async () => {
+    visit('/mod');
+    mocks.modJoin.mockResolvedValue({ unauthenticated: true });
+    render(<ModJoinScreen navigate={mocks.navigate} />);
+    fireEvent.input(await screen.findByLabelText('Moderator code'), {
+      target: { value: '  code9 ' },
+    });
+    fireEvent.click(screen.getByText('Open the console'));
+    await waitFor(() => expect(mocks.modJoin).toHaveBeenCalledWith('CODE9'));
   });
 
   it('opens the console from a typed code at /mod, via SSO when needed', async () => {
@@ -63,7 +90,7 @@ describe('moderator join', () => {
 
     render(<ModJoinScreen navigate={mocks.navigate} />);
 
-    const input = screen.getByLabelText('Moderator code');
+    const input = await screen.findByLabelText('Moderator code');
     fireEvent.input(input, { target: { value: 'code9' } });
     fireEvent.click(screen.getByText('Open the console'));
 
@@ -82,5 +109,12 @@ describe('moderator join', () => {
 
     expect(await screen.findByText(/doesn.t match any event/)).toBeTruthy();
     expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('still shows the sign-in when the stylesheet fails to load', async () => {
+    visit('/mod');
+    mocks.loadTheme.mockRejectedValueOnce(new Error('chunk failed'));
+    render(<ModJoinScreen navigate={mocks.navigate} />);
+    expect(await screen.findByLabelText('Moderator code')).toBeTruthy();
   });
 });

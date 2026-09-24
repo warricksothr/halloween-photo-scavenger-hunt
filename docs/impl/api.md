@@ -150,18 +150,20 @@ GET    /api/auth/oidc/callback         code+state → 303 to /admin (host group)
                                        With a ?next that names a mod surface
                                        (/mod, /m/<code>) a refusal returns
                                        there instead of JSON: 303 with
-                                       ?sso=not_authorized (no group) or
-                                       ?sso=not_moderator (host following a
-                                       mod link), so the screen can explain
-                                       rather than dead-end (S9CW).
+                                       ?sso=not_authorized (no group), so the
+                                       screen can explain rather than
+                                       dead-end (S9CW). A host who followed a
+                                       mod link returns to it unmarked: the
+                                       host moderates too (ADR 0027).
 ```
 
 Both routes answer `503 {"error":"oidc_disabled"}` when SSO is unset. The
 callback verifies the id_token's signature (JWKS), `iss`, `aud`, `exp`,
 and `nonce` before minting anything; any failure is `401` with no session
 cookie and the transaction cookie cleared. A host gets the existing
-`arkham_admin` session; a moderator gets an in-memory `arkham_oidc`
-identity session (`SameSite=Lax`) that S9CW consumes. Tokens, the
+`arkham_admin` session; every signed-in person, host included, also gets
+an in-memory `arkham_oidc` identity session (`SameSite=Lax`) that the mod
+join consumes (S9CW, ADR 0027). Tokens, the
 authorization code, and the client secret are used and discarded — never
 stored, logged, audited, or placed in a redirect URL.
 
@@ -220,11 +222,15 @@ POST   /api/submissions                 { riddle_id, evidence_item_id }
 ### Moderation (increment 7)
 
 ```
-POST   /api/mod/join/{mod_code}         requires a signed-in OIDC moderator
-                                        (S9CW) → moderator cookie + { event }
-                                        | 401 without one. The code selects
-                                        the event; the identity supplies the
-                                        label. Logs moderator.joined with the
+POST   /api/mod/join/{mod_code}         requires someone who may moderate:
+                                        an OIDC moderator or host identity,
+                                        or a host on the local password
+                                        (joins as local:<admin username>);
+                                        never the admin API token (S9CW,
+                                        ADR 0027) → moderator cookie +
+                                        { event } | 401 without one. The code
+                                        selects the event; the sign-in
+                                        supplies the label. Logs moderator.joined with the
                                         subject and name, never the code.
                                         (429 after repeated bad codes)
 GET    /api/mod/queue                   → pending subs, oldest first, with

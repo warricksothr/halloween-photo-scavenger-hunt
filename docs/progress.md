@@ -46,6 +46,15 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The host can moderate.** TKT-01M393JKCAXV2J3DY1219MYXFG.
+  The mod join now admits the host as well as an SSO moderator: an
+  Authentik admin sign-in also mints the identity cookie, and a host on the
+  local password joins as `local:<admin username>`. The `not_moderator`
+  refusal is gone; the admin API token still cannot join. The moderator
+  sign-in screen now loads the default theme and normalises codes
+  (TKT-01M391CVGSJYGFHXR4ANZTDZBD), and the revealed moderator card has an
+  "Open moderator console" link (ADR 0027).
+
 - **2026-09-24 — Each event card shows its join link and QR on demand.**
   TKT-01M391CVFHW62D1KF3E5Y3KACC. "Links & QR" on an event row fetches
   `GET /api/admin/events/{id}/codes` and shows the join link with a small
