@@ -12,7 +12,10 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
 
-export function DrawerScreen({ snapshot, copy }) {
+// Opened from a riddle (returnTo), the drawer tags the upload with that
+// riddle and, once it is saved, goes back to the riddle with the photo
+// selected (ADR 0036). onReturn is the same Back as the browser's.
+export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUploadedFor }) {
   const [items, setItems] = useState(null); // null = loading
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -28,17 +31,29 @@ export function DrawerScreen({ snapshot, copy }) {
     reload();
   }, []);
 
+  // The riddle that opened the drawer, while it is still on the board. A
+  // riddle a moderator removed meanwhile is neither tagged nor returned to;
+  // the photo simply lands in the drawer.
+  const returnNumber = returnTo
+    ? (snapshot?.riddles ?? []).findIndex((r) => r.id === returnTo) + 1
+    : 0;
+  const target = returnNumber > 0 ? returnTo : null;
+
   async function onFileChosen(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     setBusy(true);
     setError(null);
-    const result = await api.upload(file);
+    const result = await api.upload(file, target ?? undefined);
+    // Reset so choosing the same file twice still fires onChange.
+    event.target.value = '';
+    if (!result?.error && target) {
+      onUploadedFor(result.id);
+      return;
+    }
     if (result?.error) setError(result.message);
     await reload();
     setBusy(false);
-    // Reset so choosing the same file twice still fires onChange.
-    event.target.value = '';
   }
 
   const c = copy.screens.drawer;
@@ -52,9 +67,19 @@ export function DrawerScreen({ snapshot, copy }) {
 
   return (
     <main style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
+      {returnNumber > 0 && (
+        <button
+          class="btn secondary"
+          onClick={onReturn}
+          style={{ width: 'auto', padding: '8px 14px', marginBottom: 12, alignSelf: 'flex-start' }}
+        >
+          {c.backToRiddle(returnNumber)}
+        </button>
+      )}
       <h1 class="headline headline-rule" style={{ fontSize: '0.95rem', marginBottom: 12 }}>
         {c.headline}
       </h1>
+      {returnNumber > 0 && <p class="dim" style={{ marginBottom: 12 }}>{c.forRiddle(returnNumber)}</p>}
 
       {uploadsSuspended ? (
         <div class="verdict-banner sev-red" style={{ marginBottom: 16 }}>

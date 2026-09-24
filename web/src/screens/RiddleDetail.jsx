@@ -27,7 +27,9 @@ const SEVERITY = {
   expired: 'sev-amber',
 };
 
-export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDrawer }) {
+export function RiddleDetailScreen({
+  snapshot, copy, riddleId, onBack, onOpenDrawer, onGone = onBack, initialSelected = null,
+}) {
   const riddle = snapshot.riddles.find((r) => r.id === riddleId);
   const hints = riddle?.hints ?? [];
   // Snapshot submissions are newest-first (state.py ORDER BY created_at DESC).
@@ -36,7 +38,9 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const restriction = snapshot.me.restriction;
 
   const [drawer, setDrawer] = useState(null); // null = loading
-  const [selected, setSelected] = useState(null);
+  // Seeded when the player comes back from taking a photo for this riddle
+  // (ADR 0036), so the new photo is ready to submit.
+  const [selected, setSelected] = useState(initialSelected);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // How many hint levels this player has asked to see, tagged with the
@@ -62,8 +66,9 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const inUse = photosInUse(snapshot);
 
   if (!riddle) {
-    // Riddle vanished from the snapshot (moderator edit) — retreat.
-    onBack();
+    // Riddle vanished from the snapshot (moderator edit) — retreat
+    // without a history step, since Back would only lead here again.
+    onGone();
     return null;
   }
 
@@ -214,6 +219,12 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
               </div>
               <button class="btn" disabled={!selected || busy} onClick={onSubmit}>
                 {busy ? c.submitting : c.submit}
+              </button>
+              {/* A new shot is always an option, not only for an empty
+                  drawer; the drawer brings the player back here with it
+                  selected. */}
+              <button class="btn secondary" onClick={onOpenDrawer} style={{ marginTop: 8 }}>
+                {c.takeNew}
               </button>
             </>
           )}

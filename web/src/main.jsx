@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
 import { initErrorReporting } from './errors';
+import { useGameNav } from './nav';
 import { isModPath, modLinkCode } from './paths';
 import { getState, leaveModerator, refresh, retry, subscribe, switchGame } from './store';
 import { defaultCopy } from './theme';
@@ -147,15 +148,11 @@ function PlayerApp() {
       </div>
     );
   }
-  return <GameShell snapshot={snapshot} copy={copy} />;
+  // Keyed by event: a different game mounts a fresh shell, so no screen,
+  // drawer return target or selection carries over from the last one
+  // (ADR 0036).
+  return <GameShell key={snapshot.event.id} snapshot={snapshot} copy={copy} />;
 }
-// In-game shell: header + active tab screen + tab bar. Tabs (and the
-// open riddle) are local component state (not the URL) — the PWA is a
-// single screen stack at party scale, and preact-router adds nothing
-// until deep links exist.
-//
-// No polling anywhere: the store's SSE stream delivers verdict deltas
-// (SCANNING → verdict) and event_status, each routing to refresh().
 // Back to the landing page's Open Cases with this game still listed there
 // (ADR 0033): how a player picks another event without waiting out the
 // session. Signing out for good lives on the Team tab.
@@ -167,29 +164,55 @@ function SwitchGame({ copy }) {
   );
 }
 
+// In-game shell: header + tabs pinned at the top, then the screen. The
+// screen (tab, open riddle, the riddle the drawer returns to) lives in
+// history entries rather than the URL, so Back and the iOS edge swipe move
+// between screens (nav.js, ADR 0036).
+//
+// No polling anywhere: the store's SSE stream delivers verdict deltas
+// (SCANNING → verdict) and event_status, each routing to refresh().
 function GameShell({ snapshot, copy }) {
-  const [tab, setTab] = useState('riddles');
-  const [openRiddle, setOpenRiddle] = useState(null);
+  const { nav, go, back, leave, returnWith, selected } = useGameNav(snapshot.event.id);
+  const { tab } = nav;
 
   let screen;
-  if (openRiddle) {
+  if (tab === 'riddles' && nav.riddle) {
     screen = (
       <RiddleDetailScreen
+        // A fresh screen per riddle, so a photo selected on the way back
+        // from the drawer seeds its selection.
+        key={nav.riddle}
         snapshot={snapshot}
         copy={copy}
-        riddleId={openRiddle}
-        onBack={() => setOpenRiddle(null)}
-        onOpenDrawer={() => { setOpenRiddle(null); setTab('drawer'); }}
+        riddleId={nav.riddle}
+        initialSelected={selected}
+        onBack={back}
+        onGone={leave}
+        onOpenDrawer={() => go({ tab: 'drawer', returnTo: nav.riddle })}
       />
     );
   } else if (tab === 'riddles') {
-    screen = <RiddleListScreen snapshot={snapshot} copy={copy} onOpenRiddle={setOpenRiddle} />;
+    screen = (
+      <RiddleListScreen
+        snapshot={snapshot}
+        copy={copy}
+        onOpenRiddle={(riddle) => go({ tab: 'riddles', riddle })}
+      />
+    );
   } else if (tab === 'team') {
     screen = <TeamScreen snapshot={snapshot} copy={copy} />;
   } else if (tab === 'standings') {
     screen = <StandingsScreen snapshot={snapshot} copy={copy} />;
   } else {
-    screen = <DrawerScreen snapshot={snapshot} copy={copy} />;
+    screen = (
+      <DrawerScreen
+        snapshot={snapshot}
+        copy={copy}
+        returnTo={nav.returnTo}
+        onReturn={back}
+        onUploadedFor={returnWith}
+      />
+    );
   }
 
   return (
@@ -203,7 +226,7 @@ function GameShell({ snapshot, copy }) {
           playerName={snapshot.me.display_name}
           action={<SwitchGame copy={copy} />}
         />
-        <GameTabs tab={tab} copy={copy} onTab={(next) => { setOpenRiddle(null); setTab(next); }} />
+        <GameTabs tab={tab} copy={copy} onTab={(next) => go({ tab: next })} />
       </div>
       {screen}
       {/* The strike-1 interstitial overlays the whole app (mock: dimmed

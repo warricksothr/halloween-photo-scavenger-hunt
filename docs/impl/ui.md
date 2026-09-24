@@ -98,6 +98,19 @@ strike interstitial, and the drawer restricted variant.
 
 - **Riddle list is the home tab**, not a dashboard — the Batcomputer tile
   grid is the emotional center of the app (THEME-NOTES).
+- **Back moves between screens, not out of the game** — each tab change,
+  opened riddle and trip to the drawer is a history entry (in
+  `history.state`; the URL does not change), so the browser's Back and the
+  iOS edge swipe retrace them and the in-app Back buttons do the same
+  (ADR 0036; `web/src/nav.js`).
+- **A riddle sends the player for a photo and gets it back** — the riddle
+  page always offers "Take a new photo". The drawer it opens has a way
+  back to that riddle, tags the upload with it, and returns there with
+  the new photo selected, ready to submit (ADR 0036).
+- **The header and tabs are pinned at the top** of every player screen
+  (ADR 0034).
+- **A photo serves one riddle** — the picker shows a photo pending or
+  solved elsewhere greyed out and labelled with its riddle (ADR 0035).
 - **Verdict notifications are banners, not routes** — they appear on the
   riddle list and submission detail; no separate inbox screen in MVP.
 - **Conduct surfaces are un-themed by rule** — strike interstitial and

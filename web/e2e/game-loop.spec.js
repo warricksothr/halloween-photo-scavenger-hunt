@@ -71,16 +71,14 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
       mimeType: 'image/png',
       buffer: PHOTO,
     });
+    // Saved, the photo goes straight back to the riddle that asked for it,
+    // already selected (ADR 0036).
     await expect(
-      player.getByRole('img', { name: 'Your evidence photo' }),
-    ).toHaveCount(1);
-
-    await player.getByRole('link', { name: 'Riddles' }).click();
-    await player.getByRole('button', { name: 'Open riddle: Find the thing' }).click();
-    await expect(
-      player.getByRole('button', { name: 'Submit to the Batcomputer' }),
+      player.getByRole('heading', { name: 'Find the thing' }),
     ).toBeVisible();
-    await player.getByRole('button', { name: /^Evidence photo/ }).first().click();
+    await expect(
+      player.getByRole('button', { name: /^Evidence photo 1/ }),
+    ).toHaveAttribute('aria-pressed', 'true');
     await player.getByRole('button', { name: 'Submit to the Batcomputer' }).click();
     await expect(player.getByText('SCANNING…')).toBeVisible();
 
