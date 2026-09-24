@@ -3,8 +3,8 @@ schema: 3
 id: TKT-01M24GAP8F1JD5017QCDZWH953
 title: Run the production deployment and restore drill
 type: task
-status: in-progress
-status_reason: null
+status: blocked
+status_reason: "SSH to kobal refused: this workstation's key is not authorized on kobal; waiting on the user to authorize it or name the identity to use"
 priority: high
 due_on: null
 labels:
@@ -36,7 +36,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-10T01:53:44Z
-updated_at: 2026-09-24T01:01:38Z
+updated_at: 2026-09-24T01:05:01Z
 created_by:
   id: agent:terva/mieli
   name: Mieli
@@ -93,3 +93,15 @@ Access-path check through the public proxy, 2026-09-23. No SSH needed.
 **Finding:** schema_version is 2, but `main` carries migration 0003 (riddle_hint). kobal is running a build from before the hint-ladder merge (PR #45) and the seeder (PR #46). The demo seeder cannot run there until kobal pulls and rebuilds.
 
 **Blocker for SSH:** this workstation has no known_hosts entry for kobal under any name or address, and `~/.ssh/config` has no `kobal` alias. `ssh-keyscan` over Tailscale (100.90.98.102) offers ED25519 `SHA256:FMX84re5XHUqnp/mvPkkmJbmUwxVq/MXvH+HQksNYKo`. That key is not trusted yet; the user has to confirm it.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T01:05:01Z
+
+SSH progress, 2026-09-23. The user confirmed kobal's host key, ED25519 `SHA256:FMX84re5XHUqnp/mvPkkmJbmUwxVq/MXvH+HQksNYKo`, and it is now in this workstation's `~/.ssh/known_hosts` for 100.90.98.102 only. `~/.ssh/config` is unchanged.
+
+Authentication still fails with `Permission denied (publickey)`. kobal refused `~/.ssh/id_ed25519`, the only default identity this workstation offers. The other key here, `id_ed25519_reanzu`, is named for something else, and it was not tried: an identity for a root-equivalent host should not be guessed.
+
+The user also decided the order: run the drill on the current data first, then pull `main`, rebuild, and restart, so the fresh backup protects migration 0003.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T01:05:01Z
+
+in-progress to blocked: SSH to kobal refused: this workstation's key is not authorized on kobal; waiting on the user to authorize it or name the identity to use
