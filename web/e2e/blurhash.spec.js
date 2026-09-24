@@ -92,10 +92,10 @@ test('a scanning photo is a blur, and a removed one stays only a blur', async ({
   const acknowledge = page.getByRole('button', { name: 'I understand' });
   if (await acknowledge.isVisible()) await acknowledge.click();
   await page.getByRole('link', { name: /Drawer/ }).click();
-  const removed = page.getByRole('img', { name: 'A photo a moderator removed, shown blurred' });
+  const removed = page.getByRole('img', { name: 'A removed photo, shown blurred' });
   await expect(removed).toBeVisible();
   expect(await painted(removed)).toBe(true);
-  await expect(page.getByText('Removed by a moderator')).toBeVisible();
+  await expect(page.getByText('Photo removed')).toBeVisible();
   const after = await (await page.request.get('/api/evidence')).json();
   expect(after[0]).toMatchObject({ id: drawer[0].id, quarantined: true, photo_url: null });
   expect((await page.request.get(`/api/evidence/${drawer[0].id}/photo`)).status()).toBe(404);

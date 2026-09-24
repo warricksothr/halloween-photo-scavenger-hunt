@@ -105,7 +105,7 @@ submission was removed for violating the event rules.
   disputed call). Reversals are recorded on the player's history.
 - **Content handling**: the flagged evidence item is quarantined — the
   photo is withdrawn from the team's drawer and the player-facing app
-  immediately, and players see only its blurhash, marked as removed
+  immediately, and players see only its blurhash, marked "Photo removed" with no reason
   (ADR 0040). The photo is retained in a moderator-only view until the
   event ends (evidence if there's a dispute), then purged with the event
   data.

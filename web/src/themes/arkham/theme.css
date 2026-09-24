@@ -368,8 +368,11 @@ button.tile {
   border: 2px dashed var(--amber);
 }
 .tile.photo-rejected .in-use-label { color: var(--amber); }
-.tile.photo-flagged { border-color: var(--alert); }
-.tile.photo-flagged .in-use-label { color: var(--alert); }
+/* A removed photo is framed plainly, not in alert red: its whole team sees
+   the tile, and why it went is between its owner and the moderators
+   (design.md, Notifications). */
+.tile.photo-flagged { border-color: var(--border-lit); }
+.tile.photo-flagged .in-use-label { color: var(--text-dim); }
 .tile.photo-pending { border-color: var(--cyan); overflow: hidden; }
 .tile.photo-pending .in-use-label { animation: pulse 1.4s ease-in-out infinite; }
 .tile.photo-verified { border-color: var(--green); }

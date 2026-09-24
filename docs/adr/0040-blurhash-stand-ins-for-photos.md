@@ -50,8 +50,11 @@ of the drawer, so a team saw a gap and no reason for it.
     Riddle n".
   - The riddle picker shows the blur in the disabled tile (ADR 0035).
   - The SCANNING banner has the blur behind its translucent panel.
-- **Flagged:** the Drawer tab shows the blur in an alert-red frame,
-  labelled "Removed by a moderator". The picker leaves the photo out,
+- **Flagged:** the Drawer tab shows the blur in a plain frame, labelled
+  "Photo removed". The label and frame are deliberately neutral: the whole
+  team shares the drawer, and design.md's notification rule keeps *why* a
+  photo went between its owner, the moderators and the host. The owner
+  learns why from their strike notice. The picker leaves the photo out,
   since it cannot be submitted.
 - **Rejected:** the photo itself in a dashed amber frame, labelled
   "Rejected · Riddle n". In the picker it stays selectable, since

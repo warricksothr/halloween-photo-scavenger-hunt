@@ -126,13 +126,14 @@ export default {
       // goes.
       backToRiddle: (n) => `← Back to Riddle ${n}`,
       // Each photo's state on its tile (ADR 0040). A scanning photo and a
-      // removed one show only as a blur.
+      // removed one show only as a blur. The removed label is neutral: the
+      // whole team sees it, and conduct matters are not announced to them.
       scanning: (n) => `Scanning · Riddle ${n}`,
       scanningAlt: 'Your photo, blurred while it is scanned',
       solved: (n) => `Solved · Riddle ${n}`,
       rejected: (n) => `Rejected · Riddle ${n}`,
-      removed: 'Removed by a moderator',
-      removedAlt: 'A photo a moderator removed, shown blurred',
+      removed: 'Photo removed',
+      removedAlt: 'A removed photo, shown blurred',
       forRiddle: (n) => `Shooting for Riddle ${n}. The photo will be ready to submit there.`,
     },
     standings: {
