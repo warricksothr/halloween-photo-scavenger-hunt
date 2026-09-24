@@ -102,7 +102,7 @@ def _restriction_refusal(
     loop) and before the body is read, so a restricted team's upload is
     refused without spooling the photo.
     """
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     restriction = derive_restriction(conn, ctx.player_id)
     if restriction.blocks_uploads(conduct_now()):
         return _reject(
@@ -125,7 +125,7 @@ def _store_upload(
     the writer transaction, and the file writes. Always called through
     ``run_in_threadpool`` — SQLite and file I/O must never stall the loop.
     """
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
 
     # Disk guardrail before any Pillow work: a full disk fails SQLite writes
     # too, so refuse while the host can still recover. Guardrail, not a
@@ -337,7 +337,7 @@ async def upload(
 
 @router.get("")
 def drawer(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     # Team-scoped from day one (design.md): the drawer IS the team's
     # shared pool — a multi-member team sees every member's photos,
     # each labeled with who shot it.
@@ -358,7 +358,7 @@ def photo(
     request: Request,
     ctx: auth.PlayerContext = Depends(auth.require_player),
 ):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = conn.execute(
         "SELECT * FROM evidence_item WHERE id = ?", (evidence_id,)
     ).fetchone()

@@ -205,7 +205,7 @@ def patch_event(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -252,7 +252,7 @@ def patch_event(
 
 @router.post("/events/{event_id}/open")
 def open_event(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -313,7 +313,7 @@ def open_event(event_id: str, request: Request, _: str = Depends(auth.require_ad
     dependencies=[Depends(hold_request_lock)],
 )
 def close_event(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = _get_event(conn, event_id)
     if row is None:
         return _err(404, "event_not_found", "No such event.")
@@ -383,7 +383,7 @@ def reverse_strike(
     not the evidence. The flagged photo stays out of the drawer — the
     dispute was about the strike, and a host who also wants the photo
     back does that socially, not in data."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     strike = conn.execute(
         "SELECT id, player_id, event_id, level, reversed_at FROM strike WHERE id = ?",
         (strike_id,),
@@ -452,7 +452,7 @@ def list_event_players(
     disagree. One strike query covers the event; ``derive_restriction``
     runs per player because ``pending_notice`` needs its audit check.
     """
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     players = conn.execute(
@@ -557,7 +557,7 @@ def _replace_hints(conn: sqlite3.Connection, riddle_id: str, hints: list[str]) -
 
 @router.get("/events/{event_id}/riddles")
 def list_riddles(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     rows = conn.execute(
@@ -585,7 +585,7 @@ def create_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
     riddle_id = ids.new_id()
@@ -628,7 +628,7 @@ def patch_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = _get_riddle(conn, event_id, riddle_id)
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
@@ -688,7 +688,7 @@ def delete_riddle(
     request: Request,
     _: str = Depends(auth.require_admin),
 ):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = _get_riddle(conn, event_id, riddle_id)
     if row is None:
         return _err(404, "riddle_not_found", "No such riddle on this event.")
@@ -751,7 +751,7 @@ def purge_event(
     The event.purged audit row is written (with the pre-delete counts,
     audit-actions.md) and then deleted with the rest of the log — the
     purge is total; the counts also come back in the response."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     event = _get_event(conn, event_id)
     if event is None:
         return _err(404, "event_not_found", "No such event.")

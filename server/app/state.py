@@ -22,8 +22,6 @@ Design notes that matter here:
 
 from __future__ import annotations
 
-import sqlite3
-
 from fastapi import APIRouter, Depends, Request
 
 from app import auth
@@ -36,7 +34,7 @@ router = APIRouter(prefix="/api", tags=["state"])
 
 @router.get("/state")
 def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
 
     event = conn.execute("SELECT * FROM event WHERE id = ?", (ctx.event_id,)).fetchone()
 

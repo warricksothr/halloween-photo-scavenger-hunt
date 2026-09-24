@@ -933,7 +933,7 @@ def test_upload_after_a_strike_commits_is_rejected(admin, client, monkeypatch):
 
     def strike_after_the_reader_read(c, player_id):
         restriction = real_derive(c, player_id)
-        if c is client.app.state.read_db:
+        if isinstance(c, db_module.SerializedReader):
             conn.execute(
                 "INSERT INTO strike (id, player_id, event_id, level,"
                 " submission_id, issued_by, created_at)"

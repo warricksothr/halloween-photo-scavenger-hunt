@@ -76,7 +76,7 @@ def team_state(
     Roster device lines are the device_label + last_seen_at the
     moderator heuristics use (mocks/team.html) — a member can spot a
     dead device without waiting for a moderator."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     team = conn.execute("SELECT name FROM team WHERE id = ?", (ctx.team_id,)).fetchone()
     members = conn.execute(
         "SELECT p.id, p.display_name, p.created_at,"
@@ -200,7 +200,7 @@ def revoke_invite(
     """Kill an open invite (mis-sent QR, or simply rotate). Only members
     of the invite's team may revoke it; already-redeemed tokens are
     history, not revocable."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     invite = conn.execute(
         "SELECT team_id, redeemed_by, revoked_at FROM team_invite WHERE token = ?",
         (token,),
@@ -241,7 +241,7 @@ def invite_info(token: str, request: Request):
     team name (so they know whose QR they scanned) and the event name.
     Works without a session — the QR scanner may be a brand-new phone.
     404s for dead/unknown tokens rather than explaining why."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     invite = conn.execute(
         "SELECT ti.expires_at, ti.redeemed_by, ti.revoked_at,"
         "       t.name AS team_name, e.name AS event_name, e.status"
@@ -288,7 +288,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
       client can show the warning ("evidence stays with your current
       team"); confirm_switch=true re-calls and completes.
     """
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     # Invite tokens are guessable if short, so throttle the 404s
     # (ADR 0015). The reservation is released as soon as the token turns
     # out to be real, so a used or expired token is not a failure.

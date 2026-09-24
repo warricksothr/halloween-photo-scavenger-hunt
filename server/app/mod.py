@@ -65,7 +65,7 @@ def join(
     if reservation is None:
         return ratelimit.retry_response(wait)
 
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     event = conn.execute(
         "SELECT * FROM event WHERE mod_code = ?", (mod_code,)
     ).fetchone()
@@ -166,7 +166,7 @@ def mod_state(
     """The moderator's boot probe: the client learns its role by trying
     the player snapshot first (401 for a mod-only cookie) and then this
     — one cheap endpoint rather than an ambiguous 401 on the queue."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     event = conn.execute(
         "SELECT id, name, status, theme FROM event WHERE id = ?",
         (ctx.event_id,),
@@ -229,7 +229,7 @@ def queue(
     """Pending submissions, oldest first (design.md), each with photo
     URL, player, riddle, claim state, and any open duplicate flag on
     the submitted evidence."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     rows = conn.execute(
         "SELECT s.id, s.created_at, s.claimed_by, s.team_id,"
         "       r.id AS riddle_id, r.text AS riddle_text,"
@@ -319,7 +319,7 @@ def verdict(
             422, "bad_verdict", f"Verdict must be one of {sorted(GAME_VERDICTS)}."
         )
 
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     sub = conn.execute(
         "SELECT s.id, s.status, s.team_id, s.riddle_id FROM submission s"
         " JOIN riddle r ON r.id = s.riddle_id"
@@ -432,7 +432,7 @@ def inappropriate(
     player's photos would otherwise both read the same level and write
     the same rung — the conditional UPDATE is per-submission, so it
     cannot catch that, and the ladder would skip."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     sub = conn.execute(
         "SELECT s.id, s.status, s.team_id, s.riddle_id, s.submitted_by,"
         "       s.evidence_item_id FROM submission s"
@@ -576,7 +576,7 @@ def evidence_photo(
     """Moderator photo access (api.md: derivative only; owner team or
     moderator). The queue needs to show any team's photo, including
     quarantined items — moderators are exactly who quarantine is FOR."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = conn.execute(
         "SELECT e.photo_path FROM evidence_item e"
         " JOIN team t ON t.id = e.team_id"
@@ -618,7 +618,7 @@ def resolve_flag(
             422, "bad_resolution", "Resolution must be 'cleared' or 'confirmed'."
         )
 
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     # The flag must exist, belong to this event, and still be open.
     open_flags = _open_flags(conn, ctx.event_id)
     if evidence_id not in open_flags:
@@ -655,7 +655,7 @@ def player_history(
     (design.md): their submissions with verdicts, their strikes, and
     their sessions (UA + last_seen — the multi-teaming heuristic from
     api.md). Read-only; reads are never audited (ADR 0004)."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     player = conn.execute(
         "SELECT p.id, p.display_name, p.created_at, p.team_id"
         " FROM player p JOIN team t ON t.id = p.team_id"
@@ -725,7 +725,7 @@ def mod_teams(
     (device label + last-seen, the multi-teaming heuristics), pending
     invites, and the effective size limit. Read-only — never audited
     (ADR 0004)."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     teams = conn.execute(
         "SELECT t.id, t.name, t.size_limit, e.team_size_limit"
         " FROM team t JOIN event e ON e.id = t.event_id"
@@ -800,7 +800,7 @@ def remove_member(
     empty (score stays queryable — verified submissions still
     reference it). Players never remove members; the audit actor is
     the moderator."""
-    conn: sqlite3.Connection = reader(request)
+    conn = reader(request)
     row = conn.execute(
         "SELECT p.team_id FROM player p JOIN team t ON t.id = p.team_id"
         " WHERE p.id = ? AND t.event_id = ?",

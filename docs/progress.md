@@ -46,6 +46,14 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — Concurrent requests no longer corrupt the reader.**
+  TKT-01M396FF6CS39ZYQ9HFTRPCDW7. Threads running the same SQL on the
+  shared reader connection were handed the same cached statement, so a
+  burst of requests (the moderator console's thumbnails) answered 500
+  `InterfaceError` or a false 401. `db.reader()` now runs one statement at a
+  time under `read_lock` and reads every row before releasing it; no call
+  site changed its logic (ADR 0030, amends 0013).
+
 - **2026-09-24 — The moderator console fits a laptop and a tablet.**
   TKT-01M395WVC7B97J93YTHVAXWKM6. The layout changes with the screen width:
   one column on a phone, a queue rail with a review column at 700px, and
