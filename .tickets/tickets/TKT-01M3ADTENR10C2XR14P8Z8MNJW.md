@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T19:21:03Z
-updated_at: 2026-09-24T19:27:01Z
+updated_at: 2026-09-24T19:47:18Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -97,3 +97,7 @@ Coming back takes the mod link again. The OIDC identity cookie is untouched, so 
 **agent:claude-code/t3code-bf267378** at 2026-09-24T19:27:01Z
 
 PR #54, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/54: head ba0543c238782b5212a557a258dba8f961536af2, base a6f5e8ddc204d42af458198b554f841521e874b4. Terva r1 (mod-leave-r1): run c7f95a41, Actions #669, review 493, status success. Its one low finding, no .tickets change in the PR, is declined as on earlier PRs: ticket commits go straight to main, and this ticket's plan commit a6f5e8d is the PR base. The CI quality gate passed. The local gate passes with 558 server and 193 web tests. A headless Chromium run on the built app at 390px and 1280px: the button sits in the header; Leave went to / and back into the game as the same player, and /api/mod/state then answered 401; Leave with no player session landed on the join screen with Open Cases listing the game. Waiting for Drew's go-ahead to merge.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T19:47:18Z
+
+Drew authorized the merge. PR #54 was merged at the reviewed head ba0543c as a110d8b. Deployed to kobal: the container is healthy at schema 4. POST /api/mod/logout answers 403 without a CSRF token and 401 without a moderator session. The live bundle carries Leave console and /api/mod/logout. AC5 waits for Drew's check on his phone.
