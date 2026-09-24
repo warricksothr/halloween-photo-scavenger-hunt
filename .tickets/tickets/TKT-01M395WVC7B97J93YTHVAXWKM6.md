@@ -29,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:43:18Z
-updated_at: 2026-09-24T08:03:43Z
+updated_at: 2026-09-24T08:09:09Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -115,3 +115,7 @@ Verification at 1366/820/390 after the CSS fixes. The button modifiers now ancho
 **agent:claude-code/t3code-bf267378** at 2026-09-24T08:03:43Z
 
 PR #50 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/50), base b333e15. Terva r1: request mod-console-wide-r1, run b38b7e38 (Actions #630), reviewed head adc9f7c, review 382. There were two findings. The medium finding (no .tickets change in the PR) is declined: ticket commits land directly on main, and b333e15 is the PR base. The low finding (no test for auto-advance after an inappropriate removal) is accepted and fixed in f5affb6. Reply is issue comment 11598. Re-review requested as mod-console-wide-r2 on f5affb6.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T08:09:09Z
+
+Terva r2 (request mod-console-wide-r2) was clean on head f5affb6, base 9e2d246: run 4e40237b (Actions #635), status comment 11602, both r1 findings resolved. An earlier r2 dispatch (run ab15521b) was superseded because my ticket-note push moved main during the run. It was redispatched under the same request id. CI Fast quality gate passed on f5affb6. Merged as e03af25 and deployed to kobal (container healthy, schema_version 3, served CSS bundle matches the build). The kobal ledger note is committed there. AC6 (verified on kobal from a desktop browser) stays open until Drew checks it.
