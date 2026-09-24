@@ -192,6 +192,31 @@ describe('store', () => {
     await vi.waitFor(() => expect(getState().snapshot).toEqual(updated), {
       timeout: 2000,
     });
+    // The rebuild goes through refresh(), which names the role again.
+    expect(FakeEventSource.instances[1].url).toBe('/api/events/stream?as=player');
+  });
+
+  it('rebuilds a dead moderator stream under the moderator role', async () => {
+    // Terva PR #49 r1 asked whether a reconnect loses the role: it cannot,
+    // because the reconnect timer runs refresh(), which resolves the role
+    // and reopens the stream with it.
+    window.history.replaceState(null, '', '/mod');
+    mocks.api.modState.mockResolvedValue({
+      event: { id: 'event-1', name: 'Photo Party', theme: 'arkham' },
+      moderator: { id: 'mod-1' },
+    });
+    await refresh();
+
+    const first = FakeEventSource.instances.at(-1);
+    first.open();
+    first.fail(FakeEventSource.CLOSED);
+
+    await vi.waitFor(
+      () => expect(FakeEventSource.instances.at(-1)).not.toBe(first),
+      { timeout: 2000 },
+    );
+    expect(FakeEventSource.instances.at(-1).url).toBe('/api/events/stream?as=moderator');
+    expect(FakeEventSource.instances.some((es) => es.url.includes('undefined'))).toBe(false);
   });
 
   it('closes the stream when a resync enters the error phase', async () => {
