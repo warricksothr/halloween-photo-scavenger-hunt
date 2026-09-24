@@ -170,8 +170,9 @@ def seed(
             event["status"] = opened["status"]
     except SeedError as exc:
         # The API cannot undo the create: purge takes only a closed event,
-        # and close only an open one. Resuming is no better, because the
-        # codes leave the server only in the create response. So say what
+        # and close only an open one. Resuming would mean working out which
+        # riddles landed; a fresh event is simpler, and nobody holds this
+        # one's codes unless an admin reads them off its card (ADR 0026). So say what
         # was left behind and how to get past the duplicate check. Claim
         # nothing about its status: a lost response to the open call can
         # arrive after the server committed it. What holds either way is

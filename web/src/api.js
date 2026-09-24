@@ -204,6 +204,9 @@ export const api = {
   // the shell should fall back to login, not paint a form error.
   adminCreateEvent: (event) =>
     request('/api/admin/events', { method: 'POST', body: event }),
+  // The codes on demand (ADR 0026): their own call, so the list never
+  // carries them.
+  adminEventCodes: (eventId) => request(`/api/admin/events/${eventId}/codes`),
   adminOpenEvent: (eventId) =>
     request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
   adminCloseEvent: (eventId) =>

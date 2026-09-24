@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     adminOpenEvent: vi.fn(),
     adminCloseEvent: vi.fn(),
     adminPurgeEvent: vi.fn(),
+    adminEventCodes: vi.fn(),
   },
 }));
 
@@ -24,6 +25,10 @@ describe('admin event management', () => {
     mocks.api.adminOpenEvent.mockResolvedValue({});
     mocks.api.adminCloseEvent.mockResolvedValue({});
     mocks.api.adminPurgeEvent.mockResolvedValue({});
+    mocks.api.adminEventCodes.mockResolvedValue({
+      join_code: 'JOIN123',
+      mod_code: 'MOD456',
+    });
   });
 
   it('shows the join and mod URLs with a QR for each after creating', async () => {
@@ -47,11 +52,15 @@ describe('admin event management', () => {
     expect(await screen.findByText(`${origin}/j/JOIN123`)).toBeTruthy();
     expect(screen.getByText(`${origin}/m/MOD456`)).toBeTruthy();
 
+    // Inline SVG, not an <img>: the production CSP (img-src 'self')
+    // blocks a data: URI image, so the QR never loads one (ADR 0026).
     const codes = screen.getAllByRole('img');
     expect(codes).toHaveLength(2);
-    for (const img of codes) {
-      expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+    for (const qr of codes) {
+      expect(qr.tagName.toLowerCase()).toBe('svg');
+      expect(qr.querySelector('path').getAttribute('d')).toMatch(/^M\d/);
     }
+    expect(document.querySelector('img')).toBeNull();
 
     expect(mocks.api.adminCreateEvent).toHaveBeenCalledWith({
       name: 'Gotham Halloween',
@@ -147,5 +156,143 @@ describe('admin event management', () => {
       );
     });
     expect(await screen.findByText('No events yet. Create one to get the join and moderator codes.')).toBeTruthy();
+  });
+
+  it('shows an existing event\'s join link and QR on demand, the mod link only when revealed', async () => {
+    render(<AdminEvents initialEvents={[lobby]} />);
+    const origin = window.location.origin;
+    expect(screen.queryByText(`${origin}/j/JOIN123`)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    // The card's <code>; the print sheet repeats the URL off screen.
+    expect(await screen.findByText(`${origin}/j/JOIN123`, { selector: 'code' })).toBeTruthy();
+    expect(mocks.api.adminEventCodes).toHaveBeenCalledWith('ev-1');
+    expect(screen.getByRole('img', { name: 'Player join link QR code' })).toBeTruthy();
+    // Never on a projected screen by accident.
+    expect(screen.queryByText(`${origin}/m/MOD456`)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal moderator link' }));
+    expect(screen.getByText(`${origin}/m/MOD456`)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide links' }));
+    expect(screen.queryByText(`${origin}/j/JOIN123`)).toBeNull();
+    expect(document.querySelector('.admin-print-sheet')).toBeNull();
+  });
+
+  it('puts a large join QR print sheet on the body and prints it', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    render(<AdminEvents initialEvents={[lobby]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    await screen.findByRole('button', { name: 'Print' });
+
+    const sheet = document.querySelector('body > .admin-print-sheet');
+    expect(sheet).toBeTruthy();
+    expect(sheet.textContent).toContain('Gotham Halloween');
+    expect(sheet.textContent).toContain(`${window.location.origin}/j/JOIN123`);
+    expect(sheet.querySelector('svg.admin-print-qr')).toBeTruthy();
+    // The mod link is never on the sheet.
+    expect(sheet.textContent).not.toContain('MOD456');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
+    expect(print).toHaveBeenCalled();
+    print.mockRestore();
+  });
+
+  it('downloads the join QR as SVG named after the event', async () => {
+    const created = [];
+    URL.createObjectURL = vi.fn((blob) => {
+      created.push(blob);
+      return 'blob:qr';
+    });
+    URL.revokeObjectURL = vi.fn();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function () {
+        created.push(this.download);
+      });
+
+    render(<AdminEvents initialEvents={[lobby]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'SVG' }));
+
+    const [blob, filename] = created;
+    expect(filename).toBe('gotham-halloween-join-qr.svg');
+    expect(blob.type).toBe('image/svg+xml');
+    // jsdom's Blob has no text(); FileReader is the portable read.
+    const svg = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsText(blob);
+    });
+    expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+    // Only matrix numbers reach the file, never the link text.
+    expect(svg).not.toContain('JOIN123');
+    click.mockRestore();
+  });
+
+  it('hands the view back when the session dies while fetching codes', async () => {
+    const onSessionExpired = vi.fn();
+    mocks.api.adminEventCodes.mockResolvedValue({ unauthenticated: true });
+    mocks.api.adminEvents.mockResolvedValue({ unauthenticated: true });
+    render(<AdminEvents initialEvents={[lobby]} onSessionExpired={onSessionExpired} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    await waitFor(() => expect(onSessionExpired).toHaveBeenCalled());
+  });
+
+  it('shows the API message when the codes cannot be read', async () => {
+    mocks.api.adminEventCodes.mockResolvedValue({
+      error: 'event_not_found',
+      message: 'No such event.',
+    });
+    render(<AdminEvents initialEvents={[lobby]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    expect(await screen.findByText('No such event.')).toBeTruthy();
+  });
+
+  it('keeps the latest event\'s links when an earlier codes response lands last', async () => {
+    const second = { id: 'ev-2', name: 'Arkham After Dark', status: 'lobby' };
+    const pending = {};
+    mocks.api.adminEventCodes.mockImplementation(
+      (id) => new Promise((resolve) => { pending[id] = resolve; }),
+    );
+    render(<AdminEvents initialEvents={[lobby, second]} />);
+    const [first, next] = screen.getAllByRole('button', { name: 'Links & QR' });
+    fireEvent.click(first);
+    fireEvent.click(next);
+
+    const origin = window.location.origin;
+    pending['ev-2']({ join_code: 'SECOND', mod_code: 'M2' });
+    expect(await screen.findByText(`${origin}/j/SECOND`, { selector: 'code' })).toBeTruthy();
+    // The stale response for the first event must not take the panel back.
+    pending['ev-1']({ join_code: 'FIRST', mod_code: 'M1' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(`${origin}/j/FIRST`, { selector: 'code' })).toBeNull();
+    expect(screen.getByText(`${origin}/j/SECOND`, { selector: 'code' })).toBeTruthy();
+  });
+
+  it('shows nothing for an event purged while its codes were loading', async () => {
+    // The panel and its print sheet render only inside an event row, so a
+    // late response for a purged event has nowhere to appear; closeLinks()
+    // also drops it, so the codes do not linger in state (Terva r2).
+    const closed = { ...lobby, status: 'closed' };
+    let resolveCodes;
+    mocks.api.adminEventCodes.mockImplementation(
+      () => new Promise((resolve) => { resolveCodes = resolve; }),
+    );
+    mocks.api.adminEvents.mockResolvedValue([]);
+    render(<AdminEvents initialEvents={[closed]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Purge' }));
+    fireEvent.input(screen.getByLabelText('Type the event name to confirm'), {
+      target: { value: closed.name },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Purge event' }));
+    await screen.findByText('No events yet. Create one to get the join and moderator codes.');
+
+    resolveCodes({ join_code: 'GONE', mod_code: 'GONE2' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.body.textContent).not.toContain('GONE');
+    expect(document.querySelector('.admin-print-sheet')).toBeNull();
   });
 });

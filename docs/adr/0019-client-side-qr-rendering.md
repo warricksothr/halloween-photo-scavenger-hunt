@@ -1,7 +1,7 @@
 # 0019. Render join and moderator QR codes in the browser, never an external service
 
 Date: 2026-09-22
-Status: accepted
+Status: accepted; the rendering and show-once parts are amended by 0026
 
 ## Context
 

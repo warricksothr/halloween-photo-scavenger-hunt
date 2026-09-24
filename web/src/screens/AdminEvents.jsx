@@ -2,13 +2,14 @@
 //
 // The admin API already owned the whole lifecycle (server/app/events.py);
 // this is the UI that drives it: list, create, open, close, purge. The
-// codes panel after creation is the payoff — the join and mod codes exist
-// only in the create response by design, so the QR codes are shown once,
-// right when the host can hand them out.
-import { useState } from 'preact/hooks';
+// codes panel after creation hands out the links at once; each event's
+// "Links & QR" shows them again later, with a print sheet and downloads
+// for the door (ADR 0026).
+import { createPortal } from 'preact/compat';
+import { useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
-import { Qr } from '../components/Qr';
+import { Qr, qrPngBlob, qrSvgString, saveBlob } from '../components/Qr';
 
 const VISIBILITY = [
   { value: 'live', label: 'Live during the round' },
@@ -32,6 +33,19 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
   const [created, setCreated] = useState(null); // event plus its codes
   const [purgeFor, setPurgeFor] = useState(null); // event awaiting confirm
   const [confirmName, setConfirmName] = useState('');
+  // One event's links open at a time: its codes, fetched on demand.
+  const [linksFor, setLinksFor] = useState(null); // { id, codes }
+  // The latest links request. Each click bumps it, so a slow response for
+  // an event the host has since moved off (or closed) is dropped instead
+  // of reopening the wrong event's links.
+  const linksRequestRef = useRef(0);
+
+  // Close the links and drop any response still in flight: used when the
+  // event goes away or the session does, so no codes outlive either.
+  function closeLinks() {
+    linksRequestRef.current += 1;
+    setLinksFor(null);
+  }
 
   async function reload() {
     const result = await api.adminEvents();
@@ -41,6 +55,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
       setEvents([]);
       setCreated(null);
       setPurgeFor(null);
+      closeLinks();
       setError(null);
       onSessionExpired?.();
     } else if (result?.error) setError(result.message);
@@ -90,6 +105,22 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
     }
   }
 
+  async function toggleLinks(item) {
+    const request = ++linksRequestRef.current;
+    if (linksFor?.id === item.id) {
+      setLinksFor(null);
+      return;
+    }
+    setError(null);
+    const result = await api.adminEventCodes(item.id);
+    if (request !== linksRequestRef.current) return;
+    if (result?.unauthenticated) {
+      // Same contract as reload: a dead session hands the view back.
+      await reload();
+    } else if (result?.error) setError(result.message);
+    else setLinksFor({ id: item.id, codes: result });
+  }
+
   async function onPurge(event) {
     event.preventDefault();
     const target = purgeFor;
@@ -101,6 +132,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
       setPurgeFor(null);
       setConfirmName('');
       if (created?.id === target.id) setCreated(null);
+      closeLinks();
     }
   }
 
@@ -184,6 +216,11 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
                 <span class="admin-status">{item.status}</span>
                 <span class="admin-dim admin-event-when">{when(item.created_at)}</span>
                 <span class="admin-actions">
+                  <button class="admin-btn secondary"
+                          aria-expanded={linksFor?.id === item.id}
+                          onClick={() => toggleLinks(item)}>
+                    {linksFor?.id === item.id ? 'Hide links' : 'Links & QR'}
+                  </button>
                   {item.status === 'lobby' && (
                     <button class="admin-btn secondary" disabled={busy}
                             onClick={() =>
@@ -210,6 +247,10 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
                   )}
                 </span>
               </div>
+
+              {linksFor?.id === item.id && (
+                <EventLinks event={item} codes={linksFor.codes} />
+              )}
 
               {purgeFor?.id === item.id && (
                 <form class="admin-purge" onSubmit={onPurge}>
@@ -256,8 +297,6 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
 }
 
 function CodesPanel({ event, onDismiss }) {
-  const joinUrl = `${window.location.origin}/j/${event.join_code}`;
-  const modUrl = `${window.location.origin}/m/${event.mod_code}`;
   return (
     <div class="admin-panel admin-codes">
       <div class="admin-panel-head">
@@ -265,18 +304,18 @@ function CodesPanel({ event, onDismiss }) {
         <button class="admin-btn secondary" onClick={onDismiss}>Done</button>
       </div>
       <p class="admin-note">
-        The codes appear only now, in the create response. Note them before
-        dismissing; a purged or forgotten code cannot be re-read.
+        Hand these out now, or later from the event's Links &amp; QR. A
+        purged event's codes are gone for good.
       </p>
       <div class="admin-grid">
         <CodeCard
           title="Player join link"
-          url={joinUrl}
+          url={joinUrl(event.join_code)}
           note="Print or screen-share at the door. Scanning it is the only login players ever do."
         />
         <CodeCard
           title="Moderator link"
-          url={modUrl}
+          url={modUrl(event.mod_code)}
           note="Send privately to whoever runs the review queue. Never project this one."
         />
       </div>
@@ -287,7 +326,87 @@ function CodesPanel({ event, onDismiss }) {
   );
 }
 
-function CodeCard({ title, url, note }) {
+function joinUrl(code) {
+  return `${window.location.origin}/j/${code}`;
+}
+
+function modUrl(code) {
+  return `${window.location.origin}/m/${code}`;
+}
+
+// A filename-safe stem from the event name, for the downloads.
+function slug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
+}
+
+function EventLinks({ event, codes }) {
+  const [showMod, setShowMod] = useState(false);
+  const url = joinUrl(codes.join_code);
+  const stem = `${slug(event.name)}-join-qr`;
+  return (
+    <div class="admin-links">
+      <div class="admin-grid">
+        <CodeCard
+          title="Player join link"
+          url={url}
+          note="Print or screen-share at the door. Scanning it is the only login players ever do."
+          actions={
+            <>
+              <button class="admin-btn secondary" onClick={() => window.print()}>
+                Print
+              </button>
+              <button class="admin-btn secondary"
+                      onClick={() =>
+                        saveBlob(
+                          new Blob([qrSvgString(url)], { type: 'image/svg+xml' }),
+                          `${stem}.svg`,
+                        )}>
+                SVG
+              </button>
+              <button class="admin-btn secondary"
+                      onClick={async () => {
+                        const blob = await qrPngBlob(url);
+                        if (blob) saveBlob(blob, `${stem}.png`);
+                      }}>
+                PNG
+              </button>
+            </>
+          }
+        />
+        {showMod ? (
+          <CodeCard
+            title="Moderator link"
+            url={modUrl(codes.mod_code)}
+            note="Send privately to whoever runs the review queue. Never project this one."
+          />
+        ) : (
+          <div class="admin-code">
+            <div class="admin-status">Moderator link</div>
+            <p class="admin-note">
+              Hidden so it never ends up on a projected screen.
+            </p>
+            <button class="admin-btn secondary" onClick={() => setShowMod(true)}>
+              Reveal moderator link
+            </button>
+          </div>
+        )}
+      </div>
+      {/* The print sheet lives on <body>, so the print stylesheet can hide
+          everything else outright rather than leave blank pages behind. */}
+      {createPortal(
+        <div class="admin-print-sheet" aria-hidden="true">
+          <h1>{event.name}</h1>
+          <Qr text={url} label="Join QR code" size={512} class="admin-print-qr" />
+          <p class="admin-print-call">Scan to join</p>
+          <p class="admin-print-url">{url}</p>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function CodeCard({ title, url, note, actions }) {
   const [copied, setCopied] = useState(false);
   const canCopy = Boolean(navigator.clipboard?.writeText);
 
@@ -311,6 +430,7 @@ function CodeCard({ title, url, note }) {
           {copied ? 'Copied' : 'Copy link'}
         </button>
       )}
+      {actions && <div class="admin-code-actions">{actions}</div>}
       <p class="admin-note">{note}</p>
     </div>
   );

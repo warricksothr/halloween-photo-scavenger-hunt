@@ -75,7 +75,9 @@ password login remains as break-glass. See "Single sign-on" below.
 POST   /api/admin/login                 { username, password } → admin cookie
                                         (429 after repeated failures)
 POST   /api/admin/logout
-GET    /api/admin/events                → [event summary]
+GET    /api/admin/events                → [event summary] (never carries codes)
+GET    /api/admin/events/{id}/codes     → { join_code, mod_code } (ADR 0026;
+                                        404 event_not_found; a read, not audited)
 GET    /api/admin/readyz                → readiness diagnostics (below)
 POST   /api/admin/events                { name, theme, leaderboard_visibility,
                                           team_size_limit? }        → event + join_code + mod_code

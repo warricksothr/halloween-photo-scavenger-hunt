@@ -405,3 +405,70 @@ body:has(.admin-shell) {
   max-width: 360px;
   margin: 64px auto 0;
 }
+
+/* An event's links, opened from its row (ADR 0026). */
+.admin-links {
+  margin-top: 10px;
+}
+
+.admin-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* The join QR print sheet: rendered on <body> through a portal, invisible
+   on screen, and the only thing on the page when printed. */
+.admin-print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  /* Only while a sheet exists: with no event's links open, printing the
+     console prints the console, not a blank page. */
+  body:has(> .admin-print-sheet) > :not(.admin-print-sheet) {
+    display: none !important;
+  }
+
+  body:has(> .admin-print-sheet) {
+    background: #ffffff !important;
+  }
+
+  .admin-print-sheet {
+    color: #000000;
+    display: block;
+    font-family: system-ui, sans-serif;
+    text-align: center;
+  }
+
+  .admin-print-sheet h1 {
+    font-size: 24pt;
+    margin: 0 0 1cm;
+  }
+
+  .admin-print-qr {
+    display: block;
+    height: 12cm;
+    margin: 0 auto;
+    width: 12cm;
+  }
+
+  .admin-print-call {
+    font-size: 20pt;
+    font-weight: 700;
+    margin: 0.8cm 0 0.3cm;
+  }
+
+  .admin-print-url {
+    font-family: ui-monospace, monospace;
+    font-size: 12pt;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}

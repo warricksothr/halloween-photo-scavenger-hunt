@@ -99,6 +99,29 @@ class TestEvents:
         assert len(events) == 1
         assert "join_code" not in events[0] and "mod_code" not in events[0]
 
+    def test_codes_route_returns_the_create_time_codes(self, admin):
+        # ADR 0026: the host can read the codes back after dismissing the
+        # create panel, and that read is the only extra way out.
+        event = _create_event(admin)
+        resp = admin.get(f"/api/admin/events/{event['id']}/codes")
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "join_code": event["join_code"],
+            "mod_code": event["mod_code"],
+        }
+        # A read writes no audit row (ADR 0004).
+        assert len(_audit_rows(admin)) == 1
+
+    def test_codes_route_requires_admin(self, admin):
+        event = _create_event(admin)
+        admin.post("/api/admin/logout")
+        assert admin.get(f"/api/admin/events/{event['id']}/codes").status_code == 401
+
+    def test_codes_route_404s_an_unknown_event(self, admin):
+        resp = admin.get("/api/admin/events/nope/codes")
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "event_not_found"
+
     def test_patch_updates_fields(self, admin):
         event = _create_event(admin)
         resp = admin.patch(
