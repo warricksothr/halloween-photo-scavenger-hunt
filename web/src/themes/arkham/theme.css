@@ -345,6 +345,39 @@ button.tile {
 .tile.scanning { border-color: var(--cyan); }
 .tile.scanning .glyph-q { color: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
 
+/* A blurhash filling a tile or sitting behind the scanning banner
+   (ADR 0040). The canvas is 32px; CSS stretches it and smoothing blurs. */
+.blurhash.tile-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  display: block;
+}
+.blurhash.banner-blurhash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.9;
+}
+
+/* A rejected photo is shown as itself, framed so it reads as "tried and
+   refused" rather than blurred away (ADR 0040). */
+.tile.rejected,
+.tile.photo-rejected {
+  border: 2px dashed var(--amber);
+}
+.tile.photo-rejected .in-use-label { color: var(--amber); }
+/* A removed photo is framed plainly, not in alert red: its whole team sees
+   the tile, and why it went is between its owner and the moderators
+   (design.md, Notifications). */
+.tile.photo-flagged { border-color: var(--border-lit); }
+.tile.photo-flagged .in-use-label { color: var(--text-dim); }
+.tile.photo-pending { border-color: var(--cyan); overflow: hidden; }
+.tile.photo-pending .in-use-label { animation: pulse 1.4s ease-in-out infinite; }
+.tile.photo-verified { border-color: var(--green); }
+.tile.photo-verified .in-use-label { color: var(--green-bright); }
+
 /* A drawer photo already pending or solved on another riddle (ADR 0035):
    still shown so the player can see where it went, but dimmed and not
    selectable. A pending one pulses like a scanning tile. */

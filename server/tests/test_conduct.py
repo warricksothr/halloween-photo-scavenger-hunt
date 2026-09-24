@@ -6,8 +6,8 @@ The behaviors that matter (design.md strike ladder):
   issues no strike);
 - the ladder is derived: 1 → warned (interstitial), 2 → cooldown
   (uploads blocked), 3 → banned (submissions blocked);
-- quarantine hides the photo from the drawer and the player's photo
-  endpoint, but NOT from moderators;
+- quarantine leaves the photo in the drawer only as its blurhash and
+  closes the player's photo endpoint, but NOT moderators' (ADR 0040);
 - notice-ack is idempotent and clears the interstitial;
 - host reversal recomputes every derived state for free.
 
@@ -61,7 +61,7 @@ class TestInappropriateAction:
             (sub["id"],),
         ).fetchone()
         assert (v["verdict"], v["flavor_text"]) == ("inappropriate", "")
-        # Quarantined immediately — the photo leaves the drawer.
+        # Quarantined immediately: players see only its blurhash now.
         assert (
             conn.execute(
                 "SELECT quarantined FROM evidence_item WHERE id = ?",
@@ -150,8 +150,8 @@ class TestInappropriateAction:
         )
         assert resp.status_code == 201
 
-        # Resubmitting the quarantined photo is a 404 — it is simply
-        # not in the player's drawer any more.
+        # Resubmitting the quarantined photo is a 404: players can no
+        # longer use it, only see its blurhash.
         resp = client.post(
             "/api/submissions",
             json={
@@ -281,14 +281,20 @@ class TestStrikeLadder:
 
 
 class TestQuarantine:
-    def test_quarantined_photo_leaves_drawer_and_photo_endpoint(self, admin, client):
+    def test_quarantined_photo_is_only_a_blurhash_to_players(self, admin, client):
+        """ADR 0040: the team still sees where a flagged photo went, but
+        only as its blurhash; the photo itself is for moderators."""
         p = _party(admin, client)
         mod = _mod(client, p["mod_code"])
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         assert _inappropriate(mod, sub["id"]).status_code == 200
 
         drawer = client.get("/api/evidence").json()
-        assert [i["id"] for i in drawer] == []
+        assert [i["id"] for i in drawer] == [p["evidence_id"]]
+        item = drawer[0]
+        assert item["quarantined"] is True
+        assert item["photo_url"] is None
+        assert item["blurhash"]
         assert client.get(f"/api/evidence/{p['evidence_id']}/photo").status_code == 404
         # Moderators keep access — quarantine is FOR them (disputes).
         assert mod.get(f"/api/mod/evidence/{p['evidence_id']}/photo").status_code == 200

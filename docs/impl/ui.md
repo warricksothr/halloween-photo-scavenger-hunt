@@ -109,6 +109,13 @@ strike interstitial, and the drawer restricted variant.
   the new photo selected, ready to submit (ADR 0036).
 - **The header and tabs are pinned at the top** of every player screen
   (ADR 0034).
+- **Players see a blur, not the photo, while it waits or once removed** —
+  a photo pending review shows as its blurhash with the scanning effect on
+  the Drawer tab, in the riddle picker and behind the SCANNING banner; a
+  photo flagged inappropriate stays in the drawer only as its blurhash,
+  marked removed, and is left out of the picker; a rejected photo shows as
+  itself in a dashed amber frame (ADR 0040; `web/src/evidenceState.js`,
+  `web/src/components/Blurhash.jsx`).
 - **A photo serves one riddle** — the picker shows a photo pending or
   solved elsewhere greyed out and labelled with its riddle (ADR 0035).
 - **Verdict notifications are banners, not routes** — they appear on the

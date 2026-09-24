@@ -11,6 +11,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { Blurhash } from '../components/Blurhash';
+import { latestSubmissionByPhoto, photoState, riddleNumber } from '../evidenceState';
 
 // Opened from a riddle (returnTo), the drawer tags the upload with that
 // riddle and, once it is saved, goes back to the riddle with the photo
@@ -57,6 +59,7 @@ export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUplo
   }
 
   const c = copy.screens.drawer;
+  const latest = latestSubmissionByPhoto(snapshot);
   const restriction = snapshot?.me?.restriction;
   const uploadsSuspended = (restriction?.level ?? 0) >= 2;
   // Strike 2 names its window; strike 3 is for the rest of the event.
@@ -132,19 +135,50 @@ export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUplo
       ) : (
         <div class="tile-grid" style={{ padding: 0 }}>
           {items.map((item) => (
-            // Derivative thumbnails via the authenticated endpoint —
-            // never a direct file path (design.md access control).
-            <div key={item.id} class="tile" style={{ aspectRatio: '1' }}>
-              <img
-                src={item.photo_url}
-                alt={c.photoAlt}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
-                loading="lazy"
-              />
-            </div>
+            <DrawerTile key={item.id} item={item} snapshot={snapshot} latest={latest} c={c} />
           ))}
         </div>
       )}
     </main>
+  );
+}
+
+// One drawer photo as players may see it (ADR 0040): scanning photos and
+// flagged ones as their blurhash, a rejected one with a distinct border,
+// the rest as themselves. Photos come from the authenticated endpoint,
+// never a file path (design.md access control).
+function DrawerTile({ item, snapshot, latest, c }) {
+  const { state, riddleId } = photoState(item, latest);
+  const n = riddleNumber(snapshot, riddleId);
+  const label = {
+    flagged: c.removed,
+    pending: c.scanning(n),
+    verified: c.solved(n),
+    rejected: c.rejected(n),
+  }[state];
+  const photo = (
+    <img
+      src={item.photo_url}
+      alt={c.photoAlt}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
+      loading="lazy"
+    />
+  );
+  let body;
+  if (state === 'flagged') {
+    // Never the photo: its URL is withheld, and the blurhash is all a
+    // player gets. Photos from before blurhashes leave an empty tile.
+    body = item.blurhash ? <Blurhash hash={item.blurhash} class="tile-fill" label={c.removedAlt} /> : null;
+  } else if (state === 'pending') {
+    body = item.blurhash ? <Blurhash hash={item.blurhash} class="tile-fill" label={c.scanningAlt} /> : photo;
+  } else {
+    body = photo;
+  }
+  return (
+    <div class={`tile photo-${state}`} style={{ aspectRatio: '1' }}>
+      {body}
+      {state === 'pending' && <div class="scan-sweep" />}
+      {label && <span class="in-use-label">{label}</span>}
+    </div>
   );
 }

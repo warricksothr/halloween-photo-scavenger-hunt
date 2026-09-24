@@ -36,6 +36,12 @@ const copy = {
       loading: 'Loading drawer',
       empty: 'Drawer empty',
       backToRiddle: (n) => `Back to riddle ${n}`,
+      scanning: (n) => `Scanning riddle ${n}`,
+      scanningAlt: 'Blurred while scanning',
+      solved: (n) => `Solved riddle ${n}`,
+      rejected: (n) => `Rejected riddle ${n}`,
+      removed: 'Removed',
+      removedAlt: 'Removed photo, blurred',
       forRiddle: (n) => `For riddle ${n}`,
     },
     detail: {
@@ -53,6 +59,7 @@ const copy = {
       submit: 'Submit evidence',
       submitting: 'Submitting',
       takeNew: 'Take a new photo',
+      rejectedOn: (n) => `rejected on riddle ${n}`,
     },
     riddles: {
       headline: 'Riddle Board',
@@ -444,6 +451,83 @@ describe('keyboard and screen-reader access', () => {
     expect(onOpenDrawer).toHaveBeenCalledTimes(1);
   });
 
+  it('shows scanning and removed photos as blurs, a rejected one framed (ADR 0040)', async () => {
+    // A real blurhash, so the canvas has something valid to decode.
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-pend', photo_url: '/api/evidence/ev-pend/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-flag', photo_url: null, blurhash: hash, quarantined: true },
+      { id: 'ev-rej', photo_url: '/api/evidence/ev-rej/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-free', photo_url: '/api/evidence/ev-free/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot();
+    snap.riddles.push({ id: 'riddle-2', state: 'pending', text: 'Second', hints: [] });
+    snap.submissions = [
+      { id: 's3', riddle_id: 'riddle-2', evidence_item_id: 'ev-pend', status: 'pending' },
+      { id: 's2', riddle_id: 'riddle-1', evidence_item_id: 'ev-flag', status: 'inappropriate' },
+      { id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-rej', status: 'obscured' },
+    ];
+    render(<DrawerScreen snapshot={snap} copy={copy} />);
+
+    // Scanning and removed: a blur, never the photo.
+    expect(await screen.findByRole('img', { name: 'Blurred while scanning' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Removed photo, blurred' })).toBeTruthy();
+    expect(screen.getByText('Scanning riddle 2')).toBeTruthy();
+    expect(screen.getByText('Removed')).toBeTruthy();
+    const photos = screen.getAllByRole('img', { name: 'Your evidence photo' });
+    expect(photos.map((p) => p.getAttribute('src'))).toEqual([
+      '/api/evidence/ev-rej/photo',
+      '/api/evidence/ev-free/photo',
+    ]);
+    // Rejected: the photo itself, in a rejected frame.
+    expect(photos[0].closest('.tile').classList.contains('photo-rejected')).toBe(true);
+    expect(screen.getByText('Rejected riddle 1')).toBeTruthy();
+  });
+
+  it('leaves a removed photo out of the picker and blurs one still scanning', async () => {
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-pend', photo_url: '/api/evidence/ev-pend/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-flag', photo_url: null, blurhash: hash, quarantined: true },
+      { id: 'ev-rej', photo_url: '/api/evidence/ev-rej/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot();
+    snap.riddles.push({ id: 'riddle-2', state: 'pending', text: 'Second', hints: [] });
+    snap.submissions = [
+      { id: 's3', riddle_id: 'riddle-2', evidence_item_id: 'ev-pend', status: 'pending' },
+      { id: 's2', riddle_id: 'riddle-1', evidence_item_id: 'ev-flag', status: 'inappropriate' },
+      { id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-rej', status: 'obscured' },
+    ];
+    render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Evidence photo 1, Scanning riddle 2' });
+    expect(pending.querySelector('canvas.blurhash')).toBeTruthy();
+    expect(pending.querySelector('img')).toBeNull();
+    // Under the same scanning sweep as the Drawer tab (ADR 0040).
+    expect(pending.querySelector('.scan-sweep')).toBeTruthy();
+    // The rejected photo is free again (ADR 0035), framed, and pickable.
+    const rejected = screen.getByRole('button', { name: 'Evidence photo 2, rejected on riddle 1' });
+    expect(rejected.classList.contains('rejected')).toBe(true);
+    expect(rejected.disabled).toBe(false);
+    // The removed photo is not offered at all.
+    expect(screen.queryByRole('button', { name: /Evidence photo 3/ })).toBeNull();
+  });
+
+  it('shows the scanning photo blurred behind the SCANNING banner', async () => {
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot({ riddleState: 'pending' });
+    snap.submissions = [{ id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-1', status: 'pending' }];
+    const { container } = render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+    await waitFor(() => expect(container.querySelector('canvas.banner-blurhash')).toBeTruthy());
+  });
+
   it('greys out photos already pending or solved on another riddle (ADR 0035)', async () => {
     mocks.api.drawer.mockResolvedValue([
       { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
@@ -473,7 +557,8 @@ describe('keyboard and screen-reader access', () => {
 
     const pending = await screen.findByRole('button', { name: 'Evidence photo 1, Scanning riddle 2' });
     const solved = screen.getByRole('button', { name: 'Evidence photo 2, Solved riddle 3' });
-    const free = screen.getByRole('button', { name: 'Evidence photo 3' });
+    // Rejected, so free again (ADR 0035), and labelled as such (ADR 0040).
+    const free = screen.getByRole('button', { name: 'Evidence photo 3, rejected on riddle 2' });
     expect(pending.disabled).toBe(true);
     expect(pending.classList.contains('pending')).toBe(true);
     expect(solved.disabled).toBe(true);

@@ -88,7 +88,13 @@ def _item_json(row: sqlite3.Row) -> dict:
             row["uploaded_by_name"] if "uploaded_by_name" in row.keys() else None
         ),
         "created_at": row["created_at"],
-        "photo_url": f"/api/evidence/{row['id']}/photo",
+        # The stand-in players see while the photo is pending, and the only
+        # form of a photo flagged inappropriate (ADR 0040). None for photos
+        # uploaded before migration 0005.
+        "blurhash": row["blurhash"] if "blurhash" in row.keys() else None,
+        "quarantined": bool(row["quarantined"]),
+        # A flagged photo has no URL for players: its photo route 404s.
+        "photo_url": None if row["quarantined"] else f"/api/evidence/{row['id']}/photo",
     }
 
 
@@ -240,8 +246,8 @@ def _store_upload(
             )
         writer.execute(
             "INSERT INTO evidence_item (id, team_id, uploaded_by, riddle_id,"
-            " photo_path, phash, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " photo_path, phash, blurhash, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 evidence_id,
                 ctx.team_id,
@@ -249,6 +255,7 @@ def _store_upload(
                 riddle_id,
                 derivative_rel,
                 processed.phash,
+                processed.blurhash,
                 now,
             ),
         )
@@ -340,12 +347,14 @@ def drawer(request: Request, ctx: auth.PlayerContext = Depends(auth.require_play
     conn = reader(request)
     # Team-scoped from day one (design.md): the drawer IS the team's
     # shared pool — a multi-member team sees every member's photos,
-    # each labeled with who shot it.
+    # each labeled with who shot it. A photo flagged inappropriate stays
+    # listed as its blurhash alone, so the team sees where it went
+    # (ADR 0040); its photo route still refuses everyone but moderators.
     rows = conn.execute(
         "SELECT e.*, p.display_name AS uploaded_by_name"
         " FROM evidence_item e"
         " JOIN player p ON p.id = e.uploaded_by"
-        " WHERE e.team_id = ? AND e.quarantined = 0"
+        " WHERE e.team_id = ?"
         " ORDER BY e.created_at DESC",
         (ctx.team_id,),
     ).fetchall()
