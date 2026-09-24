@@ -16,7 +16,9 @@ parent: TKT-01M24GA0PMGWEM80RBS502FGVY
 origin: null
 dependencies: []
 blocks_on: none
-references: []
+references:
+  - ref: pr:50
+    path: null
 claim:
   actor: agent:claude-code/t3code-bf267378
   branch: t3code/mod-console-wide
@@ -27,7 +29,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:43:18Z
-updated_at: 2026-09-24T07:59:01Z
+updated_at: 2026-09-24T08:03:43Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -109,3 +111,7 @@ Requested by Drew on 2026-09-24, after moderating the kobal demo event from a de
 **agent:claude-code/t3code-bf267378** at 2026-09-24T07:53:37Z
 
 Verification at 1366/820/390 after the CSS fixes. The button modifiers now anchor on .btn (.mod-console .btn.mod-btn-*), because the runtime-injected theme's .btn.secondary tied with two classes and won on order. The rail puts the queue tags on their own line. Retry buttons are amber, 'Subject not found' is red, canned lines are left-aligned with no uppercasing, and the lightbox Close is 76px. The intermittent broken queue thumbnail is not a layout bug. It is a shared-reader-connection race on concurrent photo requests (one 401, one 500 InterfaceError), and it also exists on main. Filed as draft TKT-01M396FF6CS39ZYQ9HFTRPCDW7 (Shared reader connection races under concurrent requests); left out of this change.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T08:03:43Z
+
+PR #50 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/50), base b333e15. Terva r1: request mod-console-wide-r1, run b38b7e38 (Actions #630), reviewed head adc9f7c, review 382. There were two findings. The medium finding (no .tickets change in the PR) is declined: ticket commits land directly on main, and b333e15 is the PR base. The low finding (no test for auto-advance after an inappropriate removal) is accepted and fixed in f5affb6. Reply is issue comment 11598. Re-review requested as mod-console-wide-r2 on f5affb6.
