@@ -133,6 +133,25 @@ describe('moderator console layout and flow', () => {
     expect(screen.queryByText('Riddle for Toad')).toBeNull();
   });
 
+  it('opens the next free submission after an inappropriate removal', async () => {
+    const robin = make('a', 'Robin');
+    const toad = make('b', 'Toad', { claimed_by: { id: 'mod-other', label: 'Oracle' } });
+    const selina = make('c', 'Selina');
+    mocks.api.modQueue.mockResolvedValue([robin, toad, selina]);
+    render(<ModConsoleScreen copy={copy} moderatorId="mod-me" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Robin/ }));
+    await screen.findByText('Riddle for Robin');
+
+    mocks.api.modQueue.mockResolvedValue([toad, selina]);
+    fireEvent.click(screen.getByRole('button', { name: /Flag Inappropriate/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirm: remove photo/ }));
+
+    expect(await screen.findByText('Riddle for Selina')).toBeTruthy();
+    expect(mocks.api.modInappropriate).toHaveBeenCalledWith('a', '', 15);
+    expect(mocks.api.modClaim).toHaveBeenLastCalledWith('c');
+    expect(screen.queryByText('Riddle for Toad')).toBeNull();
+  });
+
   it('shows the empty state when nothing is left to review', async () => {
     mocks.api.modQueue.mockResolvedValue([make('a', 'Robin')]);
     render(<ModConsoleScreen copy={copy} moderatorId="mod-me" />);
