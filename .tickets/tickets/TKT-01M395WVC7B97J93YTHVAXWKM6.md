@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:43:18Z
-updated_at: 2026-09-24T07:43:20Z
+updated_at: 2026-09-24T07:59:01Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -56,11 +56,11 @@ Requested by Drew on 2026-09-24, after moderating the kobal demo event from a de
 
 ## Acceptance criteria
 
-- [ ] At desktop width the console shows three columns (queue, large photo, decision panel), each scrolling on its own, with the verdict buttons visible without scrolling on a 1366x768 screen.
-- [ ] A portrait tablet shows two columns (queue, then photo above the decision panel), and a phone keeps the single-column layout.
-- [ ] After a verdict or a conduct removal, the next pending submission that no other moderator is viewing opens automatically.
-- [ ] A 'Shared?' item shows its photo side by side with the photo it matched, labelled with both teams, with Clear/Confirm beside them.
-- [ ] Clicking a photo opens it full-size; Escape or a click closes it.
+- [x] At desktop width the console shows three columns (queue, large photo, decision panel), each scrolling on its own, with the verdict buttons visible without scrolling on a 1366x768 screen.
+- [x] A portrait tablet shows two columns (queue, then photo above the decision panel), and a phone keeps the single-column layout.
+- [x] After a verdict or a conduct removal, the next pending submission that no other moderator is viewing opens automatically.
+- [x] A 'Shared?' item shows its photo side by side with the photo it matched, labelled with both teams, with Clear/Confirm beside them.
+- [x] Clicking a photo opens it full-size; Escape or a click closes it.
 - [ ] Verified on kobal from a desktop browser.
 
 ## Implementation plan
@@ -103,3 +103,9 @@ Requested by Drew on 2026-09-24, after moderating the kobal demo event from a de
 ### Checks
 - Unit tests for auto-advance (skipping other moderators' claims), the compare, the zoom open and close, and the Teams switch.
 - Headless screenshots at 390, 820 and 1366 px on the built app with seeded submissions and a flag.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:53:37Z
+
+Verification at 1366/820/390 after the CSS fixes. The button modifiers now anchor on .btn (.mod-console .btn.mod-btn-*), because the runtime-injected theme's .btn.secondary tied with two classes and won on order. The rail puts the queue tags on their own line. Retry buttons are amber, 'Subject not found' is red, canned lines are left-aligned with no uppercasing, and the lightbox Close is 76px. The intermittent broken queue thumbnail is not a layout bug. It is a shared-reader-connection race on concurrent photo requests (one 401, one 500 InterfaceError), and it also exists on main. Filed as draft TKT-01M396FF6CS39ZYQ9HFTRPCDW7 (Shared reader connection races under concurrent requests); left out of this change.
