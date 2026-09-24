@@ -21,7 +21,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T18:35:13Z
-updated_at: 2026-09-24T18:35:13Z
+updated_at: 2026-09-24T18:38:47Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -45,3 +45,9 @@ Raised by Drew on 2026-09-24. On a return visit the site did not remember the ga
 - **How that fits ADR 0021.** The TTL exists so a lost device stops working. A resume token longer than the TTL reopens that hole unless the resume is bounded. Options: the event's own close, a moderator revoke, or a second factor such as the join code. Any change here needs a new ADR that amends 0021.
 - **Where the list lives.** One option is client storage (localStorage entries holding event id, name and display name, which are not credentials). The other is server-side, keyed by a device token. Either way, closed or purged events drop off the list.
 - **A cheaper stopgap.** Raise `ARKHAM_SESSION_TTL_SECONDS` on kobal to cover the event night. That is an ops change on kobal, so it needs Drew's confirmation.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:38:47Z
+
+Drew, 2026-09-24: no stopgap wanted. The party is about a month out, so leave ARKHAM_SESSION_TTL_SECONDS as it is on kobal and design the real rejoin instead.

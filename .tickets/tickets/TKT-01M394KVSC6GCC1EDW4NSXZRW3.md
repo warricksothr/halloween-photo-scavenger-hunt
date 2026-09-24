@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:20:55Z
-updated_at: 2026-09-24T18:35:13Z
+updated_at: 2026-09-24T18:38:47Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -119,3 +119,7 @@ Unverified:
 - Whether that link belonged to another event.
 
 Next: ask Drew which screen the link was on and where it was pasted. Then reproduce with a link copied from that surface.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:38:47Z
+
+Drew confirmed the likely cause: the moderator link was not clickable or right-clickable, so he copied the URL text by hand and got a bad copy. Fix on branch t3code/mod-link-anchor: CodeCard renders the URL as an anchor (target=_blank) on both the post-create panel and Links & QR, so a phone can tap it or long-press for Copy Link. A join link still asks for a name before joining, so tapping it never creates a player. AdminEvents.test.jsx pins the href and target on both panels. The quality gate passes.
