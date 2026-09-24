@@ -432,7 +432,14 @@ function CodeCard({ title, url, note, actions }) {
     <div class="admin-code">
       <div class="admin-status">{title}</div>
       <Qr text={url} label={`${title} QR code`} />
-      <code class="admin-code-url">{url}</code>
+      {/* A real link, not bare text: a phone can tap it or long-press it
+          for "Copy Link", and selecting plain text on a phone is how a
+          code gets copied short (TKT-01M394KVSC6GCC1EDW4NSXZRW3). Neither
+          link acts on its own: the join link still asks for a name, and
+          the mod link is the host's own way in (ADR 0027). */}
+      <a class="admin-code-url" href={url} target="_blank" rel="noopener">
+        <code>{url}</code>
+      </a>
       {canCopy && (
         <button class="admin-btn secondary" onClick={onCopy}>
           {copied ? 'Copied' : 'Copy link'}

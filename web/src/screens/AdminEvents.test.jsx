@@ -50,7 +50,12 @@ describe('admin event management', () => {
 
     const origin = window.location.origin;
     expect(await screen.findByText(`${origin}/j/JOIN123`)).toBeTruthy();
-    expect(screen.getByText(`${origin}/m/MOD456`)).toBeTruthy();
+    // The URLs are links, so a phone can tap one or long-press it to copy.
+    for (const path of ['/j/JOIN123', '/m/MOD456']) {
+      const link = screen.getByText(`${origin}${path}`).closest('a');
+      expect(link.getAttribute('href')).toBe(`${origin}${path}`);
+      expect(link.getAttribute('target')).toBe('_blank');
+    }
 
     // Inline SVG, not an <img>: the production CSP (img-src 'self')
     // blocks a data: URI image, so the QR never loads one (ADR 0026).
