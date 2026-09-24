@@ -104,6 +104,9 @@ export default {
       // picker, greyed out and labelled with the riddle holding it.
       inUsePending: (n) => `Scanning · Riddle ${n}`,
       inUseSolved: (n) => `Solved · Riddle ${n}`,
+      // Always offered under the picker; the drawer returns here with the
+      // new photo selected.
+      takeNew: 'Take a new photo',
       photoTaken: (n) => `That photo is already on Riddle ${n}. Pick another or take a new one.`,
       // The hint ladder. Nothing shows until the player asks, and each
       // press costs them one more level of the reveal.
@@ -118,6 +121,10 @@ export default {
       uploading: 'Uploading…',
       loading: 'Opening the drawer…',
       empty: 'No evidence yet. Take a photo of something suspicious.',
+      // Opened from a riddle: a way back, and a promise of where the photo
+      // goes.
+      backToRiddle: (n) => `← Back to Riddle ${n}`,
+      forRiddle: (n) => `Shooting for Riddle ${n}. The photo will be ready to submit there.`,
     },
     standings: {
       headline: 'Standings',

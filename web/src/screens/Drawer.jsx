@@ -12,7 +12,10 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { api } from '../api';
 
-export function DrawerScreen({ snapshot, copy }) {
+// Opened from a riddle (returnTo), the drawer tags the upload with that
+// riddle and, once it is saved, goes back to the riddle with the photo
+// selected (ADR 0036). onReturn is the same Back as the browser's.
+export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUploadedFor }) {
   const [items, setItems] = useState(null); // null = loading
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -33,15 +36,22 @@ export function DrawerScreen({ snapshot, copy }) {
     if (!file) return;
     setBusy(true);
     setError(null);
-    const result = await api.upload(file);
+    const result = await api.upload(file, returnTo ?? undefined);
+    // Reset so choosing the same file twice still fires onChange.
+    event.target.value = '';
+    if (!result?.error && returnTo) {
+      onUploadedFor(result.id);
+      return;
+    }
     if (result?.error) setError(result.message);
     await reload();
     setBusy(false);
-    // Reset so choosing the same file twice still fires onChange.
-    event.target.value = '';
   }
 
   const c = copy.screens.drawer;
+  const returnNumber = returnTo
+    ? (snapshot?.riddles ?? []).findIndex((r) => r.id === returnTo) + 1
+    : 0;
   const restriction = snapshot?.me?.restriction;
   const uploadsSuspended = (restriction?.level ?? 0) >= 2;
   // Strike 2 names its window; strike 3 is for the rest of the event.
@@ -52,9 +62,19 @@ export function DrawerScreen({ snapshot, copy }) {
 
   return (
     <main style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
+      {returnNumber > 0 && (
+        <button
+          class="btn secondary"
+          onClick={onReturn}
+          style={{ width: 'auto', padding: '8px 14px', marginBottom: 12, alignSelf: 'flex-start' }}
+        >
+          {c.backToRiddle(returnNumber)}
+        </button>
+      )}
       <h1 class="headline headline-rule" style={{ fontSize: '0.95rem', marginBottom: 12 }}>
         {c.headline}
       </h1>
+      {returnNumber > 0 && <p class="dim" style={{ marginBottom: 12 }}>{c.forRiddle(returnNumber)}</p>}
 
       {uploadsSuspended ? (
         <div class="verdict-banner sev-red" style={{ marginBottom: 16 }}>

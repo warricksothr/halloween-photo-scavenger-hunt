@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — Back and the edge swipe stay in the game; a riddle gets
+  its photo back.** TKT-01M390Y0QY and TKT-01M390Y0S6. Every screen change
+  pushes a history entry, so Back and the iOS swipe move between screens.
+  A riddle always offers "Take a new photo", and the drawer it opens
+  leads back to it, tags the upload with the riddle, and returns with the
+  photo selected (ADR 0036).
+
 - **2026-09-24 — One photo serves one riddle.** TKT-01M390Y0TE: a photo
   pending or solved on one riddle can no longer be submitted to another
   (409 `evidence_in_use`). The riddle's picker shows it greyed out and

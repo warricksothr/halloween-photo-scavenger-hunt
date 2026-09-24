@@ -35,6 +35,8 @@ const copy = {
       uploading: 'Uploading',
       loading: 'Loading drawer',
       empty: 'Drawer empty',
+      backToRiddle: (n) => `Back to riddle ${n}`,
+      forRiddle: (n) => `For riddle ${n}`,
     },
     detail: {
       alreadyScanning: 'Already scanning.',
@@ -50,6 +52,7 @@ const copy = {
       pickEvidence: 'Submit evidence',
       submit: 'Submit evidence',
       submitting: 'Submitting',
+      takeNew: 'Take a new photo',
     },
     riddles: {
       headline: 'Riddle Board',
@@ -369,6 +372,54 @@ describe('keyboard and screen-reader access', () => {
     expect(second.getAttribute('aria-pressed')).toBe('true');
     expect(first.getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByRole('button', { name: 'Submit evidence' }).disabled).toBe(false);
+  });
+
+  it('opened from a riddle, the drawer tags the upload and hands back the photo (ADR 0036)', async () => {
+    mocks.api.upload = vi.fn().mockResolvedValue({ id: 'ev-new' });
+    const onUploadedFor = vi.fn();
+    const onReturn = vi.fn();
+    render(
+      <DrawerScreen
+        snapshot={snapshot()}
+        copy={copy}
+        returnTo="riddle-1"
+        onReturn={onReturn}
+        onUploadedFor={onUploadedFor}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to riddle 1' }));
+    expect(onReturn).toHaveBeenCalledTimes(1);
+
+    const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText('Add a photo'), { target: { files: [file] } });
+    await waitFor(() => expect(onUploadedFor).toHaveBeenCalledWith('ev-new'));
+    expect(mocks.api.upload).toHaveBeenCalledWith(file, 'riddle-1');
+    delete mocks.api.upload;
+  });
+
+  it('offers a new photo on a riddle whose drawer is not empty, and seeds a returned selection', async () => {
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
+      { id: 'ev-2', photo_url: '/api/evidence/ev-2/photo' },
+    ]);
+    const onOpenDrawer = vi.fn();
+    render(
+      <RiddleDetailScreen
+        snapshot={snapshot()}
+        copy={copy}
+        riddleId="riddle-1"
+        initialSelected="ev-2"
+        onBack={vi.fn()}
+        onOpenDrawer={onOpenDrawer}
+      />,
+    );
+
+    const second = await screen.findByRole('button', { name: 'Evidence photo 2' });
+    expect(second.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Submit evidence' }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Take a new photo' }));
+    expect(onOpenDrawer).toHaveBeenCalledTimes(1);
   });
 
   it('greys out photos already pending or solved on another riddle (ADR 0035)', async () => {
