@@ -398,6 +398,28 @@ describe('keyboard and screen-reader access', () => {
     delete mocks.api.upload;
   });
 
+  it('does not tag or return to a riddle removed while the drawer was open', async () => {
+    mocks.api.upload = vi.fn().mockResolvedValue({ id: 'ev-new' });
+    const onUploadedFor = vi.fn();
+    render(
+      <DrawerScreen
+        snapshot={snapshot()}
+        copy={copy}
+        returnTo="riddle-gone"
+        onReturn={vi.fn()}
+        onUploadedFor={onUploadedFor}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Back to riddle/ })).toBeNull();
+    const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText('Add a photo'), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.api.upload).toHaveBeenCalledWith(file, undefined));
+    await waitFor(() => expect(mocks.api.drawer).toHaveBeenCalledTimes(2));
+    expect(onUploadedFor).not.toHaveBeenCalled();
+    delete mocks.api.upload;
+  });
+
   it('offers a new photo on a riddle whose drawer is not empty, and seeds a returned selection', async () => {
     mocks.api.drawer.mockResolvedValue([
       { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },

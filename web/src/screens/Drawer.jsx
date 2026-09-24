@@ -31,15 +31,23 @@ export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUplo
     reload();
   }, []);
 
+  // The riddle that opened the drawer, while it is still on the board. A
+  // riddle a moderator removed meanwhile is neither tagged nor returned to;
+  // the photo simply lands in the drawer.
+  const returnNumber = returnTo
+    ? (snapshot?.riddles ?? []).findIndex((r) => r.id === returnTo) + 1
+    : 0;
+  const target = returnNumber > 0 ? returnTo : null;
+
   async function onFileChosen(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     setBusy(true);
     setError(null);
-    const result = await api.upload(file, returnTo ?? undefined);
+    const result = await api.upload(file, target ?? undefined);
     // Reset so choosing the same file twice still fires onChange.
     event.target.value = '';
-    if (!result?.error && returnTo) {
+    if (!result?.error && target) {
       onUploadedFor(result.id);
       return;
     }
@@ -49,9 +57,6 @@ export function DrawerScreen({ snapshot, copy, returnTo = null, onReturn, onUplo
   }
 
   const c = copy.screens.drawer;
-  const returnNumber = returnTo
-    ? (snapshot?.riddles ?? []).findIndex((r) => r.id === returnTo) + 1
-    : 0;
   const restriction = snapshot?.me?.restriction;
   const uploadsSuspended = (restriction?.level ?? 0) >= 2;
   // Strike 2 names its window; strike 3 is for the rest of the event.
