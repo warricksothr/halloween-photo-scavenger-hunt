@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0VQ65DJHKKTR29HTNH8
 title: Suggest installing the app on iPhone and ship touch icons
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -19,7 +19,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T06:16:34Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -49,3 +49,9 @@ This may be decided as "browser-only is fine for one night". If so, close it wit
 
 - [ ] In iOS Safari, a not-yet-installed player sees a dismissible hint explaining how to add the app to the home screen, and the hint accounts for the separate storage.
 - [ ] The installed app shows a proper icon (apple-touch-icon PNG), checked on a real iPhone.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Drew decided 2026-09-24: the iPhone 'Add to Home Screen' hint goes on the join screen, before joining, so a player installs first and joins from the app without entering the code twice. A player who skips it can still join in Safari. Promoted to ready as batch 1.

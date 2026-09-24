@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0QYSZFA925774TT83PQ
 title: Make browser back and edge swipe navigate inside the app
 type: bug
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -19,7 +19,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T21:51:19Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -58,3 +58,7 @@ As a result, the edge swipe and the browser's Back button leave the app, or do n
 **agent:claude-code/t3code-bf267378** at 2026-09-24T21:51:19Z
 
 2026-09-24, Drew asked about this for the evidence flow: open a riddle, go to the Drawer to add a photo, then swipe back to the riddle. Today, picking an existing photo happens inline on the riddle detail (a grid of drawer items). The only jump away is the empty-drawer button (RiddleDetail.jsx onOpenDrawer), which closes the riddle and switches to the Drawer tab, so after uploading, the player has to find the riddle again. With history entries, Back from the Drawer should return to that riddle. Consider also offering 'Back to <riddle>' on the Drawer after an upload started from a riddle. Line references in the description predate PR #57: the tab bar is now the GameTabs component in main.jsx.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 1. Building TKT-01M390Y0QY (browser back and edge swipe) and TKT-01M390Y0S6 (return from the drawer with the new photo selected) together, since the return path rides on the history model.

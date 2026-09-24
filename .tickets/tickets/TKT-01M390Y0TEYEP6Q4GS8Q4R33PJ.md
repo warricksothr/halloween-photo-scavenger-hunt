@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0TEYEP6Q4GS8Q4R33PJ
 title: Stop offering a photo that is pending on another riddle
 type: bug
-status: draft
+status: ready
 status_reason: null
 priority: high
 due_on: null
@@ -22,7 +22,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T06:16:34Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -61,3 +61,9 @@ Decide the rule first, then record it in design.md and an ADR. The decision need
 - [ ] design.md and an ADR state whether one evidence item may be pending, or verified, on more than one riddle for the same team.
 - [ ] The server enforces that rule and returns a clear 409 for a violating submission.
 - [ ] The riddle page's picker shows an in-use photo as unavailable, with the riddle it is attached to, or hides it, as the rule decides.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Drew decided 2026-09-24: one riddle per photo within a team. A photo pending or accepted (verified) on one riddle cannot be submitted to another; once its submission is rejected or withdrawn it is free again. The server enforces it, so one photo never scores twice. In the riddle's picker an in-use photo stays visible but greyed out and not selectable, labelled with its riddle ('pending on' pulsing, or 'solved'). Promoted to ready as batch 1 of the next work.

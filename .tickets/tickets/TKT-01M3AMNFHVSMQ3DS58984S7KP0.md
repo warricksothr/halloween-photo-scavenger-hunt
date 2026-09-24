@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AMNFHVSMQ3DS58984S7KP0
 title: Show blurhash placeholders for pending and flagged photos
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: low
 due_on: null
@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T21:20:40Z
-updated_at: 2026-09-24T21:51:01Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -52,3 +52,9 @@ Drew's idea (2026-09-24): compute a blurhash of every submitted photo. While a p
 - [ ] A photo flagged inappropriate appears to players only as its blurhash; the photo itself is served only to moderators and the admin.
 - [ ] A rejected photo shows unblurred with a distinct rejected border.
 - [ ] Server tests cover the payloads and access rules; unit and e2e tests cover the three states; an ADR records the design.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.

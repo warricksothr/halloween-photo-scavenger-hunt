@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391CVK8TGZZM4WRZ4BFS1Y1
 title: Link the admin, moderator and player views to each other
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T07:19:46Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -55,3 +55,7 @@ Reported by Drew on 2026-09-24: the admin console has no link to the moderator c
 **agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
 
 2026-09-24: no longer waits on TKT-01M391CVJ10G0HGZR8ZFZB6RW4 (Decide how SSO roles map to moderating events), which was retired with per-event moderation kept. So a 'Moderate' link has to be per event. The revealed mod card's 'Open moderator console' (PR #48) already covers the admin→moderator direction for each event. What remains is moderator→host console and admin→player view.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.

@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391W15BT0AJXSY4V33TNEZK
 title: Rotate an event's join and mod codes
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: normal
 due_on: null
@@ -21,7 +21,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:32:57Z
-updated_at: 2026-09-24T07:19:46Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -53,3 +53,7 @@ There is no way to replace an event's join or mod code today (`server/app/events
 **agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
 
 2026-09-24: no longer waits on TKT-01M391CVJ10G0HGZR8ZFZB6RW4 (Decide how SSO roles map to moderating events), which was retired with per-event moderation kept. So the mod code keeps its role as the selector for an event. A rotation must still decide whether moderators who already joined keep their sessions; their moderator_session is independent of the code.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.

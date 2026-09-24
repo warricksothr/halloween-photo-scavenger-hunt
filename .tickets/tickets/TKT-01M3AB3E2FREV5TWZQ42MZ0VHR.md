@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AB3E2FREV5TWZQ42MZ0VHR
 title: Moderator queue labels own claims as someone else viewing
 type: bug
-status: draft
+status: ready
 status_reason: null
 priority: low
 due_on: null
@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T18:33:31Z
-updated_at: 2026-09-24T18:33:31Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -43,3 +43,9 @@ Seen in Drew's iPhone screenshot of the kobal moderator console on 2026-09-24, a
 ### Not yet checked
 
 Whether the two claims in the screenshot came from the same moderator session or from Drew's earlier desktop session. Read the claim rows before choosing a fix.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.

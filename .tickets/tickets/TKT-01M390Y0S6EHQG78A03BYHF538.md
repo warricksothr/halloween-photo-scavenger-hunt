@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0S6EHQG78A03BYHF538
 title: Return from the drawer to the riddle with the new photo selected
 type: task
-status: draft
+status: ready
 status_reason: null
 priority: high
 due_on: null
@@ -20,7 +20,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T06:16:41Z
+updated_at: 2026-09-24T22:08:03Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -50,3 +50,9 @@ Reported by Drew on 2026-09-24 on iPhone Safari. Three related gaps in the loop 
 - [ ] Opening the drawer from a riddle shows a way back to that riddle.
 - [ ] A photo taken from a riddle is uploaded with that riddle's aim tag, and the player returns to the riddle with it selected, ready to submit.
 - [ ] The riddle page offers a new photo whether or not the drawer already holds photos.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
+
+Promoted to ready 2026-09-24 at Drew's request as batch 1. Building TKT-01M390Y0QY (browser back and edge swipe) and TKT-01M390Y0S6 (return from the drawer with the new photo selected) together, since the return path rides on the history model.
