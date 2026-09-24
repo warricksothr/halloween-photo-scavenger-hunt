@@ -111,6 +111,11 @@
   color: var(--amber);
 }
 
+/* Your own claim, or one left behind: information, not a warning. */
+.mod-tag-dim {
+  color: var(--text-dim);
+}
+
 /* ── Review ──────────────────────────────────────────────────────── */
 
 .mod-riddle {

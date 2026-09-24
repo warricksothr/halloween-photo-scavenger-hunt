@@ -53,6 +53,47 @@ when the increment runs and its tests pass.
   `apple-touch-icon.png` and 192/512 PNG manifest icons are rendered from
   `icon.svg` by `web/scripts/render-icons.mjs` (ADR 0037).
 
+- **2026-09-24 — Pending and removed photos show as blurs.**
+  TKT-01M3AMNFH. Each upload stores a blurhash (migration 0005, schema
+  version 5, the `blurhash` package). A photo waiting for a moderator shows
+  to players as its blur with the scanning effect, in the drawer, the
+  picker and behind the SCANNING banner. A photo flagged inappropriate
+  stays in the drawer only as its blur, marked "Photo removed" with no
+  reason, and its photo route still 404s for players. A rejected photo
+  gets a dashed amber frame instead (ADR 0040).
+
+- **2026-09-24 — The host can replace a leaked join or mod code.**
+  TKT-01M391W15B. Each code rotates on its own from the event's links
+  panel, after a warning. The old code is refused at once; players,
+  their rejoin cookies and moderators already in are untouched, per
+  Drew's decisions. `event.code_rotated` records which code, never the
+  codes (ADR 0039).
+
+- **2026-09-24 — The admin, moderator and player views link to each
+  other.** TKT-01M391CVK8. The host console's header links to the
+  moderator console and the player view. The moderator console links back
+  to the host console when `/api/mod/state` reports `moderator.host`, which
+  is true only while this browser holds a host sign-in.
+
+- **2026-09-24 — The moderator queue tells your claims from a colleague's.**
+  TKT-01M3AB3E2. Kobal's rows showed both "DREW SHORT IS VIEWING" tags were
+  Drew's own claims from 15 hours earlier. The queue now reads "OPENED BY
+  YOU", "<NAME> IS VIEWING" (claimed in the last 10 minutes) or "<NAME>
+  OPENED 3 H AGO", the next pick skips only a live viewer, and times read
+  in hours and days (ADR 0038).
+
+- **2026-09-24 — Back and the edge swipe stay in the game; a riddle gets
+  its photo back.** TKT-01M390Y0QY and TKT-01M390Y0S6. Every screen change
+  pushes a history entry, so Back and the iOS swipe move between screens.
+  A riddle always offers "Take a new photo", and the drawer it opens
+  leads back to it, tags the upload with the riddle, and returns with the
+  photo selected (ADR 0036).
+
+- **2026-09-24 — One photo serves one riddle.** TKT-01M390Y0TE: a photo
+  pending or solved on one riddle can no longer be submitted to another
+  (409 `evidence_in_use`). The riddle's picker shows it greyed out and
+  labelled with the riddle holding it (ADR 0035).
+
 - **2026-09-24 — The header and tabs are pinned at the top.**
   TKT-01M390Y0PN10W11HEB6FM91PZ6: on an iPhone the tabs sat below the
   fold and the header scrolled away. Both now sit in one sticky bar at the

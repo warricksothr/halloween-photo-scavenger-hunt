@@ -35,18 +35,31 @@ const copy = {
       uploading: 'Uploading',
       loading: 'Loading drawer',
       empty: 'Drawer empty',
+      backToRiddle: (n) => `Back to riddle ${n}`,
+      scanning: (n) => `Scanning riddle ${n}`,
+      scanningAlt: 'Blurred while scanning',
+      solved: (n) => `Solved riddle ${n}`,
+      rejected: (n) => `Rejected riddle ${n}`,
+      removed: 'Removed',
+      removedAlt: 'Removed photo, blurred',
+      forRiddle: (n) => `For riddle ${n}`,
     },
     detail: {
       alreadyScanning: 'Already scanning.',
       back: 'Back',
       emptyDrawer: 'Drawer empty',
       evidenceOption: (position) => `Evidence photo ${position}`,
+      inUsePending: (n) => `Scanning riddle ${n}`,
+      inUseSolved: (n) => `Solved riddle ${n}`,
+      photoTaken: (n) => `Already on riddle ${n}`,
       loading: 'Loading drawer',
       needNudge: 'Need a nudge?',
       noMoreHints: 'That is every hint.',
       pickEvidence: 'Submit evidence',
       submit: 'Submit evidence',
       submitting: 'Submitting',
+      takeNew: 'Take a new photo',
+      rejectedOn: (n) => `rejected on riddle ${n}`,
     },
     riddles: {
       headline: 'Riddle Board',
@@ -366,6 +379,215 @@ describe('keyboard and screen-reader access', () => {
     expect(second.getAttribute('aria-pressed')).toBe('true');
     expect(first.getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByRole('button', { name: 'Submit evidence' }).disabled).toBe(false);
+  });
+
+  it('opened from a riddle, the drawer tags the upload and hands back the photo (ADR 0036)', async () => {
+    mocks.api.upload = vi.fn().mockResolvedValue({ id: 'ev-new' });
+    const onUploadedFor = vi.fn();
+    const onReturn = vi.fn();
+    render(
+      <DrawerScreen
+        snapshot={snapshot()}
+        copy={copy}
+        returnTo="riddle-1"
+        onReturn={onReturn}
+        onUploadedFor={onUploadedFor}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to riddle 1' }));
+    expect(onReturn).toHaveBeenCalledTimes(1);
+
+    const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText('Add a photo'), { target: { files: [file] } });
+    await waitFor(() => expect(onUploadedFor).toHaveBeenCalledWith('ev-new'));
+    expect(mocks.api.upload).toHaveBeenCalledWith(file, 'riddle-1');
+    delete mocks.api.upload;
+  });
+
+  it('does not tag or return to a riddle removed while the drawer was open', async () => {
+    mocks.api.upload = vi.fn().mockResolvedValue({ id: 'ev-new' });
+    const onUploadedFor = vi.fn();
+    render(
+      <DrawerScreen
+        snapshot={snapshot()}
+        copy={copy}
+        returnTo="riddle-gone"
+        onReturn={vi.fn()}
+        onUploadedFor={onUploadedFor}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Back to riddle/ })).toBeNull();
+    const file = new File(['x'], 'shot.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText('Add a photo'), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.api.upload).toHaveBeenCalledWith(file, undefined));
+    await waitFor(() => expect(mocks.api.drawer).toHaveBeenCalledTimes(2));
+    expect(onUploadedFor).not.toHaveBeenCalled();
+    delete mocks.api.upload;
+  });
+
+  it('offers a new photo on a riddle whose drawer is not empty, and seeds a returned selection', async () => {
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
+      { id: 'ev-2', photo_url: '/api/evidence/ev-2/photo' },
+    ]);
+    const onOpenDrawer = vi.fn();
+    render(
+      <RiddleDetailScreen
+        snapshot={snapshot()}
+        copy={copy}
+        riddleId="riddle-1"
+        initialSelected="ev-2"
+        onBack={vi.fn()}
+        onOpenDrawer={onOpenDrawer}
+      />,
+    );
+
+    const second = await screen.findByRole('button', { name: 'Evidence photo 2' });
+    expect(second.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Submit evidence' }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Take a new photo' }));
+    expect(onOpenDrawer).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows scanning and removed photos as blurs, a rejected one framed (ADR 0040)', async () => {
+    // A real blurhash, so the canvas has something valid to decode.
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-pend', photo_url: '/api/evidence/ev-pend/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-flag', photo_url: null, blurhash: hash, quarantined: true },
+      { id: 'ev-rej', photo_url: '/api/evidence/ev-rej/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-free', photo_url: '/api/evidence/ev-free/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot();
+    snap.riddles.push({ id: 'riddle-2', state: 'pending', text: 'Second', hints: [] });
+    snap.submissions = [
+      { id: 's3', riddle_id: 'riddle-2', evidence_item_id: 'ev-pend', status: 'pending' },
+      { id: 's2', riddle_id: 'riddle-1', evidence_item_id: 'ev-flag', status: 'inappropriate' },
+      { id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-rej', status: 'obscured' },
+    ];
+    render(<DrawerScreen snapshot={snap} copy={copy} />);
+
+    // Scanning and removed: a blur, never the photo.
+    expect(await screen.findByRole('img', { name: 'Blurred while scanning' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Removed photo, blurred' })).toBeTruthy();
+    expect(screen.getByText('Scanning riddle 2')).toBeTruthy();
+    expect(screen.getByText('Removed')).toBeTruthy();
+    const photos = screen.getAllByRole('img', { name: 'Your evidence photo' });
+    expect(photos.map((p) => p.getAttribute('src'))).toEqual([
+      '/api/evidence/ev-rej/photo',
+      '/api/evidence/ev-free/photo',
+    ]);
+    // Rejected: the photo itself, in a rejected frame.
+    expect(photos[0].closest('.tile').classList.contains('photo-rejected')).toBe(true);
+    expect(screen.getByText('Rejected riddle 1')).toBeTruthy();
+  });
+
+  it('leaves a removed photo out of the picker and blurs one still scanning', async () => {
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-pend', photo_url: '/api/evidence/ev-pend/photo', blurhash: hash, quarantined: false },
+      { id: 'ev-flag', photo_url: null, blurhash: hash, quarantined: true },
+      { id: 'ev-rej', photo_url: '/api/evidence/ev-rej/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot();
+    snap.riddles.push({ id: 'riddle-2', state: 'pending', text: 'Second', hints: [] });
+    snap.submissions = [
+      { id: 's3', riddle_id: 'riddle-2', evidence_item_id: 'ev-pend', status: 'pending' },
+      { id: 's2', riddle_id: 'riddle-1', evidence_item_id: 'ev-flag', status: 'inappropriate' },
+      { id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-rej', status: 'obscured' },
+    ];
+    render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Evidence photo 1, Scanning riddle 2' });
+    expect(pending.querySelector('canvas.blurhash')).toBeTruthy();
+    expect(pending.querySelector('img')).toBeNull();
+    // Under the same scanning sweep as the Drawer tab (ADR 0040).
+    expect(pending.querySelector('.scan-sweep')).toBeTruthy();
+    // The rejected photo is free again (ADR 0035), framed, and pickable.
+    const rejected = screen.getByRole('button', { name: 'Evidence photo 2, rejected on riddle 1' });
+    expect(rejected.classList.contains('rejected')).toBe(true);
+    expect(rejected.disabled).toBe(false);
+    // The removed photo is not offered at all.
+    expect(screen.queryByRole('button', { name: /Evidence photo 3/ })).toBeNull();
+  });
+
+  it('shows the scanning photo blurred behind the SCANNING banner', async () => {
+    const hash = 'LzG=S=2zSi#%oMWra}jsfQfQfQfQ';
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo', blurhash: hash, quarantined: false },
+    ]);
+    const snap = snapshot({ riddleState: 'pending' });
+    snap.submissions = [{ id: 's1', riddle_id: 'riddle-1', evidence_item_id: 'ev-1', status: 'pending' }];
+    const { container } = render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+    await waitFor(() => expect(container.querySelector('canvas.banner-blurhash')).toBeTruthy());
+  });
+
+  it('greys out photos already pending or solved on another riddle (ADR 0035)', async () => {
+    mocks.api.drawer.mockResolvedValue([
+      { id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' },
+      { id: 'ev-2', photo_url: '/api/evidence/ev-2/photo' },
+      { id: 'ev-3', photo_url: '/api/evidence/ev-3/photo' },
+    ]);
+    const snap = snapshot();
+    snap.riddles.push(
+      { id: 'riddle-2', state: 'pending', text: 'Second', hints: [] },
+      { id: 'riddle-3', state: 'verified', text: 'Third', hints: [] },
+    );
+    snap.submissions = [
+      { id: 's3', riddle_id: 'riddle-2', evidence_item_id: 'ev-1', status: 'pending' },
+      { id: 's2', riddle_id: 'riddle-3', evidence_item_id: 'ev-2', status: 'verified' },
+      // A rejected submission frees its photo.
+      { id: 's1', riddle_id: 'riddle-2', evidence_item_id: 'ev-3', status: 'not_found' },
+    ];
+    render(
+      <RiddleDetailScreen
+        snapshot={snap}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Evidence photo 1, Scanning riddle 2' });
+    const solved = screen.getByRole('button', { name: 'Evidence photo 2, Solved riddle 3' });
+    // Rejected, so free again (ADR 0035), and labelled as such (ADR 0040).
+    const free = screen.getByRole('button', { name: 'Evidence photo 3, rejected on riddle 2' });
+    expect(pending.disabled).toBe(true);
+    expect(pending.classList.contains('pending')).toBe(true);
+    expect(solved.disabled).toBe(true);
+    expect(free.disabled).toBe(false);
+
+    fireEvent.click(free);
+    expect(free.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('explains a photo a teammate took in the meantime', async () => {
+    mocks.api.drawer.mockResolvedValue([{ id: 'ev-1', photo_url: '/api/evidence/ev-1/photo' }]);
+    mocks.api.submit = vi.fn().mockResolvedValue({
+      error: 'evidence_in_use', message: 'In use', riddle_id: 'riddle-1', status: 'pending',
+    });
+    render(
+      <RiddleDetailScreen
+        snapshot={snapshot()}
+        copy={copy}
+        riddleId="riddle-1"
+        onBack={vi.fn()}
+        onOpenDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence photo 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit evidence' }));
+    expect(await screen.findByText('Already on riddle 1')).toBeTruthy();
+    expect(mocks.refresh).toHaveBeenCalled();
+    delete mocks.api.submit;
   });
 
   it('exposes the strike notice as a labelled alert dialog that holds focus', () => {

@@ -114,6 +114,15 @@ export default {
       // Shown when the double-tap race 409s: the submission the player
       // wanted already exists, so this is reassurance, not an error.
       alreadyScanning: 'Already scanning this one — no need to resubmit.',
+      // One photo serves one riddle (ADR 0035). A photo in use stays in the
+      // picker, greyed out and labelled with the riddle holding it.
+      inUsePending: (n) => `Scanning · Riddle ${n}`,
+      inUseSolved: (n) => `Solved · Riddle ${n}`,
+      // Always offered under the picker; the drawer returns here with the
+      // new photo selected.
+      takeNew: 'Take a new photo',
+      rejectedOn: (n) => `rejected on Riddle ${n}`,
+      photoTaken: (n) => `That photo is already on Riddle ${n}. Pick another or take a new one.`,
       // The hint ladder. Nothing shows until the player asks, and each
       // press costs them one more level of the reveal.
       needNudge: 'Need a nudge?',
@@ -127,6 +136,19 @@ export default {
       uploading: 'Uploading…',
       loading: 'Opening the drawer…',
       empty: 'No evidence yet. Take a photo of something suspicious.',
+      // Opened from a riddle: a way back, and a promise of where the photo
+      // goes.
+      backToRiddle: (n) => `← Back to Riddle ${n}`,
+      // Each photo's state on its tile (ADR 0040). A scanning photo and a
+      // removed one show only as a blur. The removed label is neutral: the
+      // whole team sees it, and conduct matters are not announced to them.
+      scanning: (n) => `Scanning · Riddle ${n}`,
+      scanningAlt: 'Your photo, blurred while it is scanned',
+      solved: (n) => `Solved · Riddle ${n}`,
+      rejected: (n) => `Rejected · Riddle ${n}`,
+      removed: 'Photo removed',
+      removedAlt: 'A removed photo, shown blurred',
+      forRiddle: (n) => `Shooting for Riddle ${n}. The photo will be ready to submit there.`,
     },
     standings: {
       headline: 'Standings',

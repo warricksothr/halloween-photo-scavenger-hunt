@@ -78,6 +78,13 @@ POST   /api/admin/logout
 GET    /api/admin/events                → [event summary] (never carries codes)
 GET    /api/admin/events/{id}/codes     → { join_code, mod_code } (ADR 0026;
                                         404 event_not_found; a read, not audited)
+POST   /api/admin/events/{id}/codes/{join|mod}/rotate
+                                        → { join_code, mod_code }: replaces
+                                        one code; the old one is refused at
+                                        once. Who already joined stays in.
+                                        Logs event.code_rotated with
+                                        { code: kind }, never a code
+                                        (ADR 0039) | 404 unknown kind/event
 GET    /api/admin/readyz                → readiness diagnostics (below)
 POST   /api/admin/events                { name, theme, leaderboard_visibility,
                                           team_size_limit? }        → event + join_code + mod_code
@@ -227,7 +234,13 @@ POST   /api/evidence                    multipart photo + optional riddle_id
                                         Logs evidence.uploaded; raises
                                         duplicate_flag.raised on cross-team
                                         phash collision.
-GET    /api/evidence                    → my team's drawer (thumbnails, tags)
+GET    /api/evidence                    → my team's drawer (thumbnails, tags):
+                                        [{ id, riddle_id, uploaded_by,
+                                        uploaded_by_name, created_at,
+                                        blurhash, quarantined, photo_url }].
+                                        A flagged photo stays listed with
+                                        photo_url null: players get only its
+                                        blurhash (ADR 0040)
 GET    /api/evidence/{id}/photo         derivative only; owner team or
                                         moderator, else 404 (not 403 — don't
                                         confirm existence)
@@ -236,7 +249,11 @@ POST   /api/submissions                 { riddle_id, evidence_item_id }
                                         → 201 submission (pending) |
                                           409 one already pending for this
                                           riddle (partial unique index →
-                                          friendly error, spec invariant)
+                                          friendly error, spec invariant) |
+                                          409 evidence_in_use: the photo is
+                                          pending or verified on another
+                                          riddle; body adds riddle_id and
+                                          status (ADR 0035)
                                         Logs submission.created.
 ```
 
@@ -260,6 +277,12 @@ POST   /api/mod/logout                  leave the console on this browser
                                         logs session.revoked. The player
                                         session and SSO identity stay | 401
                                         without a moderator session
+GET    /api/mod/state                   the console's boot probe → { event,
+                                        moderator: { id, label, host } }.
+                                        host: this browser also holds a host
+                                        sign-in, so the console links back
+                                        to /admin (a hint; /api/admin still
+                                        checks every call) | 401
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
                                           state, duplicate flags. A flagged
@@ -270,7 +293,11 @@ GET    /api/mod/queue                   → pending subs, oldest first, with
                                           name, else first member's
                                           display name) for the side-by-
                                           side compare (ADR 0029); an
-                                          unflagged item has `flag: null`
+                                          unflagged item has `flag: null`.
+                                          `claimed_by` is null or
+                                          { id, label, claimed_at,
+                                          claim_age } (ADR 0038; the age
+                                          spares the client a clock sync)
 POST   /api/mod/queue/{sub_id}/claim    soft claim (advisory; ADR 0002)
 POST   /api/mod/queue/{sub_id}/verdict  { verdict, flavor_text? }
                                         conditional UPDATE WHERE status =
@@ -339,8 +366,9 @@ GET    /api/mod/audit                   full forensic timeline, moderator+
       "state": "unsolved" }      // unsolved | pending | verified
   ],
   "submissions": [
-    { "id": "…", "riddle_id": "…", "status": "obscured",
-      "verdict_flavor": "…", "created_at": 1700000000 }
+    { "id": "…", "riddle_id": "…", "evidence_item_id": "…",
+      "status": "obscured", "verdict_flavor": "…",
+      "created_at": 1700000000 }
   ],
   "leaderboard": null            // null when hidden; else [ { team, score } ]
 }

@@ -98,6 +98,26 @@ strike interstitial, and the drawer restricted variant.
 
 - **Riddle list is the home tab**, not a dashboard — the Batcomputer tile
   grid is the emotional center of the app (THEME-NOTES).
+- **Back moves between screens, not out of the game** — each tab change,
+  opened riddle and trip to the drawer is a history entry (in
+  `history.state`; the URL does not change), so the browser's Back and the
+  iOS edge swipe retrace them and the in-app Back buttons do the same
+  (ADR 0036; `web/src/nav.js`).
+- **A riddle sends the player for a photo and gets it back** — the riddle
+  page always offers "Take a new photo". The drawer it opens has a way
+  back to that riddle, tags the upload with it, and returns there with
+  the new photo selected, ready to submit (ADR 0036).
+- **The header and tabs are pinned at the top** of every player screen
+  (ADR 0034).
+- **Players see a blur, not the photo, while it waits or once removed** —
+  a photo pending review shows as its blurhash with the scanning effect on
+  the Drawer tab, in the riddle picker and behind the SCANNING banner; a
+  photo flagged inappropriate stays in the drawer only as its blurhash,
+  marked removed, and is left out of the picker; a rejected photo shows as
+  itself in a dashed amber frame (ADR 0040; `web/src/evidenceState.js`,
+  `web/src/components/Blurhash.jsx`).
+- **A photo serves one riddle** — the picker shows a photo pending or
+  solved elsewhere greyed out and labelled with its riddle (ADR 0035).
 - **Verdict notifications are banners, not routes** — they appear on the
   riddle list and submission detail; no separate inbox screen in MVP.
 - **Conduct surfaces are un-themed by rule** — strike interstitial and
@@ -120,9 +140,23 @@ strike interstitial, and the drawer restricted variant.
   client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
+- **A leaked link can be replaced** — "New join code" in an event's links
+  panel and "New moderator code" on its revealed moderator card each warn
+  what stops working, then replace that one code and show the new link.
+  Players and moderators already in stay (ADR 0039).
+- **The three views link to each other** — the host console's header
+  links to the moderator console (`/mod`, the console this browser last
+  joined) and the player view (`/`, where Open Cases lists its games); each
+  event card's revealed mod link opens that event's console. The moderator
+  console shows "Host console" when `/api/mod/state` says this browser is
+  also signed in as the host (TKT-01M391CVK8).
 - **The console has a way out** — a Leave console button in its header
   ends this browser's moderator session and goes to `/`: the game when
   a player session exists, otherwise the join screen (ADR 0032).
+- **A claim says whose and how old** — the queue marks your own claims
+  "OPENED BY YOU", another moderator's claim from the last 10 minutes
+  "<NAME> IS VIEWING", and an older one "<NAME> OPENED 3 H AGO"; only a
+  live viewer keeps an item out of the automatic next pick (ADR 0038).
 - **The console advances itself** — after a verdict or a removal it opens
   the oldest pending item nobody else is viewing, shows a flagged photo
   beside its match, and enlarges either photo on click (ADR 0029;

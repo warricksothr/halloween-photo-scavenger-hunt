@@ -8,6 +8,9 @@ dependencies = [
     "uvicorn>=0.29",
     "argon2-cffi>=23.1",
     "Pillow>=10.0",
+    # A blurred placeholder for a photo players may not see yet or at all
+    # (ADR 0040). Pure Python, and it reads Pillow's pixels directly.
+    "blurhash>=1.1.5,<2",
     "python-multipart>=0.0.9",
     # OIDC authorization-code + PKCE (app/oidc.py). authlib pulls in its
     # own JOSE successor, joserfc, for id_token validation.

@@ -87,6 +87,22 @@ describe('api client', () => {
     await expect(api.snapshot()).resolves.toEqual({ unauthenticated: true });
   });
 
+  it("puts each queue claim's age on this device's clock (ADR 0038)", async () => {
+    globalThis.fetch.mockResolvedValue(response({
+      body: [
+        { id: 'a', claimed_by: { id: 'm', label: 'Oracle', claimed_at: 1, claim_age: 120 } },
+        { id: 'b', claimed_by: null },
+      ],
+    }));
+    const before = Date.now() / 1000;
+    const queue = await api.modQueue();
+    const local = queue[0].claimed_by.claimed_at_local;
+    // Two minutes before receipt by this clock, whatever the server's says.
+    expect(local).toBeGreaterThanOrEqual(before - 120 - 1);
+    expect(local).toBeLessThanOrEqual(Date.now() / 1000 - 120 + 1);
+    expect(queue[1].claimed_by).toBeNull();
+  });
+
   it('folds a rejected fetch into the network error shape', async () => {
     globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
 

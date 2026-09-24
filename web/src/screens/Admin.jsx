@@ -113,6 +113,17 @@ function Shell({ children, signedIn = false }) {
         <h1>Arkham Hunt — Host Console</h1>
         <span class="admin-dim">/admin</span>
         <span class="admin-spacer" />
+        {/* The other two views (TKT-01M391CVK8). The moderator console for
+            a particular event opens from its card's revealed mod link; this
+            one reopens whichever console this browser last joined. The
+            player view is the landing page, whose Open Cases lists the
+            games this browser joined. */}
+        {signedIn && (
+          <nav class="admin-views" aria-label="Other views">
+            <a class="admin-btn secondary" href="/mod">Moderator console</a>
+            <a class="admin-btn secondary" href="/">Player view</a>
+          </nav>
+        )}
         {signedIn && (
           <button class="admin-btn secondary" onClick={signOut}>Sign out</button>
         )}

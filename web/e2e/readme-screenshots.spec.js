@@ -169,13 +169,18 @@ test('capture the README product tour', async ({ browser }) => {
       mimeType: 'image/png',
       buffer: PHOTO,
     });
+    // The saved photo returns to the riddle that asked for it (ADR 0036);
+    // the drawer shot comes from the Drawer tab, and Back returns here.
+    await expect(
+      player.getByRole('heading', { name: 'Find the Bat-Signal' }),
+    ).toBeVisible();
+    await player.getByRole('link', { name: /Drawer/ }).click();
     await expect(
       player.getByRole('img', { name: 'Your evidence photo' }),
     ).toHaveCount(1);
     await capture(player, 'evidence-drawer');
 
-    await player.getByRole('link', { name: 'Riddles' }).click();
-    await player.getByRole('button', { name: 'Open riddle: Find the Bat-Signal' }).click();
+    await player.goBack();
     await expect(
       player.getByRole('button', { name: 'Submit to the Batcomputer' }),
     ).toBeVisible();

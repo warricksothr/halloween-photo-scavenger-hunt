@@ -167,7 +167,10 @@ export const api = {
     request(`/api/mod/join/${encodeURIComponent(modCode)}`, { method: 'POST' }),
   modState: () => request('/api/mod/state'),
   modLogout: () => request('/api/mod/logout', { method: 'POST' }),
-  modQueue: () => request('/api/mod/queue'),
+  // Each claim's server-reported age becomes a time on this device's
+  // clock (claimed_at_local), so claim freshness never compares the
+  // server's clock with the phone's (ADR 0038).
+  modQueue: () => request('/api/mod/queue').then(localiseClaims),
   modClaim: (submissionId) =>
     request(`/api/mod/queue/${submissionId}/claim`, { method: 'POST' }),
   modVerdict: (submissionId, verdict, flavorText) =>
@@ -215,6 +218,9 @@ export const api = {
   // The codes on demand (ADR 0026): their own call, so the list never
   // carries them.
   adminEventCodes: (eventId) => request(`/api/admin/events/${eventId}/codes`),
+  // kind is 'join' or 'mod'; answers with both codes (ADR 0039).
+  adminRotateCode: (eventId, kind) =>
+    request(`/api/admin/events/${eventId}/codes/${kind}/rotate`, { method: 'POST' }),
   adminOpenEvent: (eventId) =>
     request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
   adminCloseEvent: (eventId) =>
@@ -255,3 +261,15 @@ export const api = {
       body: { reason: reason ?? '' },
     }),
 };
+
+function localiseClaims(queue) {
+  if (!Array.isArray(queue)) return queue;
+  const received = Date.now() / 1000;
+  for (const item of queue) {
+    const claim = item.claimed_by;
+    if (claim && typeof claim.claim_age === 'number') {
+      claim.claimed_at_local = received - claim.claim_age;
+    }
+  }
+  return queue;
+}

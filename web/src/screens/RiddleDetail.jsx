@@ -13,6 +13,8 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { Blurhash } from '../components/Blurhash';
+import { latestSubmissionByPhoto, photoState, riddleNumber } from '../evidenceState';
 import { refresh } from '../store';
 
 // submission.status → banner severity. pending gets the cyan scan
@@ -27,7 +29,9 @@ const SEVERITY = {
   expired: 'sev-amber',
 };
 
-export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDrawer }) {
+export function RiddleDetailScreen({
+  snapshot, copy, riddleId, onBack, onOpenDrawer, onGone = onBack, initialSelected = null,
+}) {
   const riddle = snapshot.riddles.find((r) => r.id === riddleId);
   const hints = riddle?.hints ?? [];
   // Snapshot submissions are newest-first (state.py ORDER BY created_at DESC).
@@ -36,7 +40,9 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   const restriction = snapshot.me.restriction;
 
   const [drawer, setDrawer] = useState(null); // null = loading
-  const [selected, setSelected] = useState(null);
+  // Seeded when the player comes back from taking a photo for this riddle
+  // (ADR 0036), so the new photo is ready to submit.
+  const [selected, setSelected] = useState(initialSelected);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // How many hint levels this player has asked to see, tagged with the
@@ -55,9 +61,16 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
     });
   }, []);
 
+  // One riddle per photo (ADR 0035): a photo pending or solved on a
+  // riddle is shown but cannot be picked, labelled with the riddle's
+  // number on the board. The server refuses it anyway; this says why
+  // before the player tries. What each photo may show is ADR 0040's.
+  const latestByPhoto = latestSubmissionByPhoto(snapshot);
+
   if (!riddle) {
-    // Riddle vanished from the snapshot (moderator edit) — retreat.
-    onBack();
+    // Riddle vanished from the snapshot (moderator edit) — retreat
+    // without a history step, since Back would only lead here again.
+    onGone();
     return null;
   }
 
@@ -71,6 +84,11 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
         // Lost the double-tap race — harmless; the refresh below turns
         // the tile pending. Tell the player nothing went wrong.
         setError(copy.screens.detail.alreadyScanning);
+      } else if (result.error === 'evidence_in_use') {
+        // A teammate used the photo since this drawer loaded; the refresh
+        // below greys it out here too.
+        setSelected(null);
+        setError(copy.screens.detail.photoTaken(riddleNumber(snapshot, result.riddle_id)));
       } else {
         setError(result.message);
       }
@@ -93,6 +111,11 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
   // the player needs the "why" while they re-shoot.
   const bannerStatus = pending ? 'pending' : latest?.status;
   const banner = bannerStatus && copy.verdicts[bannerStatus];
+  // While it scans, the photo shows through the banner as its blurhash
+  // (ADR 0040), so the player sees what they sent without the photo.
+  const scanningHash = pending
+    ? drawer?.find((item) => item.id === latest?.evidence_item_id)?.blurhash ?? null
+    : null;
 
   return (
     <main style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -106,7 +129,8 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
 
       {banner && (
         <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius)' }}>
-          <div class={`verdict-banner ${SEVERITY[bannerStatus] ?? 'sev-amber'}`}>
+          {scanningHash && <Blurhash hash={scanningHash} class="banner-blurhash" />}
+          <div class={`verdict-banner ${SEVERITY[bannerStatus] ?? 'sev-amber'}`} style={{ position: 'relative' }}>
             <div class="verdict-chip">{bannerStatus === 'verified' ? '✓' : bannerStatus === 'pending' ? '…' : '!'}</div>
             <div>
               <div class="verdict-headline">{banner.headline}</div>
@@ -170,31 +194,56 @@ export function RiddleDetailScreen({ snapshot, copy, riddleId, onBack, onOpenDra
           ) : (
             <>
               <div class="tile-grid" style={{ padding: 0, marginBottom: 12 }}>
-                {drawer.map((item, index) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    class="tile"
-                    aria-label={c.evidenceOption(index + 1)}
-                    aria-pressed={selected === item.id}
-                    style={{
-                      aspectRatio: '1',
-                      borderColor: selected === item.id ? 'var(--cyan-bright)' : undefined,
-                      borderWidth: selected === item.id ? 2 : undefined,
-                    }}
-                    onClick={() => setSelected(item.id)}
-                  >
-                    <img
-                      src={item.photo_url}
-                      alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
-                      loading="lazy"
-                    />
-                  </button>
-                ))}
+                {/* A flagged photo cannot be submitted, so the picker
+                    leaves it out; the Drawer tab still shows its blurhash. */}
+                {drawer.filter((item) => !item.quarantined).map((item, index) => {
+                  const { state, riddleId } = photoState(item, latestByPhoto);
+                  const inUse = state === 'pending' || state === 'verified';
+                  const n = riddleNumber(snapshot, riddleId);
+                  const note =
+                    state === 'pending' ? c.inUsePending(n)
+                      : state === 'verified' ? c.inUseSolved(n)
+                        : state === 'rejected' ? c.rejectedOn(n)
+                          : null;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      class={inUse ? `tile in-use ${state}` : state === 'rejected' ? 'tile rejected' : 'tile'}
+                      aria-label={note ? `${c.evidenceOption(index + 1)}, ${note}` : c.evidenceOption(index + 1)}
+                      aria-pressed={selected === item.id}
+                      disabled={inUse}
+                      style={{
+                        aspectRatio: '1',
+                        borderColor: selected === item.id ? 'var(--cyan-bright)' : undefined,
+                        borderWidth: selected === item.id ? 2 : undefined,
+                      }}
+                      onClick={() => setSelected(item.id)}
+                    >
+                      {state === 'pending' && item.blurhash ? (
+                        <Blurhash hash={item.blurhash} class="tile-fill" />
+                      ) : (
+                        <img
+                          src={item.photo_url}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
+                          loading="lazy"
+                        />
+                      )}
+                      {state === 'pending' && <div class="scan-sweep" />}
+                      {inUse && <span class="in-use-label" aria-hidden="true">{note}</span>}
+                    </button>
+                  );
+                })}
               </div>
               <button class="btn" disabled={!selected || busy} onClick={onSubmit}>
                 {busy ? c.submitting : c.submit}
+              </button>
+              {/* A new shot is always an option, not only for an empty
+                  drawer; the drawer brings the player back here with it
+                  selected. */}
+              <button class="btn secondary" onClick={onOpenDrawer} style={{ marginTop: 8 }}>
+                {c.takeNew}
               </button>
             </>
           )}

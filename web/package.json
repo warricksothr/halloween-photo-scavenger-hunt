@@ -8,12 +8,13 @@
     "build": "vite build",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run lint && vitest run",
-    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js e2e/service-worker.spec.js e2e/resize-text.spec.js e2e/admin-phone.spec.js e2e/player-switch.spec.js e2e/top-controls.spec.js e2e/install-hint.spec.js --config=playwright.config.js",
+    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js e2e/service-worker.spec.js e2e/resize-text.spec.js e2e/admin-phone.spec.js e2e/player-switch.spec.js e2e/top-controls.spec.js e2e/photo-one-riddle.spec.js e2e/back-navigation.spec.js e2e/blurhash.spec.js e2e/install-hint.spec.js --config=playwright.config.js",
     "screenshots": "npm run build && playwright test e2e/readme-screenshots.spec.js --config=playwright.config.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "@sentry/browser": "^10.0.0",
+    "blurhash": "^2.0.5",
     "preact": "^10.22.0",
     "preact-router": "^4.1.2",
     "uqr": "^0.1.3"
