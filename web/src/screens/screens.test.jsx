@@ -505,6 +505,8 @@ describe('keyboard and screen-reader access', () => {
     const pending = await screen.findByRole('button', { name: 'Evidence photo 1, Scanning riddle 2' });
     expect(pending.querySelector('canvas.blurhash')).toBeTruthy();
     expect(pending.querySelector('img')).toBeNull();
+    // Under the same scanning sweep as the Drawer tab (ADR 0040).
+    expect(pending.querySelector('.scan-sweep')).toBeTruthy();
     // The rejected photo is free again (ADR 0035), framed, and pickable.
     const rejected = screen.getByRole('button', { name: 'Evidence photo 2, rejected on riddle 1' });
     expect(rejected.classList.contains('rejected')).toBe(true);

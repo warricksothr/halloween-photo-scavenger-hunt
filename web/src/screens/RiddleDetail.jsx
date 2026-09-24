@@ -230,6 +230,7 @@ export function RiddleDetailScreen({
                           loading="lazy"
                         />
                       )}
+                      {state === 'pending' && <div class="scan-sweep" />}
                       {inUse && <span class="in-use-label" aria-hidden="true">{note}</span>}
                     </button>
                   );
