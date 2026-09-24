@@ -40,6 +40,13 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
   // of reopening the wrong event's links.
   const linksRequestRef = useRef(0);
 
+  // Close the links and drop any response still in flight: used when the
+  // event goes away or the session does, so no codes outlive either.
+  function closeLinks() {
+    linksRequestRef.current += 1;
+    setLinksFor(null);
+  }
+
   async function reload() {
     const result = await api.adminEvents();
     if (result?.unauthenticated) {
@@ -48,7 +55,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
       setEvents([]);
       setCreated(null);
       setPurgeFor(null);
-      setLinksFor(null);
+      closeLinks();
       setError(null);
       onSessionExpired?.();
     } else if (result?.error) setError(result.message);
@@ -125,7 +132,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
       setPurgeFor(null);
       setConfirmName('');
       if (created?.id === target.id) setCreated(null);
-      if (linksFor?.id === target.id) setLinksFor(null);
+      closeLinks();
     }
   }
 

@@ -269,4 +269,30 @@ describe('admin event management', () => {
     expect(screen.queryByText(`${origin}/j/FIRST`, { selector: 'code' })).toBeNull();
     expect(screen.getByText(`${origin}/j/SECOND`, { selector: 'code' })).toBeTruthy();
   });
+
+  it('shows nothing for an event purged while its codes were loading', async () => {
+    // The panel and its print sheet render only inside an event row, so a
+    // late response for a purged event has nowhere to appear; closeLinks()
+    // also drops it, so the codes do not linger in state (Terva r2).
+    const closed = { ...lobby, status: 'closed' };
+    let resolveCodes;
+    mocks.api.adminEventCodes.mockImplementation(
+      () => new Promise((resolve) => { resolveCodes = resolve; }),
+    );
+    mocks.api.adminEvents.mockResolvedValue([]);
+    render(<AdminEvents initialEvents={[closed]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Purge' }));
+    fireEvent.input(screen.getByLabelText('Type the event name to confirm'), {
+      target: { value: closed.name },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Purge event' }));
+    await screen.findByText('No events yet. Create one to get the join and moderator codes.');
+
+    resolveCodes({ join_code: 'GONE', mod_code: 'GONE2' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.body.textContent).not.toContain('GONE');
+    expect(document.querySelector('.admin-print-sheet')).toBeNull();
+  });
 });
