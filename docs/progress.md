@@ -46,6 +46,14 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — A mod link reaches the console in a browser that plays.**
+  TKT-01M394KVSC6GCC1EDW4NSXZRW3. When a browser holds a player and a
+  moderator session, the path decides: on `/m`/`/mod` the store probes the
+  moderator session first and never shows the game, `/m/<code>` always
+  joins and then moves to `/mod`, and player paths keep the game. The SSE
+  stream takes `?as=player|moderator`, so each tab gets its own role's
+  deltas (ADR 0028).
+
 - **2026-09-24 — The host can moderate.** TKT-01M393JKCAXV2J3DY1219MYXFG.
   The mod join now admits the host as well as an SSO moderator: an
   Authentik admin sign-in also mints the identity cookie, and a host on the

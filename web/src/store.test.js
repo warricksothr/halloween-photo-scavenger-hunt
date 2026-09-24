@@ -84,6 +84,7 @@ describe('store', () => {
     vi.clearAllMocks();
     vi.stubGlobal('EventSource', FakeEventSource);
     FakeEventSource.instances = [];
+    window.history.replaceState(null, '', '/');
     mocks.api.logout.mockResolvedValue({});
     mocks.loadTheme.mockResolvedValue(copy);
     await logout();
@@ -105,7 +106,7 @@ describe('store', () => {
       role: 'player',
       snapshot: playerSnapshot,
     });
-    expect(FakeEventSource.instances[0].url).toBe('/api/events/stream');
+    expect(FakeEventSource.instances[0].url).toBe('/api/events/stream?as=player');
   });
 
   it('does not refresh when a mod join has no SSO moderator session', async () => {
@@ -432,5 +433,74 @@ describe('store', () => {
     expect(mocks.reportError).toHaveBeenCalledTimes(1);
     expect(mocks.reportError.mock.calls[0][2]).toBe('req-net');
     vi.useRealTimers();
+  });
+
+  // TKT-01M394KVSC6GCC1EDW4NSXZRW3: a browser can hold a player and a
+  // moderator session at once (the host who plays); the path decides.
+  const modState = {
+    event: { id: 'event-1', name: 'Photo Party', theme: 'arkham' },
+    moderator: { id: 'mod-1' },
+  };
+
+  it('on a moderator path, probes the moderator first and never the game', async () => {
+    window.history.replaceState(null, '', '/mod');
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    mocks.api.modState.mockResolvedValue(modState);
+
+    await refresh();
+
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'moderator' });
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
+    expect(FakeEventSource.instances.at(-1).url).toBe('/api/events/stream?as=moderator');
+  });
+
+  it('on a moderator path without a moderator session, shows the join, not the game', async () => {
+    window.history.replaceState(null, '', '/mod');
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    mocks.api.modState.mockResolvedValue({ unauthenticated: true });
+
+    await refresh();
+
+    expect(getState()).toMatchObject({ phase: 'join', role: null });
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
+  });
+
+  it('keeps the game first on a player path even with a moderator session', async () => {
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    mocks.api.modState.mockResolvedValue(modState);
+
+    await refresh();
+
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    expect(mocks.api.modState).not.toHaveBeenCalled();
+  });
+
+  it('moves a successful mod join off the link, so a reload does not rejoin', async () => {
+    window.history.replaceState(null, '', '/m/MODCODE1');
+    mocks.api.modJoin.mockResolvedValue({ event: modState.event });
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    mocks.api.modState.mockResolvedValue(modState);
+
+    await modJoin('MODCODE1');
+
+    expect(window.location.pathname).toBe('/mod');
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'moderator' });
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds the stream when the role a tab shows changes', async () => {
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    mocks.api.modState.mockResolvedValue(modState);
+    await refresh();
+    const playerStream = FakeEventSource.instances.at(-1);
+    expect(playerStream.url).toBe('/api/events/stream?as=player');
+
+    window.history.replaceState(null, '', '/mod');
+    await refresh();
+
+    const modStream = FakeEventSource.instances.at(-1);
+    expect(modStream).not.toBe(playerStream);
+    expect(modStream.url).toBe('/api/events/stream?as=moderator');
+    expect(playerStream.closed).toBe(true);
   });
 });

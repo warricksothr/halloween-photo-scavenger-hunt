@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
 import { initErrorReporting } from './errors';
+import { isModPath, modLinkCode } from './paths';
 import { getState, refresh, retry, subscribe } from './store';
 import { defaultCopy } from './theme';
 import { Header } from './components/Header';
@@ -32,19 +33,6 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // segment: `/administrator` is a player path, not the console.
 function isAdminPath(pathname) {
   return pathname === '/admin' || pathname.startsWith('/admin/');
-}
-
-// The moderator surfaces (S9CW): the link (/m/<code>), the bare code
-// form (/mod, where the OIDC callback lands a signed-in moderator), and
-// any deeper path. Matched by segment so a player path like /modify is
-// not swallowed.
-function isModJoinPath(pathname) {
-  return (
-    pathname === '/m' ||
-    pathname.startsWith('/m/') ||
-    pathname === '/mod' ||
-    pathname.startsWith('/mod/')
-  );
 }
 
 // A failed reporter boot must not block the app or surface as an
@@ -105,10 +93,17 @@ function PlayerApp() {
     return <TeamJoinScreen token={teamInvite[1]} copy={state.copy} />;
   }
 
+  // A mod link joins its event whatever else the browser holds: a player
+  // session (the host who plays) or a moderator session for another event.
+  // A successful join moves the URL to /mod, so this does not loop.
+  if (modLinkCode(window.location.pathname)) {
+    return <ModJoinScreen />;
+  }
+
   if (state.phase === 'join') {
     // The mod link is the only other unauthenticated surface; its path
     // decides which join screen shows before any session exists.
-    if (isModJoinPath(window.location.pathname)) {
+    if (isModPath(window.location.pathname)) {
       return <ModJoinScreen />;
     }
     return <JoinScreen />;

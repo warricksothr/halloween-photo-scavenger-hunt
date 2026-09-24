@@ -320,8 +320,11 @@ Design notes:
 
 ## SSE delta events
 
-`GET /api/events/stream` — one stream per role-scoped session. Event
-names and payloads:
+`GET /api/events/stream` — one stream per role-scoped session.
+`?as=player|moderator` picks the session when a browser holds both (the
+host who also plays); the client always sends it, a missing session for
+the named role is `401`, and any other value is `422`. Without `as` the
+moderator cookie wins (ADR 0028). Event names and payloads:
 
 | SSE event          | Sent to            | Payload                                    |
 | ------------------ | ------------------ | ------------------------------------------ |
