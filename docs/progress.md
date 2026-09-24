@@ -46,6 +46,19 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-23 — A seeder builds the demo event.**
+  TKT-01M384GE6JEAN6SN72N4FGCMNA. `python -m app.seed` creates the Riddler
+  demo event from `server/app/fixtures/demo-event.json` (twelve riddles,
+  three hint levels each, vague to specific) through the admin API with the
+  bearer token, then opens it and prints the join and mod codes (ADR 0025).
+  It validates the whole fixture with the routes' own request models before
+  the first write, rejects unknown keys so a typo cannot drop content
+  silently, and refuses a rerun that would duplicate the event name unless
+  `--allow-duplicate` is passed. `--no-open` leaves the event in the lobby
+  for a content review. Verified against uvicorn and inside a built image
+  with `podman exec`. The riddle copy is in review: round 1 asked for less
+  descriptive clues and multi-level hints, and this fixture answers it.
+
 - **2026-09-23 — The host console reverses strikes.** TKT-01M33S9D0Z4W4MH4AQZSCKCRX6.
   The reversal endpoint already shipped, but nothing read a strike list, so
   the RUNBOOK host step had no screen. `GET /api/admin/events/{id}/players`
