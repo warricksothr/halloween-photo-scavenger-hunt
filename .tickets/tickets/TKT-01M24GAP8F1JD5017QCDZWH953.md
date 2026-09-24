@@ -36,7 +36,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-10T01:53:44Z
-updated_at: 2026-09-24T05:26:28Z
+updated_at: 2026-09-24T05:30:07Z
 created_by:
   id: agent:terva/mieli
   name: Mieli
@@ -141,3 +141,15 @@ A second backup after the deploy restores as schema 3 and integrity ok. Both arc
 - **AC1 is met** (checked above).
 - **AC2 is not ticked.** The restore mechanism is proven, but the live database is empty: every game table has 0 rows and there are no photos. "Contains the expected SQLite data and photo files" is still unproven. To finish it, rerun the same commands once the AC3 smoke has put players, submissions and photos into the database, then compare the counts and the photo files.
 - **AC3 needs people** and is not ticked.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T05:30:07Z
+
+Demo data loaded on kobal on 2026-09-24, at Drew's request. The host-side details are on TKT-01M35GMW0WGM82J0VV8V8NGVSP in kobal's ledger, at commit 1 after 0af4585.
+
+- `ARKHAM_ADMIN_API_TOKEN` is now set on kobal. It was generated on the host with `openssl rand -hex 32` and is never printed.
+- **kobal-specific difference:** kobal's `compose.yml` lists each environment variable explicitly, so the token also needed a passthrough line there. Putting it in `.env` alone does nothing.
+- I recreated the container with `docker compose up -d`.
+- **Seeding:** `docker exec arkham-hunt python -m app.seed` worked unchanged. The RUNBOOK's `podman exec` becomes `docker exec` on kobal. It created one open event with 12 riddles, each with 3 hints, and 14 audit rows. The codes are not recorded here.
+- **Checks:** with no token or a wrong bearer token, `/api/admin/events` answers 401 publicly.
+
+AC2 is still unticked. The database now holds real rows, but there are no photos or submissions until the AC3 smoke is run against this event. Rerun the backup and restore after that.
