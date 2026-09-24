@@ -35,7 +35,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:35:07Z
+updated_at: 2026-09-24T00:38:15Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -119,3 +119,9 @@ Built on branch t3code/demo-seeder. The code is in fdf10f8 and the docs in the c
 
 ### Riddle content
 The fixture rewrites the /tmp draft per round-1 feedback. The clue text is shorter and more indirect, and each riddle has three hints running vague to specific. The user still has to review this copy (round 2).
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T00:38:15Z
+
+Terva review r1 on PR #46: request `demo-seeder-r1`, run `04b33e06-e6d2-4a13-98e6-671ddfd8c01c` (Actions run #578), review id 296. Reviewed head cbbb5e90fd9549c46eb647c2851b491438f5ce3f against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. CI Quality passed on that head. The gate failed on one medium finding.
+
+- **Medium, accepted and fixed in 1b0ab3a.** The token note appeared only on `csrf_failed`, but a normal run's first call is the duplicate-check GET, so a wrong token failed as `401 not_authenticated` with no note. The note now covers both codes (`_TOKEN_REFUSALS`), and ADR 0025 describes both paths. The extended regression test fails with the fix stashed and passes with it.
