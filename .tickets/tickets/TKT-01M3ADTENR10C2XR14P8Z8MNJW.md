@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T19:21:03Z
-updated_at: 2026-09-24T19:21:03Z
+updated_at: 2026-09-24T19:27:01Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -56,10 +56,10 @@ Coming back takes the mod link again. The OIDC identity cookie is untouched, so 
 
 ## Acceptance criteria
 
-- [ ] The moderator console shows a Leave button on phone, tablet and desktop layouts.
-- [ ] Leaving ends this browser's moderator session (the server rejects it afterwards) and lands on the game when a player session exists, otherwise on the landing page.
-- [ ] Leaving does not sign the browser out of the game, and the mod link rejoins the console without another SSO sign-in.
-- [ ] api.md documents POST /api/mod/logout, and an ADR records the choice against ADR 0028.
+- [x] The moderator console shows a Leave button on phone, tablet and desktop layouts.
+- [x] Leaving ends this browser's moderator session (the server rejects it afterwards) and lands on the game when a player session exists, otherwise on the landing page.
+- [x] Leaving does not sign the browser out of the game, and the mod link rejoins the console without another SSO sign-in.
+- [x] api.md documents POST /api/mod/logout, and an ADR records the choice against ADR 0028.
 - [ ] Deployed to kobal, and Drew leaves the console and reaches the game on his phone.
 
 ## Implementation plan
@@ -91,3 +91,9 @@ Coming back takes the mod link again. The OIDC identity cookie is untouched, so 
   - store: leaveModerator calls logout, lands on the player and resets the URL;
   - main shell: the button renders in the console and calls leaveModerator.
 - **docs:** api.md, ui.md, progress.md, and ADR 0032 (amends 0028: one control that leaves a role, not a switcher).
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T19:27:01Z
+
+PR #54, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/54: head ba0543c238782b5212a557a258dba8f961536af2, base a6f5e8ddc204d42af458198b554f841521e874b4. Terva r1 (mod-leave-r1): run c7f95a41, Actions #669, review 493, status success. Its one low finding, no .tickets change in the PR, is declined as on earlier PRs: ticket commits go straight to main, and this ticket's plan commit a6f5e8d is the PR base. The CI quality gate passed. The local gate passes with 558 server and 193 web tests. A headless Chromium run on the built app at 390px and 1280px: the button sits in the header; Leave went to / and back into the game as the same player, and /api/mod/state then answered 401; Leave with no player session landed on the join screen with Open Cases listing the game. Waiting for Drew's go-ahead to merge.
