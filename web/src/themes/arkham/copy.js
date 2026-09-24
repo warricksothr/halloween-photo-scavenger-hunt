@@ -65,6 +65,20 @@ export default {
       resumeHeading: 'Open Cases',
       resumeAs: (name) => `Return as ${name}`,
       resumeOr: 'Or join another hunt:',
+      // The install suggestion (TKT-01M390Y0VQ). On an iPhone the app keeps
+      // its own sign-in apart from Safari, so it asks to install first and
+      // names the code to join with in the app.
+      install: {
+        headline: 'Install the Batcomputer',
+        iosSteps: 'Tap Share (the square with the arrow), then Add to Home Screen.',
+        iosThen: (code) =>
+          code
+            ? `Then open Arkham Hunt from your home screen and join there with code ${code}. The app keeps its own sign-in, apart from Safari.`
+            : 'Then open Arkham Hunt from your home screen and join there. The app keeps its own sign-in, apart from Safari.',
+        promptBody: 'Add it to your home screen for a full-screen view.',
+        install: 'Install',
+        dismiss: 'Not now',
+      },
     },
     // The header's Switch Case control (ADR 0033): back to Open Cases,
     // keeping this hunt listed there.

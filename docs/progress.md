@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The join screen suggests installing the app, and the
+  icons are real.** TKT-01M390Y0VQ. On an iPhone, a dismissible panel says
+  how to add the app to the home screen before joining and names the join
+  code for the app. Chrome's install prompt becomes an Install button.
+  `apple-touch-icon.png` and 192/512 PNG manifest icons are rendered from
+  `icon.svg` by `web/scripts/render-icons.mjs` (ADR 0037).
+
 - **2026-09-24 — The header and tabs are pinned at the top.**
   TKT-01M390Y0PN10W11HEB6FM91PZ6: on an iPhone the tabs sat below the
   fold and the header scrolled away. Both now sit in one sticky bar at the
