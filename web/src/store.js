@@ -338,8 +338,39 @@ export async function leaveModerator() {
   return result;
 }
 
+// Switch games (ADR 0033): end this session but keep the game in Open
+// Cases, then show the join screen. It goes straight to the join phase
+// rather than refreshing, since a refresh at / would fall through to a
+// moderator session if the browser holds one.
+export async function switchGame() {
+  const result = await api.leave();
+  if (result.error) {
+    reportFailure(result, { where: 'switchGame' });
+    return result;
+  }
+  toJoinScreen();
+  return result;
+}
+
+// Sign out on this phone: logout also forgets the game (ADR 0031), so it
+// is for a phone changing hands, not for switching. Only a confirmed
+// logout leaves the game: on a failure the session and the rejoin cookie
+// are still live, and a phone that looked signed out would not be. A 401
+// comes back as `unauthenticated`, not an error: the session was already
+// gone, which is the outcome asked for.
 export async function logout() {
-  await api.logout();
+  const result = await api.logout();
+  if (result?.error) {
+    reportFailure(result, { where: 'logout' });
+    return result;
+  }
+  toJoinScreen();
+  return result;
+}
+
+function toJoinScreen() {
   stopStream();
+  // A /j/<code> or /t/<token> path would otherwise reopen that link.
+  window.history.replaceState(null, '', '/');
   set({ phase: 'join', role: null, snapshot: null, modEvent: null });
 }

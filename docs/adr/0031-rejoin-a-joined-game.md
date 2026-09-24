@@ -1,7 +1,7 @@
 # 0031. A device can rejoin a live game it already joined
 
 Date: 2026-09-24
-Status: accepted; amends 0021
+Status: accepted; amends 0021; switching games without forgetting one is added by 0033
 
 ## Context
 

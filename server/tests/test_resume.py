@@ -356,3 +356,42 @@ def test_rejoin_keeps_this_devices_label(admin, client):
     ).fetchone()
     assert "Robin's phone" in audit["details"]
     phone.close()
+
+
+# ── Switching games (ADR 0033) ────────────────────────────────────────
+
+
+def test_switching_games_keeps_the_way_back(admin, client):
+    """Leave ends the session but, unlike logout, keeps the resume
+    cookie: the game stays in Open Cases and one tap rejoins it."""
+    p = _party(admin, client)
+    batman = p["players"]["Batman"]["client"]
+    token = _cookie(batman, p["event_id"])
+
+    resp = batman.post("/api/leave")
+    assert resp.status_code == 200
+    assert batman.get("/api/state").status_code == 401
+    assert _cookie(batman, p["event_id"]) == token
+    assert [g["event_id"] for g in _listed(batman)] == [p["event_id"]]
+
+    again = batman.post(f"/api/resume/{p['event_id']}")
+    assert again.status_code == 201
+    assert again.json()["player"]["id"] == p["players"]["Batman"]["player_id"]
+
+    row = client.app.state.db.execute(
+        "SELECT details FROM audit_event WHERE action = 'session.revoked'"
+    ).fetchone()
+    assert '"switch"' in row["details"]
+
+
+def test_switching_needs_a_session(client):
+    assert client.post("/api/leave").status_code == 401
+
+
+def test_logout_still_forgets_the_game(admin, client):
+    """The shared-phone sign-out: logout removes the game from the list,
+    which is what makes it different from switching."""
+    p = _party(admin, client)
+    batman = p["players"]["Batman"]["client"]
+    assert batman.post("/api/logout").status_code == 200
+    assert _listed(batman) == []

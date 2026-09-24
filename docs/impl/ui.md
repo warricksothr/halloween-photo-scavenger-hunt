@@ -127,6 +127,11 @@ strike interstitial, and the drawer restricted variant.
   the oldest pending item nobody else is viewing, shows a flagged photo
   beside its match, and enlarges either photo on click (ADR 0029;
   `web/src/screens/ModConsole.jsx`, `web/src/screens/mod/`).
+- **A player can leave a game without losing it** — Switch Case in the
+  game and lobby header ends the session and shows the join screen, where
+  Open Cases still lists the game. Sign out of this phone, at the foot of
+  the Team tab, asks first and then forgets the game on this device
+  (ADR 0033).
 - **The join screen lists the games to go back to** — above the form,
   each live game this device joined, with the codename used there. One
   tap rejoins as the same player; a refusal says why and drops the game

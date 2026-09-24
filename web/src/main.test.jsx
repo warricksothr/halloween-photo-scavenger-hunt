@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   retry: vi.fn(),
   subscribe: vi.fn(() => () => {}),
+  switchGame: vi.fn(),
   defaultCopy: vi.fn(() => ({ screens: { boot: { loading: 'BOOT_SENTINEL' } } })),
 }));
 
@@ -23,6 +24,7 @@ vi.mock('./store', () => ({
   refresh: mocks.refresh,
   retry: mocks.retry,
   subscribe: mocks.subscribe,
+  switchGame: mocks.switchGame,
 }));
 
 // The admin route reaches AdminScreen through AdminBoot; every other screen
@@ -108,6 +110,28 @@ describe('app entry', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave console' }));
     expect(mocks.leaveModerator).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Switch Case in the game and the lobby (ADR 0033)', async () => {
+    for (const status of ['open', 'lobby']) {
+      vi.resetModules();
+      document.body.innerHTML = '<div id="app"></div>';
+      mocks.switchGame.mockClear();
+      mocks.getState.mockReturnValue({
+        phase: 'ready',
+        role: 'player',
+        snapshot: {
+          event: { status, name: 'Party' },
+          me: { display_name: 'Robin', restriction: {} },
+        },
+        copy: { screens: { header: { switchGame: 'SWITCH_SENTINEL' } }, tabs: {} },
+      });
+
+      await import('./main.jsx');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'SWITCH_SENTINEL' }));
+      expect(mocks.switchGame).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('renders the boot line from the default theme pack', async () => {
