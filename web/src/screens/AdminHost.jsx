@@ -17,6 +17,45 @@ function when(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleString();
 }
 
+function joinedAt(epochSeconds) {
+  return new Date(epochSeconds * 1000).toLocaleString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+// What the host sees for each player. A codename is usually enough, but
+// two guests can pick the same one, and a player whose session ended used
+// to rejoin as a new player (TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS). A repeated
+// name gets when it joined and its device; if even that repeats, its
+// place in join order.
+export function playerLabels(players) {
+  const byName = new Map();
+  for (const player of players) {
+    byName.set(player.display_name, [...(byName.get(player.display_name) ?? []), player]);
+  }
+  const labels = new Map();
+  for (const [name, group] of byName) {
+    if (group.length === 1) {
+      labels.set(group[0].id, name);
+      continue;
+    }
+    const detailed = group.map((player) =>
+      [name, player.joined_at ? `joined ${joinedAt(player.joined_at)}` : null,
+       player.device_label || player.team_name || null]
+        .filter(Boolean)
+        .join(' · '),
+    );
+    group.forEach((player, index) => {
+      const clash = detailed.filter((label) => label === detailed[index]).length > 1;
+      labels.set(player.id, clash ? `${detailed[index]} · #${index + 1}` : detailed[index]);
+    });
+  }
+  return labels;
+}
+
 export function AdminHost({ onSessionExpired }) {
   const [events, setEvents] = useState([]);
   const [eventsLoaded, setEventsLoaded] = useState(false);
@@ -170,6 +209,7 @@ export function AdminHost({ onSessionExpired }) {
   }
 
   const selected = players.find((player) => player.id === playerId) ?? null;
+  const labels = playerLabels(players);
 
   return (
     <>
@@ -223,7 +263,7 @@ export function AdminHost({ onSessionExpired }) {
                   ).length;
                   return (
                     <option key={player.id} value={player.id}>
-                      {player.display_name}
+                      {labels.get(player.id)}
                       {count ? ` — ${count} strike${count === 1 ? '' : 's'}` : ''}
                     </option>
                   );
@@ -246,7 +286,7 @@ export function AdminHost({ onSessionExpired }) {
 
                 {selected.strikes.length === 0 ? (
                   <p class="admin-note">
-                    No strikes on record for {selected.display_name}.
+                    No strikes on record for {labels.get(selected.id)}.
                   </p>
                 ) : (
                   selected.strikes.map((strike) => (

@@ -37,7 +37,11 @@ Mocking conventions:
 | Admin: riddle editor | `mocks/admin-riddles.html` | `GET/POST/PATCH/DELETE …/riddles`, `POST …/open` | 2 |
 
 Admin mocks are laptop-first (the host sets up from a desk), so they use
-a wider frame than the phone-first player screens. Not mocked
+a wider frame than the phone-first player screens. Under 600px the built
+console stacks each row instead: content first, its controls on the line
+below, and pickers at full width, so a host can run it from a phone
+(`web/src/admin.css`). A codename two players share is labelled with when
+each joined and its device (`playerLabels` in `web/src/screens/AdminHost.jsx`). Not mocked
 (deliberately): admin login (a bare form) and a standalone moderator
 audit page, which reuses the moderator console's history panel styling
 against `GET /api/mod/audit`.

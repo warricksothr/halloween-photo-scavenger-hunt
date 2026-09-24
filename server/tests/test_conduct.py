@@ -466,6 +466,27 @@ class TestAdminPlayerView:
         assert len(player["strikes"]) == 1
         assert player["strikes"][0]["reversed_at"] is not None
 
+    def test_players_who_share_a_codename_can_be_told_apart(self, admin, client):
+        """TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS: two Robins in one event. Each
+        entry carries when it joined and the device it last used."""
+        event = admin.post("/api/admin/events", json={"name": "Twins"}).json()
+        joined = []
+        for label in ("Drew's phone", "Sam's tablet"):
+            guest = arm_csrf(TestClient(client.app))
+            resp = guest.post(
+                f"/api/join/{event['join_code']}",
+                json={"display_name": "Robin", "device_label": label},
+            )
+            assert resp.status_code == 201, resp.text
+            joined.append(resp.json()["player"]["id"])
+            guest.close()
+
+        players = admin.get(f"/api/admin/events/{event['id']}/players").json()
+        assert [p["id"] for p in players] == joined
+        assert [p["display_name"] for p in players] == ["Robin", "Robin"]
+        assert [p["device_label"] for p in players] == ["Drew's phone", "Sam's tablet"]
+        assert all(isinstance(p["joined_at"], int) for p in players)
+
     def test_unknown_event_404(self, admin):
         assert admin.get("/api/admin/events/nope/players").status_code == 404
 

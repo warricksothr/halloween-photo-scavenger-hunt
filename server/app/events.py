@@ -455,8 +455,13 @@ def list_event_players(
     conn = reader(request)
     if _get_event(conn, event_id) is None:
         return _err(404, "event_not_found", "No such event.")
+    # joined_at and the latest device label let the console tell apart two
+    # players who picked the same codename (TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS).
     players = conn.execute(
-        "SELECT p.id, p.display_name, p.team_id, t.name AS team_name"
+        "SELECT p.id, p.display_name, p.team_id, p.created_at,"
+        "       t.name AS team_name,"
+        "       (SELECT s.device_label FROM session s WHERE s.player_id = p.id"
+        "        ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS device_label"
         " FROM player p JOIN team t ON t.id = p.team_id"
         " WHERE t.event_id = ? ORDER BY p.created_at, p.id",
         (event_id,),
@@ -476,6 +481,8 @@ def list_event_players(
             "display_name": player["display_name"],
             "team_id": player["team_id"],
             "team_name": player["team_name"],
+            "joined_at": player["created_at"],
+            "device_label": player["device_label"] or "",
             "restriction": derive_restriction(conn, player["id"]).as_dict(),
             "strikes": by_player.get(player["id"], []),
         }
