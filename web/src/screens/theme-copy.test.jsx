@@ -200,7 +200,11 @@ describe('game-facing copy comes from the theme pack', () => {
     expect(screen.queryByText('TEAM_SIGNOUT_CONFIRM')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT' }));
+    mocks.logout.mockResolvedValue({ error: 'network_error', message: 'Could not reach the server.' });
     fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT_YES' }));
     expect(mocks.logout).toHaveBeenCalledTimes(1);
+    // A failed sign-out says so and stays put: the phone is still signed in.
+    expect(await screen.findByText('Could not reach the server.')).toBeTruthy();
+    expect(screen.getByText('TEAM_SIGNOUT_CONFIRM')).toBeTruthy();
   });
 });

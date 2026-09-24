@@ -353,10 +353,19 @@ export async function switchGame() {
 }
 
 // Sign out on this phone: logout also forgets the game (ADR 0031), so it
-// is for a phone changing hands, not for switching.
+// is for a phone changing hands, not for switching. Only a confirmed
+// logout leaves the game: on a failure the session and the rejoin cookie
+// are still live, and a phone that looked signed out would not be. A 401
+// comes back as `unauthenticated`, not an error: the session was already
+// gone, which is the outcome asked for.
 export async function logout() {
-  await api.logout();
+  const result = await api.logout();
+  if (result?.error) {
+    reportFailure(result, { where: 'logout' });
+    return result;
+  }
   toJoinScreen();
+  return result;
 }
 
 function toJoinScreen() {

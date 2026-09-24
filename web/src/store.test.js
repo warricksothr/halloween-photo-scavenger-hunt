@@ -187,6 +187,24 @@ describe('store', () => {
     expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
   });
 
+  it('stays in the game when signing out fails (ADR 0033)', async () => {
+    window.history.replaceState(null, '', '/');
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    await refresh();
+    const failure = { error: 'network_error', network: true, message: 'offline' };
+    mocks.api.logout.mockResolvedValue(failure);
+
+    await expect(logout()).resolves.toBe(failure);
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    expect(mocks.reportError).toHaveBeenCalled();
+  });
+
+  it('treats an already-ended session as signed out', async () => {
+    mocks.api.logout.mockResolvedValue({ unauthenticated: true });
+    await logout();
+    expect(getState()).toMatchObject({ phase: 'join' });
+  });
+
   it('signing out also returns to / and the join screen', async () => {
     window.history.replaceState(null, '', '/t/INVITE');
     mocks.api.logout.mockResolvedValue({ ok: true });

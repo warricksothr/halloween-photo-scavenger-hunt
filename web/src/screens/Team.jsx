@@ -36,6 +36,7 @@ export function TeamScreen({ snapshot, copy }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState(null);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   async function reload() {
@@ -86,6 +87,18 @@ export function TeamScreen({ snapshot, copy }) {
   }
 
   const c = copy.screens.team;
+
+  // A failed sign-out keeps the player here and says why: the phone is
+  // still signed in, and must not look otherwise (ADR 0033).
+  async function onSignOut() {
+    setBusy(true);
+    setSignOutError(null);
+    const result = await logout();
+    if (result?.error) {
+      setSignOutError(result.message);
+      setBusy(false);
+    }
+  }
   const inviteLink = (token) =>
     `${window.location.origin}/t/${token}`;
 
@@ -217,12 +230,20 @@ export function TeamScreen({ snapshot, copy }) {
           {signingOut ? (
             <>
               <p class="subtext" style={{ marginBottom: 12 }}>{c.signOutConfirm}</p>
+              {signOutError && (
+                <div class="verdict-banner sev-red" style={{ marginBottom: 12 }}>
+                  <div class="verdict-chip">!</div>
+                  <div><p class="subtext">{signOutError}</p></div>
+                </div>
+              )}
               <button class="btn secondary"
                       style={{ color: 'var(--alert)', borderColor: 'var(--alert)', marginBottom: 8 }}
-                      onClick={logout}>
+                      disabled={busy}
+                      onClick={onSignOut}>
                 {c.signOutYes}
               </button>
-              <button class="btn secondary" onClick={() => setSigningOut(false)}>
+              <button class="btn secondary"
+                      onClick={() => { setSigningOut(false); setSignOutError(null); }}>
                 {c.signOutNo}
               </button>
             </>
