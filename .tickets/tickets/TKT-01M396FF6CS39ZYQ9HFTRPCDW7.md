@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:53:29Z
-updated_at: 2026-09-24T13:15:36Z
+updated_at: 2026-09-24T13:21:13Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -77,11 +77,11 @@ through several threads.
 
 ## Acceptance criteria
 
-- [ ] Concurrent requests on one session no longer produce 500 InterfaceError or a spurious 401: a regression test drives many concurrent moderator requests through the real routes and every one answers 200.
-- [ ] A regression test runs the same SQL on the reader from many threads at once, and each thread gets its complete, correct result.
+- [x] Concurrent requests on one session no longer produce 500 InterfaceError or a spurious 401: a regression test drives many concurrent moderator requests through the real routes and every one answers 200.
+- [x] A regression test runs the same SQL on the reader from many threads at once, and each thread gets its complete, correct result.
 - [x] Both regression tests fail on the code before the fix.
-- [ ] The fix changes no reader call site, and ADR 0013's isolation tests still pass.
-- [ ] ADR records the decision and the alternatives, and the misleading GIL comment in db.connect is corrected.
+- [x] The fix changes no reader call site, and ADR 0013's isolation tests still pass.
+- [x] ADR records the decision and the alternatives, and the misleading GIL comment in db.connect is corrected.
 - [ ] Deployed to kobal, and the moderator console's first load shows every thumbnail.
 
 ## Implementation plan
@@ -143,3 +143,7 @@ thumbnails) costs tens of milliseconds in total.
 **agent:claude-code/t3code-bf267378** at 2026-09-24T13:15:36Z
 
 Promoted to ready by Drew ('Let's address that fairly critical race issue'). Both new tests in server/tests/test_reader_concurrency.py fail on origin/main ec82300: 15 of 16 threads raise InterfaceError, and the route burst raises InterfaceError.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T13:21:13Z
+
+Fix implemented: db.reader() returns a SerializedReader (read_lock; execute reads every row with fetchall under the lock). Both regression tests pass after the fix; the full gate passes (532 server tests, 96.15% coverage). The one test that identified the reader by identity (test_upload_after_a_strike_commits_is_rejected) now uses isinstance. The 35 false 'conn: sqlite3.Connection = reader(request)' annotations were dropped; this is a type-hint change only. ADR 0030 written; ADR 0013 status points to it.
