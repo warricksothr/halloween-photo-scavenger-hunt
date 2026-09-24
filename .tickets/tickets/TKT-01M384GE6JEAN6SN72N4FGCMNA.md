@@ -23,6 +23,8 @@ blocks_on: none
 references:
   - ref: adr:0025
     path: docs/adr/0025-demo-seeder-in-the-app-package.md
+  - ref: pr:46
+    path: null
 claim:
   actor: agent:claude-code/t3code-bf267378
   branch: t3code/demo-seeder
@@ -33,7 +35,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:34:44Z
+updated_at: 2026-09-24T00:35:07Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
