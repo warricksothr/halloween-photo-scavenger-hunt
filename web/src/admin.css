@@ -430,11 +430,13 @@ body:has(.admin-shell) {
     margin: 1.5cm;
   }
 
-  body > :not(.admin-print-sheet) {
+  /* Only while a sheet exists: with no event's links open, printing the
+     console prints the console, not a blank page. */
+  body:has(> .admin-print-sheet) > :not(.admin-print-sheet) {
     display: none !important;
   }
 
-  body {
+  body:has(> .admin-print-sheet) {
     background: #ffffff !important;
   }
 

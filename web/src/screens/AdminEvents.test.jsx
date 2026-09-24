@@ -248,4 +248,25 @@ describe('admin event management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
     expect(await screen.findByText('No such event.')).toBeTruthy();
   });
+
+  it('keeps the latest event\'s links when an earlier codes response lands last', async () => {
+    const second = { id: 'ev-2', name: 'Arkham After Dark', status: 'lobby' };
+    const pending = {};
+    mocks.api.adminEventCodes.mockImplementation(
+      (id) => new Promise((resolve) => { pending[id] = resolve; }),
+    );
+    render(<AdminEvents initialEvents={[lobby, second]} />);
+    const [first, next] = screen.getAllByRole('button', { name: 'Links & QR' });
+    fireEvent.click(first);
+    fireEvent.click(next);
+
+    const origin = window.location.origin;
+    pending['ev-2']({ join_code: 'SECOND', mod_code: 'M2' });
+    expect(await screen.findByText(`${origin}/j/SECOND`, { selector: 'code' })).toBeTruthy();
+    // The stale response for the first event must not take the panel back.
+    pending['ev-1']({ join_code: 'FIRST', mod_code: 'M1' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(`${origin}/j/FIRST`, { selector: 'code' })).toBeNull();
+    expect(screen.getByText(`${origin}/j/SECOND`, { selector: 'code' })).toBeTruthy();
+  });
 });
