@@ -36,7 +36,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-10T01:53:44Z
-updated_at: 2026-09-24T05:30:14Z
+updated_at: 2026-09-24T06:17:29Z
 created_by:
   id: agent:terva/mieli
   name: Mieli
@@ -53,7 +53,7 @@ The local container and compose recipes have verified smoke coverage, but the pr
 ## Acceptance criteria
 
 - [x] The target deployment reports healthy status and serves the built PWA, API, and SSE endpoint through the documented access path.
-- [ ] A backup created while the app is live restores into a separate test location and contains the expected SQLite data and photo files.
+- [x] A backup created while the app is live restores into a separate test location and contains the expected SQLite data and photo files.
 - [ ] The full runbook smoke passes with two players, upload, submission, each verdict type, strike issue and reversal, round close, and final standings.
 - [x] The ticket records the verified commands, host-specific differences, and any follow-up defects without adding secrets or player photos to Git.
 
@@ -157,3 +157,22 @@ AC2 is still unticked. The database now holds real rows, but there are no photos
 **agent:claude-code/t3code-bf267378** at 2026-09-24T05:30:14Z
 
 Correction to the previous note: the kobal ledger commit for the token and demo seed is f27b526.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T06:17:29Z
+
+AC2 is proven against real data (2026-09-24). Drew's iPhone playtest of the demo event put a player, a team, one photo and two submissions into kobal's live database. I reran the drill while the app was serving:
+
+- **Backup:** I ran the same `backup.sh` command as before, which wrote `arkham-backup-20260924-011655-4ap7af.tar.gz`.
+- **Database:** the backup passes the integrity check, and every table's count matches live. There is 1 event, 12 riddles, 1 player, 1 team, 2 submissions, 1 evidence_item, 0 verdicts and 18 audit rows.
+- **Photos:** both sides hold 2 files, the original and its derivative. The combined sha256 of the file list is identical on both (db2ba4db3699757c…), so the files are byte-for-byte the same.
+- **Links:** every `evidence_item.photo_path` in the restored database resolves to a file under the restored `photos/`, which is 1 of 1.
+- **Restore:** the throwaway container on the restored copy served `/api/health` as ok with schema_version 3. I removed it and the scratch directory afterwards.
+
+AC3 progress, not ticked: one player joined, uploaded from the iPhone camera, and submitted. Rotation was handled correctly and the pending state rendered. That still leaves the second player, each verdict type, strike issue and reversal, round close and final standings.
+
+The playtest findings are filed as drafts under TKT-01M24GA0PMGWEM80RBS502FGVY (Prepare the first live event and future themes):
+- TKT-01M390Y0PN10W11HEB6FM91PZ6 (Keep the tab bar on screen in iOS Safari)
+- TKT-01M390Y0QYSZFA925774TT83PQ (Make browser back and edge swipe navigate inside the app)
+- TKT-01M390Y0S6EHQG78A03BYHF538 (Return from the drawer to the riddle with the new photo selected)
+- TKT-01M390Y0TEYEP6Q4GS8Q4R33PJ (Stop offering a photo that is pending on another riddle)
+- TKT-01M390Y0VQ65DJHKKTR29HTNH8 (Suggest installing the app on iPhone and ship touch icons)
