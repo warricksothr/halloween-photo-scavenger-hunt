@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -87,7 +87,7 @@ const make = (id, name, extra = {}) => ({
 describe('choosing the next submission', () => {
   const me = 'mod-me';
   // Claimed a moment ago: someone viewing now.
-  const other = { id: 'mod-other', label: 'Oracle', claimed_at: Date.now() / 1000 - 30 };
+  const other = { id: 'mod-other', label: 'Oracle', claimed_at_local: Date.now() / 1000 - 30 };
 
   it('takes the oldest item that no other moderator is viewing', () => {
     const queue = [
@@ -108,7 +108,7 @@ describe('choosing the next submission', () => {
   });
 
   it('frees an item whose claim was left behind (ADR 0038)', () => {
-    const left = { id: 'mod-other', label: 'Oracle', claimed_at: Date.now() / 1000 - 11 * 60 };
+    const left = { id: 'mod-other', label: 'Oracle', claimed_at_local: Date.now() / 1000 - 11 * 60 };
     expect(nextToReview([make('b', 'Toad', { claimed_by: left })], 'a', me).id).toBe('b');
   });
 });
@@ -116,9 +116,9 @@ describe('choosing the next submission', () => {
 describe('queue claim labels (ADR 0038)', () => {
   const now = Date.now() / 1000;
   const rows = [
-    make('a', 'Robin', { claimed_by: { id: 'mod-me', label: 'Drew', claimed_at: now - 15 * 3600 } }),
-    make('b', 'Toad', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at: now - 60 } }),
-    make('c', 'Selina', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at: now - 3 * 3600 } }),
+    make('a', 'Robin', { claimed_by: { id: 'mod-me', label: 'Drew', claimed_at_local: now - 15 * 3600 } }),
+    make('b', 'Toad', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at_local: now - 60 } }),
+    make('c', 'Selina', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at_local: now - 3 * 3600 } }),
   ];
 
   it('tells your own claims, a colleague viewing now, and a claim left behind apart', () => {
@@ -126,6 +126,22 @@ describe('queue claim labels (ADR 0038)', () => {
     expect(screen.getByRole('button', { name: /Robin/ }).textContent).toContain('OPENED BY YOU');
     expect(screen.getByRole('button', { name: /Toad/ }).textContent).toContain('ORACLE IS VIEWING');
     expect(screen.getByRole('button', { name: /Selina/ }).textContent).toContain('ORACLE OPENED 3 H AGO');
+  });
+
+  it('ages a live viewer into a claim left behind without a queue update', () => {
+    vi.useFakeTimers();
+    try {
+      const start = Date.now() / 1000;
+      const row = make('b', 'Toad', {
+        claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at_local: start - 9 * 60 },
+      });
+      render(<QueueList queue={[row]} openId={null} onOpen={vi.fn()} moderatorId="mod-me" />);
+      expect(screen.getByRole('button', { name: /Toad/ }).textContent).toContain('ORACLE IS VIEWING');
+      act(() => vi.advanceTimersByTime(2 * 60 * 1000));
+      expect(screen.getByRole('button', { name: /Toad/ }).textContent).toContain('ORACLE OPENED 11 MIN AGO');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('counts in hours and days once minutes stop reading well', () => {

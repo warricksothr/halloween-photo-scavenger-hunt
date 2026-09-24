@@ -17,8 +17,15 @@ export function claimState(item, moderatorId, now = Date.now() / 1000) {
   const claim = item.claimed_by;
   if (!claim) return null;
   if (moderatorId && claim.id === moderatorId) return 'mine';
-  // A queue from before claimed_at existed has none; treat it as fresh
-  // rather than hand the item to a second moderator.
-  if (claim.claimed_at == null) return 'viewing';
-  return now - claim.claimed_at <= CLAIM_FRESH_SECONDS ? 'viewing' : 'stale';
+  // A queue from an older server has no age; treat it as fresh rather
+  // than hand the item to a second moderator.
+  const at = claimedAt(claim);
+  if (at == null) return 'viewing';
+  return now - at <= CLAIM_FRESH_SECONDS ? 'viewing' : 'stale';
+}
+
+// When the claim was made, on this device's clock: api.modQueue turns the
+// server's claim_age into claimed_at_local on receipt.
+export function claimedAt(claim) {
+  return claim.claimed_at_local ?? null;
 }

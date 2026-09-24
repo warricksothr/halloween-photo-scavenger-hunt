@@ -24,7 +24,11 @@ were his own, made about 15 hours earlier. So the console:
 
 ## Decision
 
-- The queue's `claimed_by` carries `claimed_at` beside `id` and `label`.
+- The queue's `claimed_by` carries `claimed_at` and `claim_age` (seconds,
+  by the server's clock) beside `id` and `label`. `api.modQueue` turns
+  the age into `claimed_at_local`, a time on the device's clock, when the
+  queue arrives. Freshness then never compares the server's clock with a
+  phone's, which can be minutes apart.
 - The console reads a claim in one of three ways (`web/src/screens/mod/claims.js`):
   - **mine:** the claim's moderator is the viewer. The tag reads
     "OPENED BY YOU", dimmed.
@@ -34,8 +38,10 @@ were his own, made about 15 hours earlier. So the console:
     "<NAME> OPENED 3 H AGO", dimmed.
 - The next pick skips only a **viewing** claim. An item that is
   unclaimed, the viewer's own, or stale is free.
-- A claim without `claimed_at` (a queue from an older server) counts as
+- A claim without an age (a queue from an older server) counts as
   viewing. That errs toward not handing one item to two moderators.
+- The queue list re-reads the time every 30 seconds. An idle screen still
+  turns "IS VIEWING" into "OPENED 11 MIN AGO" without a queue update.
 - `ago()` reads minutes under an hour, hours under two days, then days.
 
 The server is unchanged apart from the extra field. Claims stay advisory
@@ -62,4 +68,5 @@ and unaudited, and the latest viewer still takes a claim over.
   judge it, and the verdict's conditional update settles who wins
   (ADR 0002).
 - Tests: `ModConsole.test.jsx` (the three labels, the stale next pick,
-  `ago()`), and `test_mod.py` (`claimed_at` in the queue).
+  a label ageing with no update, `ago()`), `api.test.js` (the age on the
+  device's clock), and `test_mod.py` (`claimed_at` and `claim_age`).

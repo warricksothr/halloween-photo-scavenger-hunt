@@ -260,6 +260,7 @@ def queue(
     URL, player, riddle, claim state, and any open duplicate flag on
     the submitted evidence."""
     conn = reader(request)
+    now = int(time.time())
     rows = conn.execute(
         "SELECT s.id, s.created_at, s.claimed_by, s.claimed_at, s.team_id,"
         "       r.id AS riddle_id, r.text AS riddle_text,"
@@ -293,13 +294,16 @@ def queue(
                 # endpoint 404s anyone outside the owning team.
                 "photo_url": f"/api/mod/evidence/{r['evidence_id']}/photo",
             },
-            # claimed_at lets the console tell a moderator viewing now from
-            # a claim left hours ago (ADR 0038).
+            # The claim's age lets the console tell a moderator viewing now
+            # from a claim left hours ago (ADR 0038). An age, not only a
+            # timestamp: a phone's clock can be minutes off the server's,
+            # and the 10-minute rule must not depend on it.
             "claimed_by": (
                 {
                     "id": r["claimed_by"],
                     "label": r["claimer_label"],
                     "claimed_at": r["claimed_at"],
+                    "claim_age": max(0, now - (r["claimed_at"] or now)),
                 }
                 if r["claimed_by"]
                 else None
