@@ -183,7 +183,12 @@ POST   /api/join/{join_code}            { display_name, device_label? }
                                           player cookie + { event, player }
                                           (429 after repeated bad codes)
 POST   /api/logout                      revoke own session (logs session.revoked)
-                                        and this device's resume token for the event
+                                        and this device's resume token for the event:
+                                        "sign out of this phone" (ADR 0033)
+POST   /api/leave                       switch games (ADR 0033): revoke own session
+                                        only, keep the resume token and cookie, so
+                                        the game stays in Open Cases (logs
+                                        session.revoked, reason "switch") | 401
 GET    /api/resume                      no session needed → { games: [{ event_id,
                                           event_name, theme, status, display_name }] }
                                           for this browser's resume cookies; clears

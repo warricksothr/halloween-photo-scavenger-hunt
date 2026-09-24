@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   api: {
     join: vi.fn(),
+    leave: vi.fn(),
     logout: vi.fn(),
     modJoin: vi.fn(),
     modLogout: vi.fn(),
@@ -33,6 +34,7 @@ import {
   retry,
   subscribe,
   subscribeDeltas,
+  switchGame,
 } from './store';
 
 const copy = { name: 'arkham' };
@@ -154,6 +156,43 @@ describe('store', () => {
     await expect(leaveModerator()).resolves.toBe(failure);
     expect(window.location.pathname).toBe('/mod');
     expect(mocks.api.snapshot).not.toHaveBeenCalled();
+  });
+
+  it('switches games: ends the session and shows the join screen (ADR 0033)', async () => {
+    window.history.replaceState(null, '', '/j/JOINCODE');
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    await refresh();
+    expect(getState()).toMatchObject({ role: 'player' });
+
+    mocks.api.leave.mockResolvedValue({ ok: true });
+    mocks.api.logout.mockClear();
+    mocks.api.modState.mockClear();
+    await switchGame();
+
+    expect(mocks.api.leave).toHaveBeenCalledTimes(1);
+    expect(mocks.api.logout).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/');
+    expect(getState()).toMatchObject({ phase: 'join', role: null, snapshot: null });
+    // Straight to the join screen: no probe that could find a moderator.
+    expect(mocks.api.modState).not.toHaveBeenCalled();
+  });
+
+  it('stays in the game when switching cannot reach the server', async () => {
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    await refresh();
+    const failure = { error: 'network_error', network: true, message: 'offline' };
+    mocks.api.leave.mockResolvedValue(failure);
+
+    await expect(switchGame()).resolves.toBe(failure);
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+  });
+
+  it('signing out also returns to / and the join screen', async () => {
+    window.history.replaceState(null, '', '/t/INVITE');
+    mocks.api.logout.mockResolvedValue({ ok: true });
+    await logout();
+    expect(window.location.pathname).toBe('/');
+    expect(getState()).toMatchObject({ phase: 'join' });
   });
 
   it('rejoins a listed game and lands in it as a player (ADR 0031)', async () => {

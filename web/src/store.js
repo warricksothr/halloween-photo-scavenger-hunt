@@ -338,8 +338,30 @@ export async function leaveModerator() {
   return result;
 }
 
+// Switch games (ADR 0033): end this session but keep the game in Open
+// Cases, then show the join screen. It goes straight to the join phase
+// rather than refreshing, since a refresh at / would fall through to a
+// moderator session if the browser holds one.
+export async function switchGame() {
+  const result = await api.leave();
+  if (result.error) {
+    reportFailure(result, { where: 'switchGame' });
+    return result;
+  }
+  toJoinScreen();
+  return result;
+}
+
+// Sign out on this phone: logout also forgets the game (ADR 0031), so it
+// is for a phone changing hands, not for switching.
 export async function logout() {
   await api.logout();
+  toJoinScreen();
+}
+
+function toJoinScreen() {
   stopStream();
+  // A /j/<code> or /t/<token> path would otherwise reopen that link.
+  window.history.replaceState(null, '', '/');
   set({ phase: 'join', role: null, snapshot: null, modEvent: null });
 }

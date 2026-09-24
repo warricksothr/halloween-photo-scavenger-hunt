@@ -125,6 +125,8 @@ export const api = {
       body: { display_name: displayName, device_label: deviceLabel },
     }),
   logout: () => request('/api/logout', { method: 'POST' }),
+  // Switch games (ADR 0033): ends the session, keeps the rejoin cookie.
+  leave: () => request('/api/leave', { method: 'POST' }),
   // Rejoin (ADR 0031): the games this browser's resume cookies name, and
   // a fresh session as the same player in one of them.
   resumable: () => request('/api/resume'),

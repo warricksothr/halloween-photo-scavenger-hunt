@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { initErrorReporting } from './errors';
 import { isModPath, modLinkCode } from './paths';
-import { getState, leaveModerator, refresh, retry, subscribe } from './store';
+import { getState, leaveModerator, refresh, retry, subscribe, switchGame } from './store';
 import { defaultCopy } from './theme';
 import { Header } from './components/Header';
 import { AdminScreen } from './screens/Admin';
@@ -124,7 +124,7 @@ function PlayerApp() {
           action={
             // The host who also plays needs a way back to the game; the
             // console has no other link out (ADR 0032).
-            <button type="button" class="btn secondary mod-leave" onClick={leaveModerator}>
+            <button type="button" class="btn secondary header-action" onClick={leaveModerator}>
               Leave console
             </button>
           }
@@ -136,7 +136,11 @@ function PlayerApp() {
   if (snapshot.event.status === 'lobby') {
     return (
       <div class="frame" data-testid="app-frame">
-        <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
+        <Header
+          eventName={snapshot.event.name}
+          playerName={snapshot.me.display_name}
+          action={<SwitchGame copy={copy} />}
+        />
         <LobbyScreen copy={copy} />
       </div>
     );
@@ -150,6 +154,17 @@ function PlayerApp() {
 //
 // No polling anywhere: the store's SSE stream delivers verdict deltas
 // (SCANNING → verdict) and event_status, each routing to refresh().
+// Back to the landing page's Open Cases with this game still listed there
+// (ADR 0033): how a player picks another event without waiting out the
+// session. Signing out for good lives on the Team tab.
+function SwitchGame({ copy }) {
+  return (
+    <button type="button" class="btn secondary header-action" onClick={switchGame}>
+      {copy.screens.header.switchGame}
+    </button>
+  );
+}
+
 function GameShell({ snapshot, copy }) {
   const [tab, setTab] = useState('riddles');
   const [openRiddle, setOpenRiddle] = useState(null);
@@ -177,7 +192,11 @@ function GameShell({ snapshot, copy }) {
 
   return (
     <div class="frame" data-testid="app-frame">
-      <Header eventName={snapshot.event.name} playerName={snapshot.me.display_name} />
+      <Header
+        eventName={snapshot.event.name}
+        playerName={snapshot.me.display_name}
+        action={<SwitchGame copy={copy} />}
+      />
       {screen}
       {/* The strike-1 interstitial overlays the whole app (mock: dimmed
           board behind). Un-themed by rule — the component carries its

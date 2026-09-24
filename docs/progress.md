@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — Players can switch games and sign out.**
+  TKT-01M3AHXRSWN97AMT49NYYBB38W and TKT-01M3AHXRV1Q0NE8GCYVFKXJMCG. Switch
+  Case in the header (`POST /api/leave`) ends the session but keeps the
+  game in Open Cases, so a player can pick another event and come back.
+  Sign out of this phone on the Team tab confirms first, then forgets the
+  game on the device (ADR 0033, amends 0031).
+
 - **2026-09-24 — The admin console works on a phone, and duplicate
   codenames can be told apart.** TKT-01M3AFZWB4RERA95SKVN0QVA6F: under
   600px the console no longer scrolls sideways. Panel pickers go full

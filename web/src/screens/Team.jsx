@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
-import { refresh } from '../store';
+import { logout, refresh } from '../store';
 
 // Last-seen in minutes, or null when the member has never been seen. The
 // wording lives in the theme pack (copy.screens.team.lastSeen); this only
@@ -35,6 +35,7 @@ export function TeamScreen({ snapshot, copy }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   async function reload() {
@@ -204,6 +205,37 @@ export function TeamScreen({ snapshot, copy }) {
           </section>
         </>
       )}
+
+      {/* Sign out on a shared phone (ADR 0033). Apart from the header's
+          Switch Case, and two-step, because this one forgets the hunt on
+          this device and cannot be undone from it. */}
+      <section style={{ padding: '8px 16px 24px' }}>
+        <h2 class="headline headline-rule" style={{ fontSize: '0.85rem', marginBottom: 4 }}>
+          {c.signOutHeading}
+        </h2>
+        <div class="panel" style={{ padding: '12px 16px' }}>
+          {signingOut ? (
+            <>
+              <p class="subtext" style={{ marginBottom: 12 }}>{c.signOutConfirm}</p>
+              <button class="btn secondary"
+                      style={{ color: 'var(--alert)', borderColor: 'var(--alert)', marginBottom: 8 }}
+                      onClick={logout}>
+                {c.signOutYes}
+              </button>
+              <button class="btn secondary" onClick={() => setSigningOut(false)}>
+                {c.signOutNo}
+              </button>
+            </>
+          ) : (
+            <>
+              <p class="dim" style={{ fontSize: '0.8rem', marginBottom: 8 }}>{c.signOutNote}</p>
+              <button class="btn secondary" onClick={() => setSigningOut(true)}>
+                {c.signOut}
+              </button>
+            </>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

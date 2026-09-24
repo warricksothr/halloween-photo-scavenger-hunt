@@ -1,7 +1,7 @@
 // Proves the player-facing screens read their strings from the active theme
 // pack: each screen renders against a sentinel copy fixture, so a string
 // baked into the component fails the assertion (TKT-01M33RFWWFJJJ7JP9JE7ZRE54K).
-import { render, screen } from '@testing-library/preact';
+import { fireEvent, render, screen } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     team: vi.fn(),
   },
   join: vi.fn(),
+  logout: vi.fn(),
   refresh: vi.fn(),
   resumableGames: vi.fn(),
   resume: vi.fn(),
@@ -77,6 +78,12 @@ const mocks = vi.hoisted(() => ({
         expiresIn: 'x',
         teamFull: 'x',
         inviteNote: 'x',
+        signOutHeading: 'TEAM_SIGNOUT_HEADING',
+        signOutNote: 'TEAM_SIGNOUT_NOTE',
+        signOut: 'TEAM_SIGNOUT',
+        signOutConfirm: 'TEAM_SIGNOUT_CONFIRM',
+        signOutYes: 'TEAM_SIGNOUT_YES',
+        signOutNo: 'TEAM_SIGNOUT_NO',
       },
     },
   },
@@ -85,6 +92,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../api', () => ({ api: mocks.api }));
 vi.mock('../store', () => ({
   join: mocks.join,
+  logout: mocks.logout,
   refresh: mocks.refresh,
   resumableGames: mocks.resumableGames,
   resume: mocks.resume,
@@ -172,5 +180,27 @@ describe('game-facing copy comes from the theme pack', () => {
     render(<TeamScreen snapshot={{ me: { display_name: 'Robin' } }} copy={mocks.copy} />);
 
     expect(await screen.findByText(/TEAM_SEEN\(null\)/)).toBeTruthy();
+  });
+
+  // ADR 0033: signing out forgets the hunt on this phone, so it asks first.
+  it('signs out of this phone only after a confirmation, in pack copy', async () => {
+    mocks.api.team.mockResolvedValue({
+      team: { name: 'GCPD', size_limit: 4 },
+      members: [{ id: 'm1', display_name: 'Robin', last_seen_at: null, you: true }],
+      invites: [],
+    });
+    render(<TeamScreen snapshot={{ me: { display_name: 'Robin' } }} copy={mocks.copy} />);
+
+    expect(await screen.findByText('TEAM_SIGNOUT_HEADING')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT' }));
+    expect(screen.getByText('TEAM_SIGNOUT_CONFIRM')).toBeTruthy();
+    expect(mocks.logout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT_NO' }));
+    expect(screen.queryByText('TEAM_SIGNOUT_CONFIRM')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT' }));
+    fireEvent.click(screen.getByRole('button', { name: 'TEAM_SIGNOUT_YES' }));
+    expect(mocks.logout).toHaveBeenCalledTimes(1);
   });
 });

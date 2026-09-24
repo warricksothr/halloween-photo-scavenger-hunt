@@ -66,6 +66,11 @@ export default {
       resumeAs: (name) => `Return as ${name}`,
       resumeOr: 'Or join another hunt:',
     },
+    // The header's Switch Case control (ADR 0033): back to Open Cases,
+    // keeping this hunt listed there.
+    header: {
+      switchGame: 'Switch Case',
+    },
     lobby: {
       headline: 'Stand By',
       subtext: 'The round has not opened yet. The Batcomputer will light up when it does.',
@@ -144,6 +149,15 @@ export default {
       teamFull: 'The team is at full strength.',
       inviteNote:
         'Share the link with your teammate — it works once, for ten minutes.',
+      // Sign out on a shared phone: unlike Switch Case, it forgets the hunt.
+      signOutHeading: 'Hand Off This Phone',
+      signOutNote:
+        'Passing this phone to someone else? Sign out so it forgets this hunt.',
+      signOut: 'Sign out of this phone',
+      signOutConfirm:
+        'This phone will forget this hunt: it will not be listed under Open Cases here again, and your codename cannot be picked up from this device.',
+      signOutYes: 'Sign out',
+      signOutNo: 'Keep playing',
       // Roster last-seen, in the pack's voice. `mins` is null when the
       // member has never been seen; the component owns the clock math.
       lastSeen: (mins) => {

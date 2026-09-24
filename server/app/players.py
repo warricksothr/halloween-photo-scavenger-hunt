@@ -174,6 +174,30 @@ def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_play
     return resp
 
 
+@router.post("/leave")
+def leave(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
+    """Switch games (ADR 0033): end this session and keep the way back.
+
+    Unlike logout, the device's resume token and cookie stay, so the
+    landing page still lists this game under Open Cases and one tap
+    rejoins as the same player. Logout is for a phone changing hands."""
+    with locked_transaction(request) as writer:
+        auth.revoke_player_session(writer, ctx.session_id)
+        log_action(
+            writer,
+            event_id=ctx.event_id,
+            actor_type=ActorType.PLAYER,
+            actor_id=ctx.player_id,
+            action=Action.SESSION_REVOKED,
+            entity_type="session",
+            entity_id=ctx.session_id,
+            details={"reason": "switch"},
+        )
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie(auth.PLAYER_COOKIE_NAME)
+    return resp
+
+
 @router.post("/me/notice-ack")
 def notice_ack(
     request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)
