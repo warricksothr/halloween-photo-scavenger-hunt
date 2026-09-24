@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T18:35:13Z
-updated_at: 2026-09-24T19:06:29Z
+updated_at: 2026-09-24T19:17:45Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -138,3 +138,7 @@ https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/p
 - Observed along the way, and not changed here: a browser with a live player session that opens another event's `/j/` link lands back in its current game. That is existing behaviour.
 
 AC6 (deploy and Drew's live rejoin) waits on the merge.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T19:17:45Z
+
+Drew authorized the merge. PR #53 was merged at the reviewed head 992dbca as 6f937c1 (CI quality gate success, Terva r2 clean except the declined ticket-store finding). Deployed to kobal: migration 0004 applied on start, the container is healthy, and /api/health reports schema_version 4. GET /api/resume with no cookies answers {"games":[]}, and POST /api/resume without a CSRF token answers 403. The live bundle calls /api/resume and carries the Open Cases copy. AC6 waits for Drew: sessions from before this deploy carry no resume cookie, so the live check needs a game joined after it, then the session ended, then a rejoin from the landing page.
