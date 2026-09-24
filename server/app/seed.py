@@ -172,11 +172,14 @@ def seed(
         # The API cannot undo the create: purge takes only a closed event,
         # and close only an open one. Resuming is no better, because the
         # codes leave the server only in the create response. So say what
-        # was left behind and how to get past the duplicate check.
+        # was left behind and how to get past the duplicate check. Claim
+        # nothing about its status: a lost response to the open call can
+        # arrive after the server committed it. What holds either way is
+        # that nobody saw the codes.
         raise SeedError(
-            f"{exc}; event {event_id} was created but not finished. It stays"
-            " in the lobby, and its codes were never printed, so no player"
-            " can join it. Rerun with --allow-duplicate to build a fresh one."
+            f"{exc}; event {event_id} was created but not finished. Its codes"
+            " were never printed, so no player can join it, whatever its"
+            " status. Rerun with --allow-duplicate to build a fresh one."
         ) from exc
     return event
 

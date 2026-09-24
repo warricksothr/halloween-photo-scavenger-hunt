@@ -186,6 +186,29 @@ def test_a_failure_after_the_create_names_the_event_and_the_recovery(
     assert len(riddles) == 2
 
 
+def test_a_lost_open_response_does_not_claim_the_event_stayed_in_the_lobby(
+    api, monkeypatch
+):
+    # The open lands on the server, then the response is lost. The seeder
+    # cannot know which happened, so the message must not assert a status.
+    real_request = api.request
+
+    def lost_response(method, url, **kwargs):
+        resp = real_request(method, url, **kwargs)
+        if url.endswith("/open"):
+            raise httpx2.ReadTimeout("timed out", request=resp.request)
+        return resp
+
+    monkeypatch.setattr(api, "request", lost_response)
+    with pytest.raises(seed.SeedError) as info:
+        seed.seed(api, _fixture())
+    message = str(info.value)
+    assert api.get("/api/admin/events").json()[0]["status"] == "open"
+    assert "failed: timed out" in message
+    assert "lobby" not in message
+    assert "no player can join it, whatever its status" in message
+
+
 def test_a_transport_failure_becomes_a_seed_error():
     def handler(request):
         raise httpx2.ConnectError("connection refused", request=request)

@@ -93,8 +93,8 @@ podman exec arkham-hunt python -m app.seed
 - A second run refuses to create another event with the same name, and
   names the one that exists. Pass `--allow-duplicate` to create it anyway.
 - If a run fails after creating the event, the error names that event.
-  It stays in the lobby, and its codes were never printed, so no player
-  can join it. Rerun with `--allow-duplicate`.
+  Its codes were never printed, so no player can join it. Rerun with
+  `--allow-duplicate`.
 - From outside the container, use the server venv and point it at the
   app: `server/.venv/bin/python -m app.seed --base-url http://127.0.0.1:8000`.
 - `answered 403 (csrf_failed ...)` or `401 not_authenticated` means the
