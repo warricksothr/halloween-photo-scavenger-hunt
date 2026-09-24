@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M396FF6CS39ZYQ9HFTRPCDW7
 title: Shared reader connection races under concurrent requests
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ blocks_on: none
 references:
   - ref: pr:51
     path: null
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/reader-race
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: ec82300c3e9cd46e41324abf524cd60f63452df8
-  session: null
-  claimed_at: 2026-09-24T13:14:20Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T07:53:29Z
-updated_at: 2026-09-24T13:30:25Z
+updated_at: 2026-09-24T18:33:23Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -84,7 +77,7 @@ through several threads.
 - [x] Both regression tests fail on the code before the fix.
 - [x] The fix changes no reader call site, and ADR 0013's isolation tests still pass.
 - [x] ADR records the decision and the alternatives, and the misleading GIL comment in db.connect is corrected.
-- [ ] Deployed to kobal, and the moderator console's first load shows every thumbnail.
+- [x] Deployed to kobal, and the moderator console's first load shows every thumbnail.
 
 ## Implementation plan
 
@@ -153,3 +146,11 @@ Fix implemented: db.reader() returns a SerializedReader (read_lock; execute read
 **agent:claude-code/t3code-bf267378** at 2026-09-24T13:30:25Z
 
 PR #51 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/51), base b3cb6a0. Terva r1: reader-race-r1, run 2f64bc13 (Actions #642), review 416 on afe546f. It had two low findings. Accepted: the worker-alive assertion, fixed in aa4fa57. Declined: the .tickets change, which lives in base b3cb6a0. Reply is comment 11838. r2: reader-race-r2, run 730c1213 (Actions #645), clean on head aa4fa57, base b3cb6a0, comment 11839. CI passed. Merged as 58a2909 and deployed to kobal: container healthy, schema_version 3, 300 concurrent /api/health requests all 200, no InterfaceError in the logs. The kobal ledger note is committed. AC6 (the console's first load shows every thumbnail on kobal) waits for Drew's check.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:33:23Z
+
+Drew loaded the moderator console on kobal from an iPhone after the 58a2909 deploy and sent a screenshot: both pending queue items (#8 Robin, #8 Toad) show their thumbnails on first load. AC6 met.
+
+## Summary
+
+Fixed in PR #51 (merged as 58a2909, deployed to kobal). db.reader() now returns a SerializedReader that runs one statement at a time on the shared reader connection under app.state.read_lock and reads every row before releasing it, so threads no longer share a half-stepped prepared statement and no cursor pins a snapshot. ADR 0030 records it and amends ADR 0013. tests/test_reader_concurrency.py holds two regressions (16 threads on the same SQL; a 60-request moderator burst) that fail on the old code. Verified live: 300 concurrent health checks all 200 with no InterfaceError, and Drew's console load showed every thumbnail.
