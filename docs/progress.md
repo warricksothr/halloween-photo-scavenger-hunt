@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The host can replace a leaked join or mod code.**
+  TKT-01M391W15B. Each code rotates on its own from the event's links
+  panel, after a warning. The old code is refused at once; players,
+  their rejoin cookies and moderators already in are untouched, per
+  Drew's decisions. `event.code_rotated` records which code, never the
+  codes (ADR 0039).
+
 - **2026-09-24 — The admin, moderator and player views link to each
   other.** TKT-01M391CVK8. The host console's header links to the
   moderator console and the player view. The moderator console links back

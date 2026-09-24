@@ -218,6 +218,9 @@ export const api = {
   // The codes on demand (ADR 0026): their own call, so the list never
   // carries them.
   adminEventCodes: (eventId) => request(`/api/admin/events/${eventId}/codes`),
+  // kind is 'join' or 'mod'; answers with both codes (ADR 0039).
+  adminRotateCode: (eventId, kind) =>
+    request(`/api/admin/events/${eventId}/codes/${kind}/rotate`, { method: 'POST' }),
   adminOpenEvent: (eventId) =>
     request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
   adminCloseEvent: (eventId) =>

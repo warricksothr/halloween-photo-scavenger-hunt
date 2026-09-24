@@ -121,6 +121,14 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
     else setLinksFor({ id: item.id, codes: result });
   }
 
+  // A leaked link (ADR 0039): replace one code, and show the new links in
+  // place. mutate reports a failure the way every other action does.
+  async function onRotate(item, kind) {
+    const result = await mutate(() => api.adminRotateCode(item.id, kind));
+    if (result && !result.error) setLinksFor({ id: item.id, codes: result });
+    return result;
+  }
+
   async function onPurge(event) {
     event.preventDefault();
     const target = purgeFor;
@@ -249,7 +257,12 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
               </div>
 
               {linksFor?.id === item.id && (
-                <EventLinks event={item} codes={linksFor.codes} />
+                <EventLinks
+                  event={item}
+                  codes={linksFor.codes}
+                  busy={busy}
+                  onRotate={(kind) => onRotate(item, kind)}
+                />
               )}
 
               {purgeFor?.id === item.id && (
@@ -339,7 +352,7 @@ function slug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event';
 }
 
-function EventLinks({ event, codes }) {
+function EventLinks({ event, codes, busy, onRotate }) {
   const [showMod, setShowMod] = useState(false);
   const url = joinUrl(codes.join_code);
   const stem = `${slug(event.name)}-join-qr`;
@@ -370,6 +383,12 @@ function EventLinks({ event, codes }) {
                       }}>
                 PNG
               </button>
+              <RotateCode
+                kind="join"
+                busy={busy}
+                onRotate={onRotate}
+                warning="The current join link and every printed QR stop working. Players already in keep playing; print the new QR."
+              />
             </>
           }
         />
@@ -381,10 +400,18 @@ function EventLinks({ event, codes }) {
             actions={
               // The host moderates too (ADR 0027): one click from the card
               // into this event's queue, in its own tab so the console stays.
-              <a class="admin-btn secondary" href={modUrl(codes.mod_code)}
-                 target="_blank" rel="noopener">
-                Open moderator console
-              </a>
+              <>
+                <a class="admin-btn secondary" href={modUrl(codes.mod_code)}
+                   target="_blank" rel="noopener">
+                  Open moderator console
+                </a>
+                <RotateCode
+                  kind="mod"
+                  busy={busy}
+                  onRotate={onRotate}
+                  warning="The current moderator link stops working. Moderators already in the console stay; send the new link to anyone joining later."
+                />
+              </>
             }
           />
         ) : (
@@ -410,6 +437,38 @@ function EventLinks({ event, codes }) {
         </div>,
         document.body,
       )}
+    </div>
+  );
+}
+
+// Replace one code, after saying what that breaks (ADR 0039). Two steps,
+// because a stray click would otherwise void every printed QR mid-party.
+function RotateCode({ kind, busy, onRotate, warning }) {
+  const [confirming, setConfirming] = useState(false);
+  const label = kind === 'join' ? 'New join code' : 'New moderator code';
+  if (!confirming) {
+    return (
+      <button class="admin-btn secondary" disabled={busy} onClick={() => setConfirming(true)}>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <div class="admin-rotate" role="group" aria-label={label}>
+      <p class="admin-note">{warning}</p>
+      <button
+        class="admin-btn"
+        disabled={busy}
+        onClick={async () => {
+          const result = await onRotate(kind);
+          if (result && !result.error) setConfirming(false);
+        }}
+      >
+        Replace the code
+      </button>
+      <button class="admin-btn secondary" disabled={busy} onClick={() => setConfirming(false)}>
+        Cancel
+      </button>
     </div>
   );
 }

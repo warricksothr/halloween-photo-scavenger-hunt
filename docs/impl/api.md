@@ -78,6 +78,13 @@ POST   /api/admin/logout
 GET    /api/admin/events                → [event summary] (never carries codes)
 GET    /api/admin/events/{id}/codes     → { join_code, mod_code } (ADR 0026;
                                         404 event_not_found; a read, not audited)
+POST   /api/admin/events/{id}/codes/{join|mod}/rotate
+                                        → { join_code, mod_code }: replaces
+                                        one code; the old one is refused at
+                                        once. Who already joined stays in.
+                                        Logs event.code_rotated with
+                                        { code: kind }, never a code
+                                        (ADR 0039) | 404 unknown kind/event
 GET    /api/admin/readyz                → readiness diagnostics (below)
 POST   /api/admin/events                { name, theme, leaderboard_visibility,
                                           team_size_limit? }        → event + join_code + mod_code

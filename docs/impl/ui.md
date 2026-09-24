@@ -133,6 +133,10 @@ strike interstitial, and the drawer restricted variant.
   client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
+- **A leaked link can be replaced** — "New join code" in an event's links
+  panel and "New moderator code" on its revealed moderator card each warn
+  what stops working, then replace that one code and show the new link.
+  Players and moderators already in stay (ADR 0039).
 - **The three views link to each other** — the host console's header
   links to the moderator console (`/mod`, the console this browser last
   joined) and the player view (`/`, where Open Cases lists its games); each
