@@ -49,7 +49,18 @@ Alternatives considered:
 
 - A rerun refuses to create a second event with the same name unless
   `--allow-duplicate` is passed, so a retried deploy step cannot leave
-  players two identical events to join.
+  players two identical events to join. The check is a read followed by a
+  write, so two seeders started at the same instant can both pass it. We
+  accept that: the seeder is run by one operator, and a real guarantee
+  would need a unique event name on the server, which would stop a host
+  reusing a name from year to year.
+- A failure after the create (a riddle or the open) leaves a partial event
+  that the API cannot remove: purge takes only a closed event, and close
+  only an open one. Resuming it is no better, because the join and mod
+  codes leave the server only in the create response. The seeder names
+  the partial event in its error instead. That event stays in the lobby
+  with codes nobody saw, so no player can join it, and a rerun with
+  `--allow-duplicate` builds a fresh one.
 - The fixture is package data (`pyproject.toml`), and the image copies it
   with the rest of `server/`.
 - A wrong token fails as `401 not_authenticated` on the duplicate-check

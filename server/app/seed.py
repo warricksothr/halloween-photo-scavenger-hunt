@@ -146,8 +146,11 @@ def seed(
     fixture = validate_fixture(fixture)
     name = fixture["name"]
     if not allow_duplicate:
-        # A rerun (a retried deploy, a second terminal) must not leave two
-        # demo events with the same name for players to join by mistake.
+        # A sequential rerun (a retried deploy step) must not leave two
+        # demo events with the same name. This is a read then a write, so
+        # two seeders started at the same instant can both pass it; the
+        # seeder is a one-operator tool, and a real guarantee would need a
+        # unique name on the server, which hosts do not want (ADR 0025).
         existing = [
             e for e in _call(client, "GET", "/api/admin/events") if e["name"] == name
         ]
@@ -159,11 +162,22 @@ def seed(
     event_fields = {k: v for k, v in fixture.items() if k != "riddles"}
     event = _call(client, "POST", "/api/admin/events", json=event_fields)
     event_id = event["id"]
-    for riddle in sorted(fixture["riddles"], key=lambda r: r["sort_order"]):
-        _call(client, "POST", f"/api/admin/events/{event_id}/riddles", json=riddle)
-    if open_round:
-        opened = _call(client, "POST", f"/api/admin/events/{event_id}/open")
-        event["status"] = opened["status"]
+    try:
+        for riddle in sorted(fixture["riddles"], key=lambda r: r["sort_order"]):
+            _call(client, "POST", f"/api/admin/events/{event_id}/riddles", json=riddle)
+        if open_round:
+            opened = _call(client, "POST", f"/api/admin/events/{event_id}/open")
+            event["status"] = opened["status"]
+    except SeedError as exc:
+        # The API cannot undo the create: purge takes only a closed event,
+        # and close only an open one. Resuming is no better, because the
+        # codes leave the server only in the create response. So say what
+        # was left behind and how to get past the duplicate check.
+        raise SeedError(
+            f"{exc}; event {event_id} was created but not finished. It stays"
+            " in the lobby, and its codes were never printed, so no player"
+            " can join it. Rerun with --allow-duplicate to build a fresh one."
+        ) from exc
     return event
 
 

@@ -153,6 +153,39 @@ def test_error_bodies_are_unwrapped_or_shown_raw(status, body, expected):
     assert str(info.value).endswith(expected)
 
 
+@pytest.mark.parametrize("fail_on", ["riddles", "open"])
+def test_a_failure_after_the_create_names_the_event_and_the_recovery(
+    api, monkeypatch, fail_on
+):
+    # A route failing mid-seed leaves the event behind. The error must name
+    # it, and the documented recovery (--allow-duplicate) must then work.
+    real_request = api.request
+    calls = {"n": 0}
+
+    def flaky(method, url, **kwargs):
+        if method == "POST" and url.endswith(fail_on):
+            calls["n"] += 1
+            if calls["n"] == 2 or fail_on == "open":
+                return httpx2.Response(503, text="upstream hiccup")
+        return real_request(method, url, **kwargs)
+
+    monkeypatch.setattr(api, "request", flaky)
+    with pytest.raises(seed.SeedError) as info:
+        seed.seed(api, _fixture())
+    partial = api.get("/api/admin/events").json()[0]
+    message = str(info.value)
+    assert "503 (upstream hiccup)" in message
+    assert f"event {partial['id']} was created but not finished" in message
+    assert partial["status"] == "lobby"
+    with pytest.raises(seed.SeedError, match="already exists"):
+        seed.seed(api, _fixture())
+    monkeypatch.setattr(api, "request", real_request)
+    fresh = seed.seed(api, _fixture(), allow_duplicate=True)
+    assert fresh["status"] == "open"
+    riddles = api.get(f"/api/admin/events/{fresh['id']}/riddles").json()
+    assert len(riddles) == 2
+
+
 def test_a_transport_failure_becomes_a_seed_error():
     def handler(request):
         raise httpx2.ConnectError("connection refused", request=request)
