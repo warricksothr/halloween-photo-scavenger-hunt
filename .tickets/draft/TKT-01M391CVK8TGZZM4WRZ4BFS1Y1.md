@@ -15,13 +15,12 @@ parent: TKT-01M24GA0PMGWEM80RBS502FGVY
 origin: null
 dependencies:
   - TKT-01M391CVFHW62D1KF3E5Y3KACC
-  - TKT-01M391CVJ10G0HGZR8ZFZB6RW4
 blocks_on: none
 references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T06:24:40Z
+updated_at: 2026-09-24T07:19:46Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -50,3 +49,9 @@ Reported by Drew on 2026-09-24: the admin console has no link to the moderator c
 
 - [ ] The admin console links to the moderator view and the player view, and the moderator console links back to the host console for an admin.
 - [ ] Links that need an event (a mod link) are available per event row.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
+
+2026-09-24: no longer waits on TKT-01M391CVJ10G0HGZR8ZFZB6RW4 (Decide how SSO roles map to moderating events), which was retired with per-event moderation kept. So a 'Moderate' link has to be per event. The revealed mod card's 'Open moderator console' (PR #48) already covers the admin→moderator direction for each event. What remains is moderator→host console and admin→player view.

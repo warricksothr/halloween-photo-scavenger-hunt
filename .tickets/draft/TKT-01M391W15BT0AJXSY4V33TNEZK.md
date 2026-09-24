@@ -15,14 +15,13 @@ assignees: []
 milestone: null
 parent: TKT-01M24GA0PMGWEM80RBS502FGVY
 origin: null
-dependencies:
-  - TKT-01M391CVJ10G0HGZR8ZFZB6RW4
+dependencies: []
 blocks_on: none
 references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:32:57Z
-updated_at: 2026-09-24T06:32:57Z
+updated_at: 2026-09-24T07:19:46Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -48,3 +47,9 @@ There is no way to replace an event's join or mod code today (`server/app/events
 
 - [ ] An admin can replace an event's join and/or mod code; the old code stops working and the rotation is audited without recording either code.
 - [ ] The effect on players and moderators who already joined is decided, recorded in an ADR, and tested.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
+
+2026-09-24: no longer waits on TKT-01M391CVJ10G0HGZR8ZFZB6RW4 (Decide how SSO roles map to moderating events), which was retired with per-event moderation kept. So the mod code keeps its role as the selector for an event. A rotation must still decide whether moderators who already joined keep their sessions; their moderator_session is independent of the code.

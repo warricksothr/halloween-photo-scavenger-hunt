@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391CVJ10G0HGZR8ZFZB6RW4
 title: Decide how SSO roles map to moderating events
 type: spike
-status: draft
+status: archived
 status_reason: null
 priority: high
 due_on: null
@@ -23,9 +23,12 @@ references:
   - ref: ticket:TKT-01M33S9D3C15QT20SEBR3MDDQY
     path: null
 claim: null
-archive: null
+archive:
+  archived_at: 2026-09-24T07:19:46Z
+  from_status: draft
+  reason: "Decided 2026-09-24: keep per-event moderation through mod links; the host can reach every link from the event card and can moderate (ADR 0026, ADR 0027). No global moderator role."
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T06:25:00Z
+updated_at: 2026-09-24T07:19:46Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -61,3 +64,26 @@ Record the result by amending or replacing ADR 0020, and bring design.md:305-306
 
 - [ ] One option is chosen and recorded, amending or replacing ADR 0020, and design.md's admin-can-moderate line agrees with it.
 - [ ] Follow-up implementation tickets are filed for the chosen option, including whether the admin can moderate and where a moderator's SSO login lands.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
+
+Decided by Drew on 2026-09-24 and retired without further work. **Option 1 stands:** moderation stays per event, through the event's mod link, and there are no global moderators.
+
+### Why
+The host can now always reach the right link. The event card's Links & QR shows the mod link on demand and opens the moderator console directly (ADR 0026, PR #47). The host can also moderate (ADR 0027, PR #48). A global role would add an event picker and a second authorization path for no gain at a party this size.
+
+### The rules as they now stand
+- **Who may join:** an Authentik moderator, or the host, joins an event's queue by opening that event's mod link. The code selects the event, and the sign-in supplies the person (ADR 0020, as amended by ADR 0027).
+- **Handing out links:** the host hands the mod link out privately, from the event card.
+
+### Open questions from the description, settled here
+- **A bare mod code without SSO (the LAN recipe):** unchanged. It still needs a moderator or host sign-in, and a host on the local password qualifies.
+- **The in-memory identity surviving a restart:** unchanged. A restart signs everyone out, as it does for admin sessions; re-signing in is the recovery.
+
+Nothing here amends the ADRs further. This spike's second criterion, follow-up tickets, needs none, because the host part shipped as TKT-01M393JKCAXV2J3DY1219MYXFG (Let the host join an event's moderator console).
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:19:46Z
+
+archived from draft: Decided 2026-09-24: keep per-event moderation through mod links; the host can reach every link from the event card and can moderate (ADR 0026, ADR 0027). No global moderator role.
