@@ -60,7 +60,14 @@ body {
   font-family: var(--font-body);
   font-weight: 400;
   line-height: 1.45;
+  /* 100vh on iOS Safari is the viewport with its URL bar hidden, so it
+     overshoots while the bar shows; dvh tracks what is visible. 100vh
+     stays first as the fallback for engines without dvh. */
   min-height: 100vh;
+  min-height: 100dvh;
+  /* index.html sets viewport-fit=cover, so the page runs under the home
+     indicator; this keeps the last item of a long screen clear of it. */
+  padding-bottom: env(safe-area-inset-bottom);
   /* Faint hex/tech patterning — Batcomputer panel texture. */
   background-image:
     linear-gradient(30deg, rgba(127, 212, 232, 0.025) 12%, transparent 12.5%, transparent 87%, rgba(127, 212, 232, 0.025) 87.5%),
@@ -73,6 +80,7 @@ body {
   max-width: 420px;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   border-left: var(--rule);
   border-right: var(--rule);
   display: flex;
@@ -104,10 +112,23 @@ body {
   color: var(--text-dim);
 }
 
+/* The header and tabs, pinned together at the top of every player
+   screen (ADR 0034). At the top, a scrolled board never hides the
+   controls, installed or in Safari, and nothing depends on where
+   Safari's own bottom bar sits. The bar is opaque because content now
+   scrolls under it; the header and tabs keep their panel tint on top.
+   The top inset clears the installed app's translucent status bar. */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-deep);
+  padding-top: env(safe-area-inset-top);
+}
+
 .tab-bar {
-  margin-top: auto;
   display: flex;
-  border-top: var(--rule);
+  border-bottom: var(--rule);
   background: var(--bg-panel-translucent);
 }
 
@@ -121,12 +142,13 @@ body {
   font-size: 0.7rem;
   color: var(--text-dim);
   text-decoration: none;
-  border-top: 2px solid transparent;
+  /* The accent sits on the edge facing the content below the bar. */
+  border-bottom: 2px solid transparent;
 }
 
 .tab-bar a.active {
   color: var(--cyan-bright);
-  border-top-color: var(--cyan);
+  border-bottom-color: var(--cyan);
 }
 
 .tab-bar .tab-icon { display: block; font-size: 1.1rem; margin-bottom: 2px; }

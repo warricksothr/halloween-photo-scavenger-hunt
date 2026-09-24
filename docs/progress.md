@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The header and tabs are pinned at the top.**
+  TKT-01M390Y0PN10W11HEB6FM91PZ6: on an iPhone the tabs sat below the
+  fold and the header scrolled away. Both now sit in one sticky bar at the
+  top of every player screen. The frame uses `100dvh`, and the installed
+  app's translucent status bar is cleared with `viewport-fit=cover` and
+  the safe-area insets (ADR 0034).
+
 - **2026-09-24 — Players can switch games and sign out.**
   TKT-01M3AHXRSWN97AMT49NYYBB38W and TKT-01M3AHXRV1Q0NE8GCYVFKXJMCG. Switch
   Case in the header (`POST /api/leave`) ends the session but keeps the
