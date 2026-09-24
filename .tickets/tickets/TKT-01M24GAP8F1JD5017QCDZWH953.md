@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M24GAP8F1JD5017QCDZWH953
 title: Run the production deployment and restore drill
 type: task
-status: draft
+status: in-progress
 status_reason: null
 priority: high
 due_on: null
@@ -26,16 +26,23 @@ references:
     path: docs/build-plan.md
   - ref: implementation:compose
     path: compose.yml
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/restore-drill
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 9f2d7cc7b6042c9d6532347afcdd8199c3d5de72
+  session: null
+  claimed_at: 2026-09-24T01:00:55Z
+  expires_at: null
 archive: null
 created_at: 2026-09-10T01:53:44Z
-updated_at: 2026-09-10T17:29:06Z
+updated_at: 2026-09-24T01:00:55Z
 created_by:
   id: agent:terva/mieli
   name: Mieli
 updated_by:
-  id: agent:terva/mieli
-  name: Mieli
+  id: agent:claude-code/t3code-bf267378
+  name: ""
 extensions: {}
 ---
 
