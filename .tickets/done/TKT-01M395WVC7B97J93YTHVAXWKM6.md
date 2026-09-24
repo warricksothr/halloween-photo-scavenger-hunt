@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M395WVC7B97J93YTHVAXWKM6
 title: Give the moderator console a desktop and tablet layout
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -19,17 +19,10 @@ blocks_on: none
 references:
   - ref: pr:50
     path: null
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/mod-console-wide
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 8ed5d7c3f1afe7abc9f3a9a878d97f5485d0d64b
-  session: null
-  claimed_at: 2026-09-24T07:43:20Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T07:43:18Z
-updated_at: 2026-09-24T08:09:09Z
+updated_at: 2026-09-24T13:14:16Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -63,7 +56,7 @@ Requested by Drew on 2026-09-24, after moderating the kobal demo event from a de
 - [x] After a verdict or a conduct removal, the next pending submission that no other moderator is viewing opens automatically.
 - [x] A 'Shared?' item shows its photo side by side with the photo it matched, labelled with both teams, with Clear/Confirm beside them.
 - [x] Clicking a photo opens it full-size; Escape or a click closes it.
-- [ ] Verified on kobal from a desktop browser.
+- [x] Verified on kobal from a desktop browser.
 
 ## Implementation plan
 
@@ -119,3 +112,11 @@ PR #50 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 **agent:claude-code/t3code-bf267378** at 2026-09-24T08:09:09Z
 
 Terva r2 (request mod-console-wide-r2) was clean on head f5affb6, base 9e2d246: run 4e40237b (Actions #635), status comment 11602, both r1 findings resolved. An earlier r2 dispatch (run ab15521b) was superseded because my ticket-note push moved main during the run. It was redispatched under the same request id. CI Fast quality gate passed on f5affb6. Merged as e03af25 and deployed to kobal (container healthy, schema_version 3, served CSS bundle matches the build). The kobal ledger note is committed there. AC6 (verified on kobal from a desktop browser) stays open until Drew checks it.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T13:14:16Z
+
+AC6: Drew reviewed the deployed console (e03af25) and approved it on 2026-09-24 ('This pass on those administrative UIs is good').
+
+## Summary
+
+Merged as e03af25 (PR #50) and deployed to kobal. The moderator console lays out by width: a single column on a phone, a queue rail plus review column at 700px, and queue | photo | decision at 1100px, each column scrolling on its own. It auto-advances to the next unclaimed item after a verdict or removal, compares a shared photo side by side with its match (the flag gains other_photo_url/other_team_label), and zooms either photo to full size. ADR 0029. Found while verifying and filed separately: TKT-01M396FF6CS39ZYQ9HFTRPCDW7 (Shared reader connection races under concurrent requests).
