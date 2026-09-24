@@ -190,7 +190,7 @@ def require_admin(request: Request) -> str:
 # ── Player sessions ───────────────────────────────────────────────────
 
 
-def _hash_token(token: str) -> str:
+def hash_token(token: str) -> str:
     """SHA-256 of the bearer token — the only form at rest (schema.md:
     plaintext never stored, so a DB leak yields no usable sessions)."""
     return hashlib.sha256(token.encode()).hexdigest()
@@ -226,7 +226,7 @@ def issue_player_session(
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             ids.new_id(),
-            _hash_token(token),
+            hash_token(token),
             player_id,
             device_label,
             user_agent,
@@ -287,7 +287,7 @@ def current_player(request: Request) -> PlayerContext | None:
         " JOIN player p ON p.id = s.player_id"
         " JOIN team t ON t.id = p.team_id"
         " WHERE s.token_hash = ?",
-        (_hash_token(token),),
+        (hash_token(token),),
     ).fetchone()
     if row is None or row["revoked_at"] is not None or _expired(row["created_at"], ttl):
         return None
@@ -322,6 +322,22 @@ def require_player(request: Request) -> PlayerContext:
             detail={"error": "not_authenticated", "message": "Join the event first."},
         )
     return ctx
+
+
+def set_player_cookie(response, request: Request, token: str) -> None:
+    """The player session cookie, as join, invite redeem and rejoin set it.
+
+    SameSite=Lax (not Strict like admin): the player arrives *by
+    following* the join link/QR from another app, and the cookie must
+    survive that first navigation."""
+    response.set_cookie(
+        PLAYER_COOKIE_NAME,
+        token,
+        httponly=True,
+        secure=request.app.state.cookie_secure,
+        samesite="lax",
+        max_age=request.app.state.session_ttl,
+    )
 
 
 def revoke_player_session(conn: sqlite3.Connection, session_id: str) -> None:
@@ -361,7 +377,7 @@ def issue_moderator_session(
         "INSERT INTO moderator_session (id, token_hash, moderator_id,"
         " created_at, last_seen_at)"
         " VALUES (?, ?, ?, ?, ?)",
-        (ids.new_id(), _hash_token(token), moderator_id, now, now),
+        (ids.new_id(), hash_token(token), moderator_id, now, now),
     )
     return token
 
@@ -380,7 +396,7 @@ def current_moderator(request: Request) -> ModeratorContext | None:
         " FROM moderator_session s"
         " JOIN moderator m ON m.id = s.moderator_id"
         " WHERE s.token_hash = ?",
-        (_hash_token(token),),
+        (hash_token(token),),
     ).fetchone()
     if row is None or row["revoked_at"] is not None or _expired(row["created_at"], ttl):
         return None

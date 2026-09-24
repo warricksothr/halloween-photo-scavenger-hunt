@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
     logout: vi.fn(),
     modJoin: vi.fn(),
     modState: vi.fn(),
+    resumable: vi.fn(),
+    resume: vi.fn(),
     snapshot: vi.fn(),
   },
   loadTheme: vi.fn(),
@@ -24,6 +26,8 @@ import {
   logout,
   modJoin,
   refresh,
+  resumableGames,
+  resume,
   retry,
   subscribe,
   subscribeDeltas,
@@ -107,6 +111,35 @@ describe('store', () => {
       snapshot: playerSnapshot,
     });
     expect(FakeEventSource.instances[0].url).toBe('/api/events/stream?as=player');
+  });
+
+  it('rejoins a listed game and lands in it as a player (ADR 0031)', async () => {
+    mocks.api.resume.mockResolvedValue({ event: { id: 'event-1' } });
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+
+    await resume('event-1');
+
+    expect(mocks.api.resume).toHaveBeenCalledWith('event-1');
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    expect(FakeEventSource.instances.at(-1).url).toBe('/api/events/stream?as=player');
+  });
+
+  it('hands a refused rejoin back without refreshing', async () => {
+    const refusal = { error: 'banned', message: 'Removed.', status: 403 };
+    mocks.api.resume.mockResolvedValue(refusal);
+
+    await expect(resume('event-1')).resolves.toBe(refusal);
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
+  it('lists resumable games, and an empty list when the fetch fails', async () => {
+    mocks.api.resumable.mockResolvedValue({ games: [{ event_id: 'event-1' }] });
+    await expect(resumableGames()).resolves.toEqual([{ event_id: 'event-1' }]);
+
+    mocks.api.resumable.mockResolvedValue({ error: 'network_error', network: true });
+    await expect(resumableGames()).resolves.toEqual([]);
+    expect(mocks.reportError).toHaveBeenCalled();
   });
 
   it('does not refresh when a mod join has no SSO moderator session', async () => {

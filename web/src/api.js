@@ -125,6 +125,11 @@ export const api = {
       body: { display_name: displayName, device_label: deviceLabel },
     }),
   logout: () => request('/api/logout', { method: 'POST' }),
+  // Rejoin (ADR 0031): the games this browser's resume cookies name, and
+  // a fresh session as the same player in one of them.
+  resumable: () => request('/api/resume'),
+  resume: (eventId) =>
+    request(`/api/resume/${encodeURIComponent(eventId)}`, { method: 'POST' }),
   noticeAck: () => request('/api/me/notice-ack', { method: 'POST' }),
   drawer: () => request('/api/evidence'),
   recap: () => request('/api/recap'),

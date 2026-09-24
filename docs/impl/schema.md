@@ -115,6 +115,19 @@ CREATE TABLE IF NOT EXISTS session (
 );
 CREATE INDEX IF NOT EXISTS idx_session_player ON session(player_id);
 
+-- A device's way back to its player once the session has ended (ADR 0031,
+-- migration 0004). Outlives the session; good only while the event is open
+-- and the player is not banned. Revoked by logout on that device, a
+-- moderator removal and an invite switch.
+CREATE TABLE IF NOT EXISTS player_resume (
+    id          TEXT PRIMARY KEY,
+    token_hash  TEXT NOT NULL UNIQUE,   -- SHA-256, as for session
+    player_id   TEXT NOT NULL REFERENCES player(id) ON DELETE CASCADE,
+    created_at  INTEGER NOT NULL,
+    revoked_at  INTEGER                 -- NULL = live
+);
+CREATE INDEX IF NOT EXISTS idx_player_resume_player ON player_resume(player_id);
+
 -- Moderator sessions are sessions on a synthetic moderator "player" in a
 -- synthetic team? No — moderators get their own table. They are not
 -- players: they score nothing, appear on no leaderboard, and conflating

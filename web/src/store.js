@@ -298,6 +298,29 @@ export async function join(joinCode, displayName, deviceLabel) {
   return result;
 }
 
+// The games this browser can rejoin, for the join screen. A failure is
+// an empty list: the join form below it still works.
+export async function resumableGames() {
+  const result = await api.resumable();
+  if (result.error) {
+    reportFailure(result, { where: 'resumableGames' });
+    return [];
+  }
+  return result.games ?? [];
+}
+
+// Rejoin as the same player (ADR 0031). A refusal (the game closed, the
+// player was banned) comes back for the join screen to show.
+export async function resume(eventId) {
+  const result = await api.resume(eventId);
+  if (result.error) {
+    reportFailure(result, { where: 'resume' });
+    return result;
+  }
+  await refresh();
+  return result;
+}
+
 export async function logout() {
   await api.logout();
   stopStream();

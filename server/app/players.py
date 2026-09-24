@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids, ratelimit
+from app import auth, ids, ratelimit, resume
 from app.audit import Action, ActorType, log_action
 from app.conduct import derive_restriction
 from app.db import locked_transaction, reader
@@ -112,6 +112,7 @@ def join(join_code: str, body: JoinBody, request: Request):
             device_label=body.device_label,
             user_agent=user_agent,
         )
+        resume_token = resume.issue(writer, player_id)
         log_action(
             writer,
             event_id=event["id"],
@@ -142,17 +143,9 @@ def join(join_code: str, body: JoinBody, request: Request):
             },
         },
     )
-    # SameSite=Lax (not Strict like admin): the player arrives *by
-    # following* the join link/QR from another app, and the cookie must
-    # survive that first navigation.
-    resp.set_cookie(
-        auth.PLAYER_COOKIE_NAME,
-        token,
-        httponly=True,
-        secure=request.app.state.cookie_secure,
-        samesite="lax",
-        max_age=request.app.state.session_ttl,
-    )
+    auth.set_player_cookie(resp, request, token)
+    # The way back once this session has ended (ADR 0031).
+    resume.set_cookie(resp, request, event["id"], resume_token)
     return resp
 
 
@@ -160,6 +153,11 @@ def join(join_code: str, body: JoinBody, request: Request):
 def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_player)):
     with locked_transaction(request) as writer:
         auth.revoke_player_session(writer, ctx.session_id)
+        # Logging out forgets the game on this device too: on a shared
+        # phone, the next person must not find a way back in (ADR 0031).
+        resume.revoke_this_device(
+            writer, request, player_id=ctx.player_id, event_id=ctx.event_id
+        )
         log_action(
             writer,
             event_id=ctx.event_id,
@@ -172,6 +170,7 @@ def logout(request: Request, ctx: auth.PlayerContext = Depends(auth.require_play
         )
     resp = JSONResponse(content={"ok": True})
     resp.delete_cookie(auth.PLAYER_COOKIE_NAME)
+    resume.clear_cookie(resp, ctx.event_id)
     return resp
 
 

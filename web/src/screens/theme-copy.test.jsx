@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   },
   join: vi.fn(),
   refresh: vi.fn(),
+  resumableGames: vi.fn(),
+  resume: vi.fn(),
   copy: {
     verdicts: {},
     recap: {},
@@ -27,6 +29,9 @@ const mocks = vi.hoisted(() => ({
         codePlaceholder: 'JOIN_CODE_PH',
         devicePlaceholder: 'JOIN_DEVICE_PH',
         submit: 'JOIN_SUBMIT',
+        resumeHeading: 'JOIN_RESUME_HEADING',
+        resumeAs: (name) => `JOIN_RESUME_AS(${name})`,
+        resumeOr: 'JOIN_RESUME_OR',
       },
       teamJoin: {
         headline: 'TEAMJOIN_HEADLINE',
@@ -78,7 +83,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../api', () => ({ api: mocks.api }));
-vi.mock('../store', () => ({ join: mocks.join, refresh: mocks.refresh }));
+vi.mock('../store', () => ({
+  join: mocks.join,
+  refresh: mocks.refresh,
+  resumableGames: mocks.resumableGames,
+  resume: mocks.resume,
+}));
 vi.mock('../theme', () => ({
   DEFAULT_THEME: 'arkham',
   loadTheme: vi.fn(async () => mocks.copy),
@@ -94,6 +104,7 @@ describe('game-facing copy comes from the theme pack', () => {
     vi.clearAllMocks();
     window.history.replaceState(null, '', '/');
     mocks.refresh.mockResolvedValue(undefined);
+    mocks.resumableGames.mockResolvedValue([]);
   });
 
   it('renders the join code labels and placeholders from copy', async () => {
@@ -102,6 +113,17 @@ describe('game-facing copy comes from the theme pack', () => {
     expect(await screen.findByLabelText('JOIN_CODE_LABEL')).toBeTruthy();
     expect(screen.getByPlaceholderText('JOIN_CODE_PH')).toBeTruthy();
     expect(screen.getByPlaceholderText('JOIN_DEVICE_PH')).toBeTruthy();
+  });
+
+  it('renders the rejoin list from copy', async () => {
+    mocks.resumableGames.mockResolvedValue([
+      { event_id: 'ev-1', event_name: 'Gotham', display_name: 'Robin', status: 'open', theme: 'arkham' },
+    ]);
+    render(<JoinScreen />);
+
+    expect(await screen.findByText('JOIN_RESUME_HEADING')).toBeTruthy();
+    expect(screen.getByText('JOIN_RESUME_AS(Robin)')).toBeTruthy();
+    expect(screen.getByText('JOIN_RESUME_OR')).toBeTruthy();
   });
 
   it('renders the invite loading line from copy', async () => {

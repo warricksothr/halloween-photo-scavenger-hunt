@@ -24,7 +24,7 @@ Mocking conventions:
 
 | Screen | Mock | Data sources | Increment |
 | ------ | ---- | ------------ | --------- |
-| Landing / join | `mocks/landing.html` | `POST /api/join/{code}` | 3–4 |
+| Landing / join | `mocks/landing.html` | `POST /api/join/{code}`, `GET /api/resume`, `POST /api/resume/{event_id}` | 3–4, ADR 0031 |
 | Lobby (pre-round wait) | `mocks/lobby.html` | `/api/state` (`event.status`), SSE `event_status` | 4 |
 | Riddle list (tile grid) | `mocks/riddle-list.html` | `/api/state` (`riddles[].state`), SSE `verdict` | 4, 6 |
 | Image drawer | `mocks/drawer.html` | `GET/POST /api/evidence`, `/api/state` (`restriction`) | 5 |
@@ -120,6 +120,10 @@ strike interstitial, and the drawer restricted variant.
   the oldest pending item nobody else is viewing, shows a flagged photo
   beside its match, and enlarges either photo on click (ADR 0029;
   `web/src/screens/ModConsole.jsx`, `web/src/screens/mod/`).
+- **The join screen lists the games to go back to** — above the form,
+  each live game this device joined, with the codename used there. One
+  tap rejoins as the same player; a refusal says why and drops the game
+  (ADR 0031; `web/src/screens/Join.jsx`).
 - **The lobby screen exists** — joining before the round opens needs a
   holding state; without it, early joiners hit a dead end.
 - **The round-open action is gated on content** — "open the round" is

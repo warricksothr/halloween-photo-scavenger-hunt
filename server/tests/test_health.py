@@ -17,7 +17,7 @@ def test_health(tmp_path):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["schema_version"] == 3
+    assert body["schema_version"] == 4
 
 
 def test_memory_database_is_rejected(tmp_path):

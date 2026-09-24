@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import auth, ids, ratelimit
+from app import auth, ids, ratelimit, resume
 from app.audit import Action, ActorType, log_action
 from app.db import hold_request_lock, locked_transaction, reader
 from app.leaderboard import publish_leaderboard
@@ -414,12 +414,15 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             writer.execute(
                 "UPDATE player SET team_id = ? WHERE id = ?", (team_id, player_id)
             )
+            # The same goes for every device's way back in (ADR 0031).
+            resume.revoke_all(writer, player_id, now)
         token_session = auth.issue_player_session(
             writer,
             player_id=player_id,
             device_label=body.device_label,
             user_agent=user_agent,
         )
+        resume_token = resume.issue(writer, player_id)
         log_action(
             writer,
             event_id=invite["event_id"],
@@ -440,12 +443,6 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             "switched_from_team_id": switched_from,
         },
     )
-    resp.set_cookie(
-        auth.PLAYER_COOKIE_NAME,
-        token_session,
-        httponly=True,
-        secure=request.app.state.cookie_secure,
-        samesite="lax",
-        max_age=request.app.state.session_ttl,
-    )
+    auth.set_player_cookie(resp, request, token_session)
+    resume.set_cookie(resp, request, invite["event_id"], resume_token)
     return resp
