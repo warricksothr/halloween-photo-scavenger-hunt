@@ -192,6 +192,11 @@ body:has(.admin-shell) {
   overflow-wrap: anywhere;
 }
 
+.admin-code-url code {
+  color: inherit;
+  font-size: inherit;
+}
+
 .admin-btn.danger {
   background: var(--admin-danger);
   border-color: var(--admin-danger);
