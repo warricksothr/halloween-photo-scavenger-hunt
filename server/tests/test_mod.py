@@ -194,6 +194,9 @@ class TestModJoin:
         assert host.post(f"/api/mod/join/{p['mod_code']}").status_code == 201
         assert host.get("/api/mod/state").json()["moderator"]["host"] is True
 
+        # _mod signs in through sign_in_moderator, the planted SSO
+        # identity: an SSO moderator with no host sign-in. The flag reads
+        # the host session alone, however it was obtained.
         mod = _mod(client, p["mod_code"])
         assert mod.get("/api/mod/state").json()["moderator"]["host"] is False
 
