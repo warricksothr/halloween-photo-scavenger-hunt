@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391CVK8TGZZM4WRZ4BFS1Y1
 title: Link the admin, moderator and player views to each other
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -17,17 +17,10 @@ dependencies:
   - TKT-01M391CVFHW62D1KF3E5Y3KACC
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/view-links
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: ff0c2eae001d2c192d874c6ec2667bc1738d0d1b
-  session: null
-  claimed_at: 2026-09-24T22:59:50Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T23:14:28Z
+updated_at: 2026-09-24T23:52:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -82,3 +75,7 @@ Terva reviews:
 - pr62-view-links-2, run 728 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/728), head 805afad4de442ea084f1da100452651135755e4b: only the declined .tickets item remains, and the reviewer marked the SSO item unassessable from the diff (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/62#issuecomment-12676).
 
 Local gate passes; npm run test:e2e 11/11. Awaiting Drew's merge authorization.
+
+## Summary
+
+Merged in PR #62 (merge ca1de54). The host console links to the moderator console and player view, and the moderator console links back when this browser holds a host sign-in. Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.

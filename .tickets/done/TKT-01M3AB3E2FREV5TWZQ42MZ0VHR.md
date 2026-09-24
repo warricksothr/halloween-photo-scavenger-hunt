@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AB3E2FREV5TWZQ42MZ0VHR
 title: Moderator queue labels own claims as someone else viewing
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: low
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/own-claims
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 4d8503ce01920aa3202ec59748862fe8fbd69465
-  session: null
-  claimed_at: 2026-09-24T22:54:38Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T18:33:31Z
-updated_at: 2026-09-24T23:07:24Z
+updated_at: 2026-09-24T23:52:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -80,3 +73,7 @@ Terva reviews:
 - pr61-own-claims-2, run 725 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/725), head 66e378a50c16636b3f0ed0d39300336210c76bae: clean apart from the declined .tickets low (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/61#issuecomment-12650).
 
 CI does not report on a stacked PR. The local gate passes, and npm run test:e2e passes 10/10. Awaiting Drew's merge authorization.
+
+## Summary
+
+Merged in PR #61 (merge c1f0b59). The queue tells your own claims from a colleague's, ages claims with a server-measured claim_age, and lets claims older than 10 minutes go (ADR 0038). Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.

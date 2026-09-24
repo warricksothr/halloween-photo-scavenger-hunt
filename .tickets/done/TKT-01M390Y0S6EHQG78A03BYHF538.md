@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0S6EHQG78A03BYHF538
 title: Return from the drawer to the riddle with the new photo selected
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/back-navigation
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 4e2e2d941c2d912f5acb0723a005f05b13e248d6
-  session: null
-  claimed_at: 2026-09-24T22:19:09Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:44:17Z
+updated_at: 2026-09-24T23:52:48Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -81,3 +74,7 @@ Terva reviews:
 - pr59-back-navigation-3, run 717 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/717), head 4d8503ce01920aa3202ec59748862fe8fbd69465: clean apart from the declined .tickets low (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/59#issuecomment-12604).
 
 CI's quality gate does not report on a PR whose base is not main, so the local gate stands in: bash scripts/check-quality.sh passes and npm run test:e2e passes 10/10 on 4d8503c. After #58 merges, retarget this PR to main and let CI run. The iOS edge-swipe gesture itself needs Drew's iPhone check.
+
+## Summary
+
+Merged in PR #59 (merge c4f5a4e), with TKT-01M390Y0QY. A riddle offers 'Take a new photo'; the drawer it opens tags the upload with the riddle and returns with the photo selected (ADR 0036). Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.

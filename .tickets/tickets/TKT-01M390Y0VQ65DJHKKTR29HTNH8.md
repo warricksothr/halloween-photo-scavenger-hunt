@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:53:28Z
+updated_at: 2026-09-24T23:52:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -74,3 +74,7 @@ Scope note: besides the iPhone hint, Chrome's beforeinstallprompt (Android and d
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:53:28Z
 
 PR #60 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/60), branch t3code/install-hint from main, head 6a4620faec2dfbda090a3e016e7a3bb7a0b6b008, base db6f6f5. Terva pr60-install-hint-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/721 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/60#issuecomment-12615). Its only finding, rated medium this time, is that the PR carries no .tickets change. Declined, as on every PR here: ticket-store changes are committed directly to main. Because it was rated medium, the terva status reads failure, and there is no code finding behind it. CI Fast quality gate passes on 6a4620f; local gate passes; npm run test:e2e 10/10. Awaiting Drew's merge authorization.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:52:49Z
+
+Merged in PR #60 (merge 37486df), after merging main into the branch to resolve progress.md and the e2e list. Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24. Left in progress: AC2 (the icon on a real iPhone) waits on Drew's device check.

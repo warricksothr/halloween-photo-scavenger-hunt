@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M390Y0TEYEP6Q4GS8Q4R33PJ
 title: Stop offering a photo that is pending on another riddle
 type: bug
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -19,17 +19,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/photo-one-riddle
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 2551a4b49afc29e9523d8538b8cf36a938748c4f
-  session: null
-  claimed_at: 2026-09-24T22:08:10Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:19:08Z
+updated_at: 2026-09-24T23:52:48Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -82,3 +75,7 @@ Drew decided 2026-09-24: one riddle per photo within a team. A photo pending or 
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:19:08Z
 
 PR #58 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/58), branch t3code/photo-one-riddle, head 4e2e2d941c2d912f5acb0723a005f05b13e248d6, base 0067bc4. Terva pr58-photo-one-riddle-1, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/712: clean (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/58#issuecomment-12565). Its one low finding, no .tickets change in the PR, is declined: this repository commits ticket-store changes directly to main. CI Fast quality gate passes on 4e2e2d9; local gate passes; npm run test:e2e 8/8. Awaiting Drew's merge authorization.
+
+## Summary
+
+Merged in PR #58 (merge 6b23aff). A photo pending or solved on one riddle is refused on another (409 evidence_in_use), and the picker greys it out and labels the riddle holding it (ADR 0035). Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.

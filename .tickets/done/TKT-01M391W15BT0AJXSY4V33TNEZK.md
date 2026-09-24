@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391W15BT0AJXSY4V33TNEZK
 title: Rotate an event's join and mod codes
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/rotate-codes
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: bff0aaef31b6625a8031209e73d8cb7927522140
-  session: null
-  claimed_at: 2026-09-24T23:08:03Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T06:32:57Z
-updated_at: 2026-09-24T23:34:43Z
+updated_at: 2026-09-24T23:52:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -76,3 +69,7 @@ PR #63 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 **agent:claude-code/t3code-bf267378** at 2026-09-24T23:34:43Z
 
 Terva pr63-rotate-codes-2 (run 731, head bb43463, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/63#issuecomment-12701): passed, and the leaked-code finding was marked resolved. The only remaining low finding asks for .tickets changes in the PR. Declined as on every PR: ticket-store commits go to main so they never supersede a running review.
+
+## Summary
+
+Merged in PR #63 (merge 9aa3835). Join and mod codes rotate separately; the old code is refused at once, existing players and moderators keep their access, and event.code_rotated records which code changed, never the codes (ADR 0039). Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.

@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AMNFHVSMQ3DS58984S7KP0
 title: Show blurhash placeholders for pending and flagged photos
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: low
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/blurhash
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 0acf772cdc684cf920bd79f7fa1d40f2685f1110
-  session: null
-  claimed_at: 2026-09-24T23:15:06Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-24T21:20:40Z
-updated_at: 2026-09-24T23:34:43Z
+updated_at: 2026-09-24T23:52:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -81,3 +74,7 @@ PR #64 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 - pr64-blurhash-2 (run 734, head 70f6383): the first finding was resolved. A new medium finding: the picker's pending tile lacked the scanning sweep that ADR 0040 promises. Accepted. 6529264 adds the sweep, and screens.test asserts it.
 - pr64-blurhash-3 (run 735, head 6529264, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/64#issuecomment-12722): passed. The only remaining finding is the .tickets one, declined as on every PR.
 Gate passes; e2e blurhash and photo-one-riddle pass.
+
+## Summary
+
+Merged in PR #64 (merge 87b69a7). Uploads store a blurhash (migration 0005). Pending photos show as a blur with the scanning sweep everywhere, flagged ones only as a blur marked 'Photo removed' with no reason, and rejected ones in a dashed amber frame (ADR 0040). Deployed to scavenger.nulloctet.com at 37486df on 2026-09-24.
