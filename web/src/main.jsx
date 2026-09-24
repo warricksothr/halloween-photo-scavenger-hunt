@@ -123,11 +123,18 @@ function PlayerApp() {
           eventName={`${modEvent.name} — Moderator`}
           playerName={state.moderator?.label ?? 'console'}
           action={
-            // The host who also plays needs a way back to the game; the
-            // console has no other link out (ADR 0032).
-            <button type="button" class="btn secondary header-action" onClick={leaveModerator}>
-              Leave console
-            </button>
+            <span class="header-actions">
+              {/* The host moderating from the same browser can get back
+                  to the host console (TKT-01M391CVK8). */}
+              {state.moderator?.host && (
+                <a class="btn secondary header-action" href="/admin">Host console</a>
+              )}
+              {/* The host who also plays needs a way back to the game
+                  (ADR 0032). */}
+              <button type="button" class="btn secondary header-action" onClick={leaveModerator}>
+                Leave console
+              </button>
+            </span>
           }
         />
         <ModConsoleScreen copy={copy} moderatorId={state.moderator?.id ?? null} />

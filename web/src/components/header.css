@@ -8,6 +8,15 @@
   gap: 12px;
 }
 
+/* More than one control (the moderator console's Host console and Leave
+   console): side by side, wrapping under the name on a narrow phone. */
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .app-header .btn.header-action {
   font-size: 0.68rem;
   padding: 4px 10px;

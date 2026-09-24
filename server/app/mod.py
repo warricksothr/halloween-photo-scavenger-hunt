@@ -203,7 +203,14 @@ def mod_state(
     ).fetchone()
     return {
         "event": dict(event),
-        "moderator": {"id": ctx.moderator_id, "label": ctx.label},
+        "moderator": {
+            "id": ctx.moderator_id,
+            "label": ctx.label,
+            # This browser is also signed in to the host console, so the
+            # console can offer a link back to it (TKT-01M391CVK8). A
+            # hint for a link only: /api/admin still checks every call.
+            "host": auth.current_admin(request) is not None,
+        },
     }
 
 

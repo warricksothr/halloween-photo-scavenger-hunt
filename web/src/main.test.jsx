@@ -110,6 +110,25 @@ describe('app entry', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave console' }));
     expect(mocks.leaveModerator).toHaveBeenCalledTimes(1);
+    // Not the host in this browser: no link to the host console.
+    expect(screen.queryByRole('link', { name: 'Host console' })).toBeNull();
+  });
+
+  it('links a host who moderates back to the host console (TKT-01M391CVK8)', async () => {
+    window.history.replaceState({}, '', '/mod');
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'moderator',
+      modEvent: { name: 'Party' },
+      moderator: { id: 'mod-1', label: 'Drew', host: true },
+      copy: {},
+    });
+
+    await import('./main.jsx');
+
+    const link = await screen.findByRole('link', { name: 'Host console' });
+    expect(link.getAttribute('href')).toBe('/admin');
+    expect(screen.getByRole('button', { name: 'Leave console' })).toBeTruthy();
   });
 
   it('offers Switch Case in the game and the lobby (ADR 0033)', async () => {

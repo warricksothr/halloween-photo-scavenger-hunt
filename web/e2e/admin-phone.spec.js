@@ -7,7 +7,8 @@
 // and strike row's controls sit under its content. At 1280px the rows keep
 // their controls beside the content, so the laptop layout is pinned too. Two players share a codename
 // here, so the host's picker labels are checked in the same pass
-// (TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS).
+// (TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS). The last test follows the links between
+// the admin, moderator and player views at the same width (TKT-01M391CVK8).
 import { expect, test } from '@playwright/test';
 
 import { ADMIN_PASSWORD, ADMIN_USERNAME, adminApi, loginAdmin } from './support';
@@ -23,6 +24,7 @@ const RIDDLE =
   'Every face in this city wears one, and nobody reads it aloud. Bring me one long enough to need four of your digits.';
 
 let admin;
+let modCode;
 
 test.beforeAll(async ({ playwright, browser }) => {
   admin = await adminApi(playwright);
@@ -68,6 +70,7 @@ test.beforeAll(async ({ playwright, browser }) => {
     await guest.close();
   }
   // The host moderates on their admin sign-in (ADR 0027).
+  modCode = event.mod_code;
   expect((await admin.post(`/api/mod/join/${event.mod_code}`)).status()).toBe(201);
   const flagged = await admin.post(`/api/mod/queue/${submissionId}/inappropriate`, {
     data: { note: 'A deliberately long moderator note so the strike row has text to wrap' },
@@ -165,4 +168,30 @@ test('the laptop layout keeps controls beside their content', async ({ page }) =
   await picker.selectOption({ label: flagged });
   await expect(page.locator('.admin-strike').first()).toBeVisible();
   expect(await controlsBelow(page, '.admin-strike', '.admin-strike-body')).toBe(false);
+});
+
+test('the host links between the three views, and both headers fit a phone', async ({ page }) => {
+  // TKT-01M391CVK8: the admin header links out, and a host moderating in
+  // the same browser gets a link back.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page);
+  await page.goto('/admin');
+  const views = page.getByRole('navigation', { name: 'Other views' });
+  await expect(views.getByRole('link', { name: 'Moderator console' })).toBeVisible();
+  await expect(views.getByRole('link', { name: 'Player view' })).toBeVisible();
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+  const csrf = (await page.context().cookies()).find((c) => c.name === 'arkham_csrf').value;
+  const joined = await page.request.post(`/api/mod/join/${modCode}`, { headers: { 'X-CSRF-Token': csrf } });
+  expect(joined.status()).toBe(201);
+  await views.getByRole('link', { name: 'Moderator console' }).click();
+  await expect(page.getByRole('heading', { name: 'Analysis Queue' })).toBeVisible();
+  const hostLink = page.getByRole('link', { name: 'Host console' });
+  await expect(hostLink).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave console' })).toBeVisible();
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+  await hostLink.click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(views).toBeVisible();
 });
