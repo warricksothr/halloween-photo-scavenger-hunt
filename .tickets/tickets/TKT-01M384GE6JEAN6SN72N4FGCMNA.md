@@ -35,7 +35,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:42:49Z
+updated_at: 2026-09-24T00:45:45Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -132,3 +132,9 @@ Terva review r2 on PR #46: request `demo-seeder-r2`, run `f552dc63-0455-43a1-82a
 
 - **Medium: a mid-seed failure leaves an event that blocks the rerun. Accepted, fixed in a112018.** Automatic cleanup was ruled out: purge takes only a closed event, close takes only an open one, and a lobby event with no riddles cannot open. Resume was ruled out too: the join and mod codes leave the server only in the create response, so a resumed event could not print them. The fix is a documented, tested recovery path instead. A failure after the create now names the partial event, says it stays in the lobby with codes nobody saw, and points at `--allow-duplicate`. A new test fails a riddle POST and the open call, then checks the refusal and the recovery. It fails with the fix stashed. ADR 0025 and the RUNBOOK are updated.
 - **Medium: the duplicate check races between the read and the create. Declined, and the claim is narrowed.** Only a server-side unique event name would give a real guarantee. That changes product behavior (a host could no longer reuse a name) for a CLI one operator runs, so it is out of scope. The code comment no longer claims to cover "a second terminal", and ADR 0025 records the race as accepted.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T00:45:45Z
+
+Terva review r3 on PR #46: request `demo-seeder-r3`, run `363bb8b2-8fc0-4cc8-88e9-6c64c8534c65` (Actions run #582), review id 298. Reviewed head 1f636b8d34d800cb006e6229b7b4290b8f8bf04f against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. CI Quality passed on that head. The review marked r2 finding 1 resolved. It still lists r2 finding 2 (the duplicate-check race) as present, and that finding stays declined as recorded in the r2 note.
+
+- **Medium: a transport failure on the open call does not prove the event stayed in the lobby. Accepted, fixed in 4e9539a.** The recovery message no longer claims a status. It says the codes were never printed, so no player can join the event whatever its status, which is true in every case. A new test lets the real open commit and then raises ReadTimeout. It checks that the event is open and the message does not say "lobby", and it fails with the fix stashed. ADR 0025 and the RUNBOOK are reworded to match.
