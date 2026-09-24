@@ -19,7 +19,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T06:16:34Z
+updated_at: 2026-09-24T21:51:19Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -52,3 +52,9 @@ As a result, the edge swipe and the browser's Back button leave the app, or do n
 - [ ] Opening a riddle or switching tabs adds a history entry; browser Back and the iOS edge swipe return to the previous screen within the app.
 - [ ] Back from the first in-app screen does not trap the user, and /j/<code> links still join.
 - [ ] An ADR records the navigation approach.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:51:19Z
+
+2026-09-24, Drew asked about this for the evidence flow: open a riddle, go to the Drawer to add a photo, then swipe back to the riddle. Today, picking an existing photo happens inline on the riddle detail (a grid of drawer items). The only jump away is the empty-drawer button (RiddleDetail.jsx onOpenDrawer), which closes the riddle and switches to the Drawer tab, so after uploading, the player has to find the riddle again. With history entries, Back from the Drawer should return to that riddle. Consider also offering 'Back to <riddle>' on the Drawer after an upload started from a riddle. Line references in the description predate PR #57: the tab bar is now the GameTabs component in main.jsx.
