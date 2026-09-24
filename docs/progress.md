@@ -46,6 +46,12 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The admin, moderator and player views link to each
+  other.** TKT-01M391CVK8. The host console's header links to the
+  moderator console and the player view. The moderator console links back
+  to the host console when `/api/mod/state` reports `moderator.host`, which
+  is true only while this browser holds a host sign-in.
+
 - **2026-09-24 — The moderator queue tells your claims from a colleague's.**
   TKT-01M3AB3E2. Kobal's rows showed both "DREW SHORT IS VIEWING" tags were
   Drew's own claims from 15 hours earlier. The queue now reads "OPENED BY

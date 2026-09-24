@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -48,6 +48,10 @@ describe('admin console shell', () => {
       expect(screen.getByRole('button', { name: label })).toBeTruthy();
     }
     expect(screen.queryByLabelText('Password')).toBeNull();
+    // Links to the other two views (TKT-01M391CVK8).
+    const views = screen.getByRole('navigation', { name: 'Other views' });
+    expect(within(views).getByRole('link', { name: 'Moderator console' }).getAttribute('href')).toBe('/mod');
+    expect(within(views).getByRole('link', { name: 'Player view' }).getAttribute('href')).toBe('/');
   });
 
   it('opens the riddle editor on the Riddles tab', async () => {

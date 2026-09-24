@@ -133,6 +133,12 @@ strike interstitial, and the drawer restricted variant.
   client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
+- **The three views link to each other** — the host console's header
+  links to the moderator console (`/mod`, the console this browser last
+  joined) and the player view (`/`, where Open Cases lists its games); each
+  event card's revealed mod link opens that event's console. The moderator
+  console shows "Host console" when `/api/mod/state` says this browser is
+  also signed in as the host (TKT-01M391CVK8).
 - **The console has a way out** — a Leave console button in its header
   ends this browser's moderator session and goes to `/`: the game when
   a player session exists, otherwise the join screen (ADR 0032).

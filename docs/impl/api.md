@@ -264,6 +264,12 @@ POST   /api/mod/logout                  leave the console on this browser
                                         logs session.revoked. The player
                                         session and SSO identity stay | 401
                                         without a moderator session
+GET    /api/mod/state                   the console's boot probe → { event,
+                                        moderator: { id, label, host } }.
+                                        host: this browser also holds a host
+                                        sign-in, so the console links back
+                                        to /admin (a hint; /api/admin still
+                                        checks every call) | 401
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
                                           state, duplicate flags. A flagged

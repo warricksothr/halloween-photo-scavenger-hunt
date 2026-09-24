@@ -182,6 +182,25 @@ class TestModJoin:
         ]
         assert host.get("/api/mod/state").status_code == 200
 
+    def test_state_says_whether_this_browser_is_also_the_host(self, admin, client):
+        """TKT-01M391CVK8: the console offers a link back to the host
+        console only where the host console would let this browser in."""
+        p = _party(admin, client)
+        host = arm_csrf(TestClient(client.app))
+        host.post(
+            "/api/admin/login",
+            json={"username": ADMIN_USER, "password": ADMIN_PASSWORD},
+        )
+        assert host.post(f"/api/mod/join/{p['mod_code']}").status_code == 201
+        assert host.get("/api/mod/state").json()["moderator"]["host"] is True
+
+        mod = _mod(client, p["mod_code"])
+        assert mod.get("/api/mod/state").json()["moderator"]["host"] is False
+
+        # Signing out of the host console takes the link away too.
+        host.post("/api/admin/logout")
+        assert host.get("/api/mod/state").json()["moderator"]["host"] is False
+
     def test_admin_api_token_cannot_join(self, admin, client):
         """A script's bearer token is not a person at a keyboard."""
         p = _party(admin, client)

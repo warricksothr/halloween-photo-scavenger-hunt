@@ -53,6 +53,12 @@ body:has(.admin-shell) {
   margin: 0;
 }
 
+/* Links to the moderator console and the player view. */
+.admin-header .admin-views {
+  display: flex;
+  gap: 8px;
+}
+
 .admin-header .admin-dim {
   color: var(--admin-dim);
   font-size: 0.8rem;
