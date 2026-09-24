@@ -181,6 +181,11 @@ A resubmission is always a **new** `PENDING` submission referencing the
 same riddle — terminal states never reopen. One active (`PENDING`)
 submission per riddle per team.
 
+**One riddle per photo** (ADR 0035). Within a team, a photo that is
+`PENDING` or `VERIFIED` on one riddle cannot be submitted to any other,
+so one photo never scores twice. Any other verdict frees it. The picker
+still shows a photo in use, greyed out and labelled with its riddle.
+
 ### Event lifecycle
 
 ```mermaid

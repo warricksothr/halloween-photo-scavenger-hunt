@@ -79,7 +79,7 @@ def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
     ]
 
     sub_rows = conn.execute(
-        "SELECT s.id, s.riddle_id, s.status, s.created_at,"
+        "SELECT s.id, s.riddle_id, s.evidence_item_id, s.status, s.created_at,"
         "       v.flavor_text AS verdict_flavor"
         " FROM submission s"
         " LEFT JOIN verdict v ON v.submission_id = s.id"
@@ -91,6 +91,9 @@ def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
         {
             "id": s["id"],
             "riddle_id": s["riddle_id"],
+            # Which photo it used, so the picker can show a photo as in use
+            # on this riddle (ADR 0035).
+            "evidence_item_id": s["evidence_item_id"],
             "status": s["status"],
             "verdict_flavor": s["verdict_flavor"],
             "created_at": s["created_at"],

@@ -345,6 +345,27 @@ button.tile {
 .tile.scanning { border-color: var(--cyan); }
 .tile.scanning .glyph-q { color: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
 
+/* A drawer photo already pending or solved on another riddle (ADR 0035):
+   still shown so the player can see where it went, but dimmed and not
+   selectable. A pending one pulses like a scanning tile. */
+.tile.in-use { cursor: not-allowed; overflow: hidden; }
+.tile.in-use img { opacity: 0.35; filter: grayscale(1); }
+.tile.in-use.pending { border-color: var(--cyan); }
+.tile.in-use.pending .in-use-label { animation: pulse 1.4s ease-in-out infinite; }
+.in-use-label {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 4px 2px;
+  font-family: var(--font-head);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--cyan-bright);
+  background: rgba(10, 14, 20, 0.8);
+}
+.tile.in-use.verified .in-use-label { color: var(--text-dim); }
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

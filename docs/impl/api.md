@@ -236,7 +236,11 @@ POST   /api/submissions                 { riddle_id, evidence_item_id }
                                         → 201 submission (pending) |
                                           409 one already pending for this
                                           riddle (partial unique index →
-                                          friendly error, spec invariant)
+                                          friendly error, spec invariant) |
+                                          409 evidence_in_use: the photo is
+                                          pending or verified on another
+                                          riddle; body adds riddle_id and
+                                          status (ADR 0035)
                                         Logs submission.created.
 ```
 
@@ -339,8 +343,9 @@ GET    /api/mod/audit                   full forensic timeline, moderator+
       "state": "unsolved" }      // unsolved | pending | verified
   ],
   "submissions": [
-    { "id": "…", "riddle_id": "…", "status": "obscured",
-      "verdict_flavor": "…", "created_at": 1700000000 }
+    { "id": "…", "riddle_id": "…", "evidence_item_id": "…",
+      "status": "obscured", "verdict_flavor": "…",
+      "created_at": 1700000000 }
   ],
   "leaderboard": null            // null when hidden; else [ { team, score } ]
 }

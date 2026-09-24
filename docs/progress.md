@@ -46,6 +46,11 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — One photo serves one riddle.** TKT-01M390Y0TE: a photo
+  pending or solved on one riddle can no longer be submitted to another
+  (409 `evidence_in_use`). The riddle's picker shows it greyed out and
+  labelled with the riddle holding it (ADR 0035).
+
 - **2026-09-24 — The header and tabs are pinned at the top.**
   TKT-01M390Y0PN10W11HEB6FM91PZ6: on an iPhone the tabs sat below the
   fold and the header scrolled away. Both now sit in one sticky bar at the

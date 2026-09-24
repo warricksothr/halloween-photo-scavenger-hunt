@@ -100,6 +100,11 @@ export default {
       // Shown when the double-tap race 409s: the submission the player
       // wanted already exists, so this is reassurance, not an error.
       alreadyScanning: 'Already scanning this one — no need to resubmit.',
+      // One photo serves one riddle (ADR 0035). A photo in use stays in the
+      // picker, greyed out and labelled with the riddle holding it.
+      inUsePending: (n) => `Scanning · Riddle ${n}`,
+      inUseSolved: (n) => `Solved · Riddle ${n}`,
+      photoTaken: (n) => `That photo is already on Riddle ${n}. Pick another or take a new one.`,
       // The hint ladder. Nothing shows until the player asks, and each
       // press costs them one more level of the reveal.
       needNudge: 'Need a nudge?',
