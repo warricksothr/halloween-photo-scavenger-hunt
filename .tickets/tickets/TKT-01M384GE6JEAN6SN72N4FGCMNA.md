@@ -35,7 +35,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:38:15Z
+updated_at: 2026-09-24T00:42:49Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -125,3 +125,10 @@ The fixture rewrites the /tmp draft per round-1 feedback. The clue text is short
 Terva review r1 on PR #46: request `demo-seeder-r1`, run `04b33e06-e6d2-4a13-98e6-671ddfd8c01c` (Actions run #578), review id 296. Reviewed head cbbb5e90fd9549c46eb647c2851b491438f5ce3f against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. CI Quality passed on that head. The gate failed on one medium finding.
 
 - **Medium, accepted and fixed in 1b0ab3a.** The token note appeared only on `csrf_failed`, but a normal run's first call is the duplicate-check GET, so a wrong token failed as `401 not_authenticated` with no note. The note now covers both codes (`_TOKEN_REFUSALS`), and ADR 0025 describes both paths. The extended regression test fails with the fix stashed and passes with it.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T00:42:49Z
+
+Terva review r2 on PR #46: request `demo-seeder-r2`, run `f552dc63-0455-43a1-82a8-106948c9a322` (Actions run #580), review id 297. Reviewed head 454aab86836f7538040d96055416e29c63bfd0ae against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. CI Quality passed on that head. The review marked the r1 finding resolved and raised two new medium findings.
+
+- **Medium: a mid-seed failure leaves an event that blocks the rerun. Accepted, fixed in a112018.** Automatic cleanup was ruled out: purge takes only a closed event, close takes only an open one, and a lobby event with no riddles cannot open. Resume was ruled out too: the join and mod codes leave the server only in the create response, so a resumed event could not print them. The fix is a documented, tested recovery path instead. A failure after the create now names the partial event, says it stays in the lobby with codes nobody saw, and points at `--allow-duplicate`. A new test fails a riddle POST and the open call, then checks the refusal and the recovery. It fails with the fix stashed. ADR 0025 and the RUNBOOK are updated.
+- **Medium: the duplicate check races between the read and the create. Declined, and the claim is narrowed.** Only a server-side unique event name would give a real guarantee. That changes product behavior (a host could no longer reuse a name) for a CLI one operator runs, so it is out of scope. The code comment no longer claims to cover "a second terminal", and ADR 0025 records the race as accepted.
