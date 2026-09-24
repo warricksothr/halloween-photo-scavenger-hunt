@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:32:57Z
-updated_at: 2026-09-24T23:27:38Z
+updated_at: 2026-09-24T23:34:43Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -72,3 +72,7 @@ Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.
 **agent:claude-code/t3code-bf267378** at 2026-09-24T23:27:38Z
 
 PR #63 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/63), branch t3code/rotate-codes, stacked on #62. Terva pr63-rotate-codes-1, run 729, head 0acf772: one medium. A freshly drawn code equal to the current one would be accepted by SQLite and leave the leaked link working. Accepted and fixed in bb43463: a candidate matching either of the event's codes is redrawn, and after three tries the request fails with code_collision without writing an audit row. Tests force both paths. Re-review requested as pr63-rotate-codes-2 (run 731).
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:34:43Z
+
+Terva pr63-rotate-codes-2 (run 731, head bb43463, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/63#issuecomment-12701): passed, and the leaked-code finding was marked resolved. The only remaining low finding asks for .tickets changes in the PR. Declined as on every PR: ticket-store commits go to main so they never supersede a running review.

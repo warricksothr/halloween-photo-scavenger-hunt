@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T21:20:40Z
-updated_at: 2026-09-24T23:27:38Z
+updated_at: 2026-09-24T23:34:43Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -73,3 +73,11 @@ Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.
 **agent:claude-code/t3code-bf267378** at 2026-09-24T23:27:38Z
 
 Open question from earlier, decided in ADR 0040 without asking: the 4x3 components Drew was asked about stay, because a sharper hash starts to show what is in a flagged photo. Photos uploaded before migration 0005 have no blurhash. They show as before while pending (the photo itself) and as an empty frame when flagged, never the photo; no backfill, since kobal's existing photos are test uploads.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:34:43Z
+
+PR #64 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/64), branch t3code/blurhash, stacked on #63 (base t3code/rotate-codes).
+- pr64-blurhash-1 (run 733, head c2105da): a medium finding that the 'Removed by a moderator' label and alert-red frame told the whole team a conduct action happened, against design.md's notification rule. Accepted. 70f6383 changes the label to 'Photo removed' in a plain frame, and design.md and ADR 0040 now say no reason is shown.
+- pr64-blurhash-2 (run 734, head 70f6383): the first finding was resolved. A new medium finding: the picker's pending tile lacked the scanning sweep that ADR 0040 promises. Accepted. 6529264 adds the sweep, and screens.test asserts it.
+- pr64-blurhash-3 (run 735, head 6529264, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/64#issuecomment-12722): passed. The only remaining finding is the .tickets one, declined as on every PR.
+Gate passes; e2e blurhash and photo-one-riddle pass.
