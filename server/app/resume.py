@@ -56,14 +56,21 @@ def cookie_name(event_id: str) -> str:
     return f"{COOKIE_PREFIX}{event_id}"
 
 
-def issue(conn: sqlite3.Connection, player_id: str) -> str:
-    """Mint a resume token for ``player_id`` and return it. Like a
-    session token, only its hash is stored."""
+def issue(conn: sqlite3.Connection, player_id: str, device_label: str) -> str:
+    """Mint a resume token for ``player_id`` on this device and return it.
+    Like a session token, only its hash is stored."""
     token = secrets.token_urlsafe(32)
     conn.execute(
-        "INSERT INTO player_resume (id, token_hash, player_id, created_at)"
-        " VALUES (?, ?, ?, ?)",
-        (ids.new_id(), auth.hash_token(token), player_id, int(time.time())),
+        "INSERT INTO player_resume"
+        " (id, token_hash, player_id, device_label, created_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (
+            ids.new_id(),
+            auth.hash_token(token),
+            player_id,
+            device_label,
+            int(time.time()),
+        ),
     )
     return token
 
@@ -115,6 +122,7 @@ def revoke_this_device(
 class _Resumable:
     player_id: str
     display_name: str
+    device_label: str
     event_id: str
     event_name: str
     theme: str
@@ -124,7 +132,7 @@ class _Resumable:
 def _lookup(conn, event_id: str, token: str) -> tuple[_Resumable | None, str]:
     """The game a token can rejoin, or None and the reason it cannot."""
     row = conn.execute(
-        "SELECT r.revoked_at, p.id AS player_id, p.display_name,"
+        "SELECT r.revoked_at, r.device_label, p.id AS player_id, p.display_name,"
         "       e.id AS event_id, e.name, e.theme, e.status"
         " FROM player_resume r"
         " JOIN player p ON p.id = r.player_id"
@@ -145,6 +153,7 @@ def _lookup(conn, event_id: str, token: str) -> tuple[_Resumable | None, str]:
         _Resumable(
             player_id=row["player_id"],
             display_name=row["display_name"],
+            device_label=row["device_label"],
             event_id=row["event_id"],
             event_name=row["name"],
             theme=row["theme"],
@@ -237,12 +246,7 @@ def resume(event_id: str, request: Request):
             return _refuse(event_id, reason)
         # The device keeps the label it gave when it joined, so the
         # moderator's device heuristics still see the same phone.
-        last = writer.execute(
-            "SELECT device_label FROM session WHERE player_id = ?"
-            " ORDER BY created_at DESC LIMIT 1",
-            (game.player_id,),
-        ).fetchone()
-        device_label = last["device_label"] if last else ""
+        device_label = game.device_label
         session_token = auth.issue_player_session(
             writer,
             player_id=game.player_id,
@@ -273,4 +277,7 @@ def resume(event_id: str, request: Request):
         },
     )
     auth.set_player_cookie(resp, request, session_token)
+    # Re-set the same token so its 30 days count from this rejoin: a
+    # device that keeps coming back keeps its way back.
+    set_cookie(resp, request, event_id, token)
     return resp

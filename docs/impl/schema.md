@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS player_resume (
     id          TEXT PRIMARY KEY,
     token_hash  TEXT NOT NULL UNIQUE,   -- SHA-256, as for session
     player_id   TEXT NOT NULL REFERENCES player(id) ON DELETE CASCADE,
+    device_label TEXT NOT NULL DEFAULT '', -- this device's label, for the
+                                           -- session a rejoin mints
     created_at  INTEGER NOT NULL,
     revoked_at  INTEGER                 -- NULL = live
 );

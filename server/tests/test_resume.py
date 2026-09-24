@@ -298,3 +298,61 @@ def test_logout_from_a_session_older_than_resume_cookies(admin, client):
     batman.cookies.delete(resume.cookie_name(p["event_id"]))
     assert batman.post("/api/logout").status_code == 200
     assert batman.get("/api/state").status_code == 401
+
+
+def test_rejoin_renews_the_resume_cookie(admin, client):
+    """The 30 days count from the latest rejoin, so a device that keeps
+    coming back keeps its way back."""
+    p = _party(admin, client)
+    batman = p["players"]["Batman"]["client"]
+    token = _cookie(batman, p["event_id"])
+    _session_ends(batman)
+    resp = batman.post(f"/api/resume/{p['event_id']}")
+    assert resp.status_code == 201
+    header = next(
+        h
+        for h in resp.headers.get_list("set-cookie")
+        if h.startswith(resume.cookie_name(p["event_id"]))
+    )
+    assert f"={token};" in header
+    assert f"Max-Age={resume.MAX_AGE_SECONDS}" in header
+    assert "Path=/api" in header
+    assert "HttpOnly" in header
+
+
+def test_rejoin_keeps_this_devices_label(admin, client):
+    """Each device rejoins with the label it joined with, even when the
+    player's latest session is another device's."""
+    event = admin.post("/api/admin/events", json={"name": "Label Party"}).json()
+    phone = arm_csrf(TestClient(client.app))
+    joined = phone.post(
+        f"/api/join/{event['join_code']}",
+        json={"display_name": "Robin", "device_label": "Robin's phone"},
+    )
+    assert joined.status_code == 201
+    player_id = joined.json()["player"]["id"]
+    # A later session on another device, newest by created_at.
+    db = client.app.state.db
+    db.execute(
+        "INSERT INTO session (id, token_hash, player_id, device_label,"
+        " user_agent, created_at, last_seen_at)"
+        " VALUES ('s-tablet', 'h-tablet', ?, 'Robin''s tablet', '', ?, ?)",
+        (player_id, 2**31, 2**31),
+    )
+    db.commit()
+
+    _session_ends(phone)
+    assert phone.post(f"/api/resume/{event['id']}").status_code == 201
+    labels = [
+        r["device_label"]
+        for r in db.execute(
+            "SELECT device_label FROM session WHERE player_id = ? AND id != 's-tablet'",
+            (player_id,),
+        )
+    ]
+    assert labels == ["Robin's phone", "Robin's phone"]
+    audit = db.execute(
+        "SELECT details FROM audit_event WHERE action = 'player.resumed'"
+    ).fetchone()
+    assert "Robin's phone" in audit["details"]
+    phone.close()

@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS player_resume (
     id          TEXT PRIMARY KEY,
     token_hash  TEXT NOT NULL UNIQUE,
     player_id   TEXT NOT NULL REFERENCES player(id) ON DELETE CASCADE,
+    -- The label this device gave when it joined. A rejoin's session takes
+    -- it from here, not from the player's latest session, which may be
+    -- another device's.
+    device_label TEXT NOT NULL DEFAULT '',
     created_at  INTEGER NOT NULL,
     revoked_at  INTEGER                 -- NULL = live
 );

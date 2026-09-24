@@ -422,7 +422,7 @@ def redeem_invite(token: str, body: RedeemBody, request: Request):
             device_label=body.device_label,
             user_agent=user_agent,
         )
-        resume_token = resume.issue(writer, player_id)
+        resume_token = resume.issue(writer, player_id, body.device_label)
         log_action(
             writer,
             event_id=invite["event_id"],

@@ -17,8 +17,10 @@ rejoin any they are not banned from.
 
 Each join, invite redeem and rejoin also leaves the device a **resume
 token**: one `arkham_resume_<event_id>` cookie per event. It is HttpOnly,
-SameSite=Lax, `Path=/api`, with a 30-day max-age. Only the token's SHA-256
-is stored, in `player_resume`, one row per device.
+SameSite=Lax, `Path=/api`, with a 30-day max-age, and a rejoin re-sets it
+so the 30 days count from the latest visit. Only the token's SHA-256 is
+stored, in `player_resume`, one row per device, beside that device's label.
+The rejoined session takes its label from there.
 
 - `GET /api/resume` needs no session. It reads the cookies and returns the
   games they can still rejoin.

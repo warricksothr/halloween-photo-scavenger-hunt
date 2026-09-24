@@ -112,7 +112,7 @@ def join(join_code: str, body: JoinBody, request: Request):
             device_label=body.device_label,
             user_agent=user_agent,
         )
-        resume_token = resume.issue(writer, player_id)
+        resume_token = resume.issue(writer, player_id, body.device_label)
         log_action(
             writer,
             event_id=event["id"],
