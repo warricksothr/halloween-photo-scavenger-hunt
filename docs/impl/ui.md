@@ -116,6 +116,9 @@ strike interstitial, and the drawer restricted variant.
   client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
+- **The console has a way out** — a Leave console button in its header
+  ends this browser's moderator session and goes to `/`: the game when
+  a player session exists, otherwise the join screen (ADR 0032).
 - **The console advances itself** — after a verdict or a removal it opens
   the oldest pending item nobody else is viewing, shows a flagged photo
   beside its match, and enlarges either photo on click (ADR 0029;

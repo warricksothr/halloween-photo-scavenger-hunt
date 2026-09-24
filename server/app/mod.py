@@ -156,6 +156,36 @@ def join(
     return resp
 
 
+@router.post("/logout")
+def logout(
+    request: Request, ctx: auth.ModeratorContext = Depends(auth.require_moderator)
+):
+    """Leave the console on this browser (ADR 0032). Revokes this session
+    only: the person's SSO identity stays, so the mod link opens the
+    console again without another sign-in, and a player session in the
+    same browser is untouched. Claims are left alone, since they belong to
+    the moderator row and another device may still be reviewing."""
+    with locked_transaction(request) as writer:
+        writer.execute(
+            "UPDATE moderator_session SET revoked_at = ?"
+            " WHERE id = ? AND revoked_at IS NULL",
+            (int(time.time()), ctx.session_id),
+        )
+        log_action(
+            writer,
+            event_id=ctx.event_id,
+            actor_type=ActorType.MODERATOR,
+            actor_id=ctx.moderator_id,
+            action=Action.SESSION_REVOKED,
+            entity_type="session",
+            entity_id=ctx.session_id,
+            details={"reason": "logout"},
+        )
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie(auth.MOD_COOKIE_NAME)
+    return resp
+
+
 # ── The queue ─────────────────────────────────────────────────────────
 
 

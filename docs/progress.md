@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The moderator console has a Leave button.**
+  TKT-01M3ADTENR10C2XR14P8Z8MNJW. On a phone, a host who joined as a
+  moderator had no way back to the game. Leave console signs this browser
+  out of the console (`POST /api/mod/logout`) and goes to `/`: the game if
+  a player session exists, otherwise the join screen. The SSO sign-in
+  stays, so the mod link brings the console back (ADR 0032, amends 0028).
+
 - **2026-09-24 — A returning phone can rejoin its game.**
   TKT-01M3AB6H937Y7ET5M0HDR23NM4. A session still ends after 12 hours, but
   each join now also leaves the device a per-event resume cookie that only

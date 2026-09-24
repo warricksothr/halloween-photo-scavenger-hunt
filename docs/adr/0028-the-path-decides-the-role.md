@@ -1,7 +1,7 @@
 # 0028. The path decides the role when a browser holds two sessions
 
 Date: 2026-09-24
-Status: accepted
+Status: accepted; the console's Leave button is added by 0032
 
 ## Context
 

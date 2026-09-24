@@ -249,6 +249,12 @@ POST   /api/mod/join/{mod_code}         requires someone who may moderate:
                                         supplies the label. Logs moderator.joined with the
                                         subject and name, never the code.
                                         (429 after repeated bad codes)
+POST   /api/mod/logout                  leave the console on this browser
+                                        (ADR 0032): revokes this moderator
+                                        session, clears the moderator cookie,
+                                        logs session.revoked. The player
+                                        session and SSO identity stay | 401
+                                        without a moderator session
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
                                           state, duplicate flags. A flagged
