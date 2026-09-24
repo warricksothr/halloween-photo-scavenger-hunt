@@ -52,9 +52,10 @@ Alternatives considered:
   players two identical events to join.
 - The fixture is package data (`pyproject.toml`), and the image copies it
   with the rest of `server/`.
-- A wrong token fails the first write with `csrf_failed`, not `401`: the
-  CSRF middleware exempts only a *matching* token, so it runs before auth.
-  The seeder adds a note that names the token, so the operator does not
-  chase a browser problem.
+- A wrong token fails as `401 not_authenticated` on the duplicate-check
+  read, or as `403 csrf_failed` on the first write when `--allow-duplicate`
+  skips that read: the CSRF middleware exempts only a *matching* token, so
+  it runs before auth. The seeder adds a note naming the token to either
+  code, so the operator does not chase a browser problem.
 - Riddle content changes are ordinary commits to the fixture, reviewed like
   code.

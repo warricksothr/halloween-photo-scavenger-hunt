@@ -102,6 +102,9 @@ def test_a_server_refusal_names_the_route_and_the_error_code(api):
     message = str(info.value)
     assert "GET /api/admin/events answered 401" in message
     assert "not_authenticated: Admin login required." in message
+    # The default path's first call is the duplicate-check read, so the
+    # token note must ride the 401 too, not only the write's csrf_failed.
+    assert "did not accept the token in $ARKHAM_ADMIN_API_TOKEN" in message
 
 
 def test_a_wrong_token_on_the_first_write_names_the_token(api):

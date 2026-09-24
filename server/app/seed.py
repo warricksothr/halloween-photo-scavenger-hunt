@@ -32,6 +32,8 @@ from app.events import EventCreate, RiddleCreate
 
 DEFAULT_FIXTURE = Path(__file__).parent / "fixtures" / "demo-event.json"
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+# The error codes a wrong bearer token produces (see _call).
+_TOKEN_REFUSALS = frozenset({"not_authenticated", "csrf_failed"})
 
 
 class SeedError(Exception):
@@ -117,10 +119,11 @@ def _call(client: httpx2.Client, method: str, path: str, **kwargs) -> object:
         body = body["detail"]
     if isinstance(body, dict) and "error" in body:
         detail = f"{body['error']}: {body.get('message')}"
-        if body["error"] == "csrf_failed":
-            # Only a matching token skips the CSRF check, so a wrong one
-            # fails there first, on the first write, and the server's
-            # "reload" advice is meant for a browser.
+        if body["error"] in _TOKEN_REFUSALS:
+            # A wrong token shows up as one of two codes: 401 on a read
+            # (the duplicate check), or csrf_failed on a write, because
+            # only a matching token skips the CSRF check. Neither server
+            # message names the token, and "reload" is meant for a browser.
             detail += f"; the server did not accept the token in ${API_TOKEN_ENV}"
     else:
         detail = resp.text[:200]
