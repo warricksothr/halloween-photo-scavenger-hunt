@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T23:07:24Z
+updated_at: 2026-09-24T23:14:28Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -70,3 +70,15 @@ Admin → moderator: the event card's revealed mod card already has 'Open modera
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
 
 Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:14:28Z
+
+PR #62 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/62), branch t3code/view-links, stacked on #61.
+
+Terva reviews:
+- pr62-view-links-1, run 727, head bff0aae. Two findings:
+  - medium: no .tickets change in the PR. Declined, because ticket changes are committed to main.
+  - low: the SSO moderator case is untested. Declined with evidence: the test's plain moderator comes from test_mod._mod, which signs in through support.sign_in_moderator, the planted SSO identity. 805afad adds a comment saying so. An SSO host case was tried and dropped: the stub plants only the identity cookie, while a real SSO admin sign-in also creates the host session, and that session is all the flag reads.
+- pr62-view-links-2, run 728 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/728), head 805afad4de442ea084f1da100452651135755e4b: only the declined .tickets item remains, and the reviewer marked the SSO item unassessable from the diff (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/62#issuecomment-12676).
+
+Local gate passes; npm run test:e2e 11/11. Awaiting Drew's merge authorization.
