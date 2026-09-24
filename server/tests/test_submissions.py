@@ -96,6 +96,63 @@ class TestSubmit:
         resp = _submit(client, p["riddle_ids"][0], p["evidence_id"])
         assert resp.status_code == 201
 
+    def test_one_photo_serves_one_riddle(self, admin, client):
+        """ADR 0035: a photo pending or verified on one riddle cannot go to
+        another, whichever teammate submits it; the 409 names the riddle."""
+        p = _party(admin, client, riddles=("R1", "R2"))
+        r1, r2 = p["riddle_ids"]
+        assert _submit(client, r1, p["evidence_id"]).status_code == 201
+
+        resp = _submit(client, r2, p["evidence_id"])
+        assert resp.status_code == 409
+        assert resp.json()["error"] == "evidence_in_use"
+        assert resp.json()["riddle_id"] == r1
+        assert resp.json()["status"] == "pending"
+
+        # Verified still holds it: one photo never scores twice.
+        conn = client.app.state.db
+        conn.execute("UPDATE submission SET status = 'verified'")
+        conn.commit()
+        resp = _submit(client, r2, p["evidence_id"])
+        assert resp.status_code == 409
+        assert resp.json()["status"] == "verified"
+        assert conn.execute("SELECT COUNT(*) FROM submission").fetchone()[0] == 1
+
+        # The snapshot says which photo each submission used, so the picker
+        # can show it as taken.
+        snap = client.get("/api/state").json()
+        assert snap["submissions"][0]["evidence_item_id"] == p["evidence_id"]
+
+    def test_rejection_frees_the_photo(self, admin, client):
+        p = _party(admin, client, riddles=("R1", "R2"))
+        r1, r2 = p["riddle_ids"]
+        _submit(client, r1, p["evidence_id"])
+        conn = client.app.state.db
+        conn.execute("UPDATE submission SET status = 'not_found'")
+        conn.commit()
+        assert _submit(client, r2, p["evidence_id"]).status_code == 201
+
+    def test_rule_holds_across_teammates(self, admin, client):
+        """The drawer is shared, so a teammate on another device is held to
+        the same photo rule."""
+        p = _party(admin, client, riddles=("R1", "R2"))
+        r1, r2 = p["riddle_ids"]
+        _submit(client, r1, p["evidence_id"])
+        conn = client.app.state.db
+        team_id = conn.execute("SELECT team_id FROM submission").fetchone()[0]
+        mate = arm_csrf(TestClient(client.app))
+        mate.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
+        # Put the second player on the first player's team directly; the
+        # invite flow is covered in test_teams.
+        mate_id = conn.execute(
+            "SELECT id FROM player WHERE display_name = 'Robin'"
+        ).fetchone()[0]
+        conn.execute("UPDATE player SET team_id = ? WHERE id = ?", (team_id, mate_id))
+        conn.commit()
+        resp = _submit(mate, r2, p["evidence_id"])
+        assert resp.status_code == 409
+        assert resp.json()["error"] == "evidence_in_use"
+
     def test_scoping_and_lifecycle_errors(self, admin, client):
         p = _party(admin, client, riddles=("R1",))
         # Other team's evidence: 404, existence not confirmed.
@@ -172,6 +229,11 @@ class TestRestrictionGates:
         conn = client.app.state.db
         player_id = conn.execute("SELECT id FROM player").fetchone()[0]
         sub = _submit(client, p["riddle_ids"][0], p["evidence_id"]).json()
+        # A second photo taken before the strike: the first is in use on
+        # riddle 1, and one photo serves one riddle (ADR 0035).
+        second = client.post(
+            "/api/evidence", files={"photo": ("c.jpg", make_jpeg(), "image/jpeg")}
+        ).json()["id"]
         self._strike(
             conn,
             p["event_id"],
@@ -188,7 +250,7 @@ class TestRestrictionGates:
         assert resp.status_code == 403
         assert resp.json()["error"] == "upload_restricted"
         # …but an existing drawer photo may still be submitted.
-        resp = _submit(client, p["riddle_ids"][1], p["evidence_id"])
+        resp = _submit(client, p["riddle_ids"][1], second)
         assert resp.status_code == 201
 
     def test_strike_3_blocks_uploads(self, admin, client):

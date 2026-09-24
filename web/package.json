@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run lint && vitest run",
-    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js e2e/service-worker.spec.js e2e/resize-text.spec.js e2e/admin-phone.spec.js e2e/player-switch.spec.js e2e/top-controls.spec.js --config=playwright.config.js",
+    "test:e2e": "npm run build && playwright test e2e/game-loop.spec.js e2e/service-worker.spec.js e2e/resize-text.spec.js e2e/admin-phone.spec.js e2e/player-switch.spec.js e2e/top-controls.spec.js e2e/photo-one-riddle.spec.js --config=playwright.config.js",
     "screenshots": "npm run build && playwright test e2e/readme-screenshots.spec.js --config=playwright.config.js",
     "preview": "vite preview"
   },

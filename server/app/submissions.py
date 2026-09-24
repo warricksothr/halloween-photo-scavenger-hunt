@@ -12,6 +12,9 @@ Rules recap (docs/impl/api.md + design.md game loop):
   the riddle itself stays open and a NEW photo for it may be submitted
   normally (design.md conduct rules).
 - Strike 3 bans submissions entirely (derived restriction, conduct.py).
+- One riddle per photo (ADR 0035): a photo pending or verified on any
+  riddle cannot be submitted again, so one photo never scores twice. Any
+  other verdict frees it.
 """
 
 from __future__ import annotations
@@ -89,6 +92,31 @@ def submit(
                     403,
                     "submission_restricted",
                     "Submissions are disabled for the rest of this event.",
+                )
+
+            # One riddle per photo (ADR 0035). Checked on the writer under
+            # the lock, like everything above, so two riddles racing for the
+            # same photo cannot both pass. Not a unique index: live databases
+            # may already hold a photo used twice, which a migration adding
+            # the index would fail on. A pending submission of this photo to
+            # this same riddle is a double tap, left to the index below so
+            # the player still hears "already scanning".
+            in_use = writer.execute(
+                "SELECT riddle_id, status FROM submission"
+                " WHERE evidence_item_id = ? AND status IN ('pending', 'verified')"
+                "   AND NOT (riddle_id = ? AND status = 'pending')"
+                " LIMIT 1",
+                (body.evidence_item_id, body.riddle_id),
+            ).fetchone()
+            if in_use is not None:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": "evidence_in_use",
+                        "message": "That photo is already in use on another riddle.",
+                        "riddle_id": in_use["riddle_id"],
+                        "status": in_use["status"],
+                    },
                 )
 
             writer.execute(
