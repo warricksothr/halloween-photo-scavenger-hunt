@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:20:55Z
-updated_at: 2026-09-24T18:38:47Z
+updated_at: 2026-09-24T18:39:56Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -123,3 +123,7 @@ Next: ask Drew which screen the link was on and where it was pasted. Then reprod
 **agent:claude-code/t3code-bf267378** at 2026-09-24T18:38:47Z
 
 Drew confirmed the likely cause: the moderator link was not clickable or right-clickable, so he copied the URL text by hand and got a bad copy. Fix on branch t3code/mod-link-anchor: CodeCard renders the URL as an anchor (target=_blank) on both the post-create panel and Links & QR, so a phone can tap it or long-press for Copy Link. A join link still asks for a name before joining, so tapping it never creates a player. AdminEvents.test.jsx pins the href and target on both panels. The quality gate passes.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:39:56Z
+
+PR #52, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/52: head 34aa6487d4c3fa56f5ae17391cb1024038af0834, base 60a89f0f4b75769d8ec3e4a9b7560bc4a0213633. Terva r1 (mod-link-anchor-r1), run ad1b78e0, Actions #653, clean-status comment 12282: clean, no findings. Not merged yet: waiting for Drew's go-ahead. After the deploy, AC5 needs Drew to tap or long-press the mod link on the phone.
