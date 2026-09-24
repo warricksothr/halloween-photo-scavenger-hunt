@@ -134,6 +134,55 @@ describe('app entry', () => {
     }
   });
 
+  it('pins the header and the tabs together at the top of the game (ADR 0034)', async () => {
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'player',
+      snapshot: {
+        event: { status: 'open', name: 'Party' },
+        me: { display_name: 'Robin', restriction: {} },
+      },
+      copy: {
+        screens: { header: { switchGame: 'SWITCH_SENTINEL' } },
+        tabs: { riddles: 'Riddles', drawer: 'Drawer', team: 'Team', standings: 'Standings' },
+      },
+    });
+
+    await import('./main.jsx');
+
+    const switchCase = await screen.findByRole('button', { name: 'SWITCH_SENTINEL' });
+    const bar = switchCase.closest('.top-bar');
+    expect(bar).toBeTruthy();
+    // The bar leads the frame, so the screen scrolls under it.
+    expect(bar.parentElement.firstElementChild).toBe(bar);
+    const tabs = [...bar.querySelectorAll('.tab-bar a')];
+    expect(tabs.map((a) => a.textContent)).toEqual(['?Riddles', '▦Drawer', '⬡Team', '≡Standings']);
+    expect(tabs[0].getAttribute('aria-current')).toBe('page');
+
+    fireEvent.click(tabs[2]);
+    await waitFor(() => expect(tabs[2].getAttribute('aria-current')).toBe('page'));
+    expect(tabs[0].getAttribute('aria-current')).toBeNull();
+  });
+
+  it('pins the lobby header at the top, with no tabs yet', async () => {
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'player',
+      snapshot: {
+        event: { status: 'lobby', name: 'Party' },
+        me: { display_name: 'Robin', restriction: {} },
+      },
+      copy: { screens: { header: { switchGame: 'SWITCH_SENTINEL' } }, tabs: {} },
+    });
+
+    await import('./main.jsx');
+
+    const bar = (await screen.findByRole('button', { name: 'SWITCH_SENTINEL' })).closest('.top-bar');
+    expect(bar).toBeTruthy();
+    expect(bar.parentElement.firstElementChild).toBe(bar);
+    expect(bar.querySelector('.tab-bar')).toBeNull();
+  });
+
   it('renders the boot line from the default theme pack', async () => {
     mocks.getState.mockReturnValue({ phase: 'booting' });
 

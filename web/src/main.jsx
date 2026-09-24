@@ -136,11 +136,13 @@ function PlayerApp() {
   if (snapshot.event.status === 'lobby') {
     return (
       <div class="frame" data-testid="app-frame">
-        <Header
-          eventName={snapshot.event.name}
-          playerName={snapshot.me.display_name}
-          action={<SwitchGame copy={copy} />}
-        />
+        <div class="top-bar">
+          <Header
+            eventName={snapshot.event.name}
+            playerName={snapshot.me.display_name}
+            action={<SwitchGame copy={copy} />}
+          />
+        </div>
         <LobbyScreen copy={copy} />
       </div>
     );
@@ -192,35 +194,44 @@ function GameShell({ snapshot, copy }) {
 
   return (
     <div class="frame" data-testid="app-frame">
-      <Header
-        eventName={snapshot.event.name}
-        playerName={snapshot.me.display_name}
-        action={<SwitchGame copy={copy} />}
-      />
+      {/* Header and tabs pinned together at the top (ADR 0034): every
+          control stays on screen while the board scrolls, and nothing
+          depends on where Safari's bottom bar sits. */}
+      <div class="top-bar">
+        <Header
+          eventName={snapshot.event.name}
+          playerName={snapshot.me.display_name}
+          action={<SwitchGame copy={copy} />}
+        />
+        <GameTabs tab={tab} copy={copy} onTab={(next) => { setOpenRiddle(null); setTab(next); }} />
+      </div>
       {screen}
       {/* The strike-1 interstitial overlays the whole app (mock: dimmed
           board behind). Un-themed by rule — the component carries its
           own plain copy. */}
       {snapshot.me.restriction?.pending_notice && <StrikeNoticeScreen />}
-      <nav class="tab-bar">
-        <a href="#" class={tab === 'riddles' ? 'active' : ''}
-           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('riddles'); }}>
-          <span class="tab-icon">?</span>{copy.tabs.riddles}
-        </a>
-        <a href="#" class={tab === 'drawer' ? 'active' : ''}
-           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('drawer'); }}>
-          <span class="tab-icon">▦</span>{copy.tabs.drawer}
-        </a>
-        <a href="#" class={tab === 'team' ? 'active' : ''}
-           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('team'); }}>
-          <span class="tab-icon">⬡</span>{copy.tabs.team}
-        </a>
-        <a href="#" class={tab === 'standings' ? 'active' : ''}
-           onClick={(e) => { e.preventDefault(); setOpenRiddle(null); setTab('standings'); }}>
-          <span class="tab-icon">≡</span>{copy.tabs.standings}
-        </a>
-      </nav>
     </div>
+  );
+}
+
+const TABS = [
+  ['riddles', '?'],
+  ['drawer', '▦'],
+  ['team', '⬡'],
+  ['standings', '≡'],
+];
+
+function GameTabs({ tab, copy, onTab }) {
+  return (
+    <nav class="tab-bar">
+      {TABS.map(([key, icon]) => (
+        <a key={key} href="#" class={tab === key ? 'active' : ''}
+           aria-current={tab === key ? 'page' : undefined}
+           onClick={(e) => { e.preventDefault(); onTab(key); }}>
+          <span class="tab-icon">{icon}</span>{copy.tabs[key]}
+        </a>
+      ))}
+    </nav>
   );
 }
 
