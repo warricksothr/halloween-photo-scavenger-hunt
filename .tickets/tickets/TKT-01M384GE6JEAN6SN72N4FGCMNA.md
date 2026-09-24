@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M384GE6JEAN6SN72N4FGCMNA
 title: Ship a demo event and riddles (seed script + content fixture)
 type: task
-status: draft
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -21,15 +21,22 @@ dependencies:
   - TKT-01M386AR687DYXFQ7M6VBSAA6V
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/demo-seeder
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 7f5b8c54d45c3d08f0d02378b169956c367e68f2
+  session: null
+  claimed_at: 2026-09-24T00:27:08Z
+  expires_at: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-23T23:18:33Z
+updated_at: 2026-09-24T00:27:08Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
 updated_by:
-  id: agent:opencode/t3code-0691bbb1
+  id: agent:claude-code/t3code-bf267378
   name: ""
 extensions: {}
 ---
