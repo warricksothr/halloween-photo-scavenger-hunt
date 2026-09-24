@@ -164,6 +164,25 @@ describe('app entry', () => {
     expect(tabs[0].getAttribute('aria-current')).toBeNull();
   });
 
+  it('pins the lobby header at the top, with no tabs yet', async () => {
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'player',
+      snapshot: {
+        event: { status: 'lobby', name: 'Party' },
+        me: { display_name: 'Robin', restriction: {} },
+      },
+      copy: { screens: { header: { switchGame: 'SWITCH_SENTINEL' } }, tabs: {} },
+    });
+
+    await import('./main.jsx');
+
+    const bar = (await screen.findByRole('button', { name: 'SWITCH_SENTINEL' })).closest('.top-bar');
+    expect(bar).toBeTruthy();
+    expect(bar.parentElement.firstElementChild).toBe(bar);
+    expect(bar.querySelector('.tab-bar')).toBeNull();
+  });
+
   it('renders the boot line from the default theme pack', async () => {
     mocks.getState.mockReturnValue({ phase: 'booting' });
 
