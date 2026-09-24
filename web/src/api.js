@@ -164,6 +164,7 @@ export const api = {
   modJoin: (modCode) =>
     request(`/api/mod/join/${encodeURIComponent(modCode)}`, { method: 'POST' }),
   modState: () => request('/api/mod/state'),
+  modLogout: () => request('/api/mod/logout', { method: 'POST' }),
   modQueue: () => request('/api/mod/queue'),
   modClaim: (submissionId) =>
     request(`/api/mod/queue/${submissionId}/claim`, { method: 'POST' }),

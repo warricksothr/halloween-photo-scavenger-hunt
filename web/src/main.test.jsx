@@ -1,9 +1,10 @@
-import { screen, waitFor } from '@testing-library/preact';
+import { fireEvent, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   initErrorReporting: vi.fn(() => Promise.resolve(true)),
   getState: vi.fn(() => ({ phase: 'booting' })),
+  leaveModerator: vi.fn(),
   refresh: vi.fn(),
   retry: vi.fn(),
   subscribe: vi.fn(() => () => {}),
@@ -18,6 +19,7 @@ vi.mock('./theme', () => ({
 }));
 vi.mock('./store', () => ({
   getState: mocks.getState,
+  leaveModerator: mocks.leaveModerator,
   refresh: mocks.refresh,
   retry: mocks.retry,
   subscribe: mocks.subscribe,
@@ -25,7 +27,8 @@ vi.mock('./store', () => ({
 
 // The admin route reaches AdminScreen through AdminBoot; every other screen
 // is imported by main.jsx, so each is stubbed to keep the module graph light.
-vi.mock('./components/Header', () => ({ Header: () => null }));
+// The header stub keeps its action so the console's Leave button can be clicked.
+vi.mock('./components/Header', () => ({ Header: ({ action }) => <div>{action}</div> }));
 vi.mock('./screens/Admin', () => ({ AdminScreen: () => null }));
 vi.mock('./screens/ConnectionError', () => ({ ConnectionErrorScreen: () => null }));
 vi.mock('./screens/Join', () => ({ JoinScreen: () => <div data-testid="join" /> }));
@@ -89,6 +92,22 @@ describe('app entry', () => {
     await import('./main.jsx');
 
     await waitFor(() => expect(screen.getByTestId('mod-join')).toBeTruthy());
+  });
+
+  it('offers a way out of the moderator console (ADR 0032)', async () => {
+    window.history.replaceState({}, '', '/mod');
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'moderator',
+      modEvent: { name: 'Party' },
+      moderator: { id: 'mod-1', label: 'Drew' },
+      copy: {},
+    });
+
+    await import('./main.jsx');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave console' }));
+    expect(mocks.leaveModerator).toHaveBeenCalledTimes(1);
   });
 
   it('renders the boot line from the default theme pack', async () => {

@@ -321,6 +321,23 @@ export async function resume(eventId) {
   return result;
 }
 
+// Leave the moderator console on this browser (ADR 0032). The server
+// ends the moderator session; the player session, if any, is untouched.
+// The URL moves to / so that the refresh lands on the game, or on the join
+// screen with its rejoin list, and Back does not reopen a dead console. A
+// 401 means the session had already ended, which is the same outcome.
+export async function leaveModerator() {
+  const result = await api.modLogout();
+  if (result.error) {
+    reportFailure(result, { where: 'leaveModerator' });
+    return result;
+  }
+  stopStream();
+  window.history.replaceState(null, '', '/');
+  await refresh();
+  return result;
+}
+
 export async function logout() {
   await api.logout();
   stopStream();

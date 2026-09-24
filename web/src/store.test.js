@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     join: vi.fn(),
     logout: vi.fn(),
     modJoin: vi.fn(),
+    modLogout: vi.fn(),
     modState: vi.fn(),
     resumable: vi.fn(),
     resume: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('./errors', () => ({
 import {
   getState,
   join,
+  leaveModerator,
   logout,
   modJoin,
   refresh,
@@ -111,6 +113,47 @@ describe('store', () => {
       snapshot: playerSnapshot,
     });
     expect(FakeEventSource.instances[0].url).toBe('/api/events/stream?as=player');
+  });
+
+  it('leaves the moderator console for the game in the same browser (ADR 0032)', async () => {
+    window.history.replaceState(null, '', '/mod');
+    mocks.api.modState.mockResolvedValue({
+      event: { id: 'event-1', name: 'Photo Party', theme: 'arkham' },
+      moderator: { id: 'mod-1' },
+    });
+    await refresh();
+    expect(getState()).toMatchObject({ role: 'moderator' });
+
+    mocks.api.modLogout.mockResolvedValue({ ok: true });
+    mocks.api.snapshot.mockResolvedValue(playerSnapshot);
+    await leaveModerator();
+
+    expect(mocks.api.modLogout).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe('/');
+    expect(getState()).toMatchObject({ phase: 'ready', role: 'player' });
+    expect(FakeEventSource.instances.at(-1).url).toBe('/api/events/stream?as=player');
+  });
+
+  it('lands on the join screen when there is no game to go back to', async () => {
+    window.history.replaceState(null, '', '/mod');
+    mocks.api.modLogout.mockResolvedValue({ unauthenticated: true });
+    mocks.api.snapshot.mockResolvedValue({ unauthenticated: true });
+    mocks.api.modState.mockResolvedValue({ unauthenticated: true });
+
+    await leaveModerator();
+
+    expect(window.location.pathname).toBe('/');
+    expect(getState()).toMatchObject({ phase: 'join' });
+  });
+
+  it('stays in the console when leaving fails to reach the server', async () => {
+    window.history.replaceState(null, '', '/mod');
+    const failure = { error: 'network_error', network: true, message: 'offline' };
+    mocks.api.modLogout.mockResolvedValue(failure);
+
+    await expect(leaveModerator()).resolves.toBe(failure);
+    expect(window.location.pathname).toBe('/mod');
+    expect(mocks.api.snapshot).not.toHaveBeenCalled();
   });
 
   it('rejoins a listed game and lands in it as a player (ADR 0031)', async () => {

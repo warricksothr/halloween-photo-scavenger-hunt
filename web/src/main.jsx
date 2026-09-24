@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { initErrorReporting } from './errors';
 import { isModPath, modLinkCode } from './paths';
-import { getState, refresh, retry, subscribe } from './store';
+import { getState, leaveModerator, refresh, retry, subscribe } from './store';
 import { defaultCopy } from './theme';
 import { Header } from './components/Header';
 import { AdminScreen } from './screens/Admin';
@@ -121,6 +121,13 @@ function PlayerApp() {
         <Header
           eventName={`${modEvent.name} — Moderator`}
           playerName={state.moderator?.label ?? 'console'}
+          action={
+            // The host who also plays needs a way back to the game; the
+            // console has no other link out (ADR 0032).
+            <button type="button" class="btn secondary mod-leave" onClick={leaveModerator}>
+              Leave console
+            </button>
+          }
         />
         <ModConsoleScreen copy={copy} moderatorId={state.moderator?.id ?? null} />
       </div>
