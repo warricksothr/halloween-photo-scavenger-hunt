@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T06:16:34Z
-updated_at: 2026-09-24T22:27:16Z
+updated_at: 2026-09-24T22:44:17Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -73,3 +73,17 @@ web/src/nav.js useGameNav: the screen (tab, riddle, returnTo, depth, event) live
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
 
 Promoted to ready 2026-09-24 at Drew's request as batch 1. Building TKT-01M390Y0QY (browser back and edge swipe) and TKT-01M390Y0S6 (return from the drawer with the new photo selected) together, since the return path rides on the history model.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T22:44:17Z
+
+PR #59 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/59), branch t3code/back-navigation, stacked on PR #58 (base t3code/photo-one-riddle at 4e2e2d9). One PR covers TKT-01M390Y0QY (Make browser back and edge swipe navigate inside the app) and TKT-01M390Y0S6 (Return from the drawer to the riddle with the new photo selected).
+
+Terva reviews:
+- pr59-back-navigation-1, run 715, head d24ca76. Three findings:
+  - high: a game switch reusing the shell could carry the last game's tab or drawer target over. Fixed in 3e17a34: GameShell is keyed by event, with a test that fails without the key.
+  - medium: after a reload, Back retraces history instead of going up a level. The code was right: the entries survive a reload, and the in-app Back matches the swipe. The ADR wording was wrong and is corrected in 3e17a34, with a reload-then-Back test added.
+  - low: no .tickets change in the PR. Declined, because ticket changes are committed directly to main.
+- pr59-back-navigation-2, run 716, head 3e17a34: the earlier findings are resolved. One new medium: the drawer still tagged and returned to a riddle that was removed while it was open. Fixed in 4d8503c, with a test.
+- pr59-back-navigation-3, run 717 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/717), head 4d8503ce01920aa3202ec59748862fe8fbd69465: clean apart from the declined .tickets low (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/59#issuecomment-12604).
+
+CI's quality gate does not report on a PR whose base is not main, so the local gate stands in: bash scripts/check-quality.sh passes and npm run test:e2e passes 10/10 on 4d8503c. After #58 merges, retarget this PR to main and let CI run. The iOS edge-swipe gesture itself needs Drew's iPhone check.
