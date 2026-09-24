@@ -61,11 +61,15 @@ def test_reader_serves_concurrent_threads_the_same_statement(client):
                 failures.append(f"wrong rows: {got}")
                 return
 
-    workers = [threading.Thread(target=hammer) for _ in range(THREADS)]
+    # Daemon threads, so a worker stuck on the reader lock fails this test
+    # rather than hanging the whole run on exit.
+    workers = [threading.Thread(target=hammer, daemon=True) for _ in range(THREADS)]
     for worker in workers:
         worker.start()
     for worker in workers:
         worker.join(timeout=30)
+    stuck = [worker.name for worker in workers if worker.is_alive()]
+    assert stuck == [], f"workers never finished (a stalled reader lock): {stuck}"
     assert failures == []
 
 
