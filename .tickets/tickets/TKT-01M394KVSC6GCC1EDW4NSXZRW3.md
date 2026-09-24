@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:20:55Z
-updated_at: 2026-09-24T07:34:48Z
+updated_at: 2026-09-24T18:35:13Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -98,3 +98,24 @@ PR #49, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 - The live bundle requests `events/stream?as=`.
 
 **AC5 is not ticked.** The live check needs a real player session and Drew's host sign-in in one browser. I did not add a test player to the live demo event.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:35:13Z
+
+### Live check on kobal (Drew, iPhone, 2026-09-24): AC5 not met
+
+Drew reports:
+- The moderator link could not be clicked.
+- A copied, pasted link showed an error.
+- Visiting the page and typing the code joined and connected.
+
+The kobal container log (codes redacted) matches:
+- 18:31:53: `GET /m/<code>`, then `/api/mod/state` 401, then `POST /api/mod/join/<code>` **404** (bad_mod_code). This came after a fresh OIDC round-trip (login 303 at 18:30:55, callback 303 at 18:31:36).
+- 18:32:30: `GET /m/` (typed-code form), `/api/mod/state` 401, `POST /api/mod/join/<code>` **201**, `/api/mod/state` 200.
+
+So the server did not recognise the code the link carried, but the typed code matched. The code alphabet (`ids._CODE_ALPHABET`) fits the client's `modLinkCode` regex, and `ModJoin` upper-cases both paths, so neither explains the difference.
+
+Unverified:
+- Which surface the link came from. The URL text in `CodeCard` is a `<code>` element, not an anchor. The post-create CodesPanel has no open button, and the Links & QR card has "Open moderator console" with `target=_blank`.
+- Whether that link belonged to another event.
+
+Next: ask Drew which screen the link was on and where it was pasted. Then reproduce with a link copied from that surface.
