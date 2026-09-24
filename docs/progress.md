@@ -46,14 +46,21 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The join screen suggests installing the app, and the
+  icons are real.** TKT-01M390Y0VQ. On an iPhone, a dismissible panel says
+  how to add the app to the home screen before joining and names the join
+  code for the app. Chrome's install prompt becomes an Install button.
+  `apple-touch-icon.png` and 192/512 PNG manifest icons are rendered from
+  `icon.svg` by `web/scripts/render-icons.mjs` (ADR 0037).
+
 - **2026-09-24 — Pending and removed photos show as blurs.**
   TKT-01M3AMNFH. Each upload stores a blurhash (migration 0005, schema
   version 5, the `blurhash` package). A photo waiting for a moderator shows
   to players as its blur with the scanning effect, in the drawer, the
   picker and behind the SCANNING banner. A photo flagged inappropriate
-  stays in the drawer only as its blur, marked removed, and its photo
-  route still 404s for players. A rejected photo gets a dashed amber
-  frame instead (ADR 0040).
+  stays in the drawer only as its blur, marked "Photo removed" with no
+  reason, and its photo route still 404s for players. A rejected photo
+  gets a dashed amber frame instead (ADR 0040).
 
 - **2026-09-24 — The host can replace a leaked join or mod code.**
   TKT-01M391W15B. Each code rotates on its own from the event's links

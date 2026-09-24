@@ -2,7 +2,7 @@
 // command the quality gate and CI already invoke fails on a lint error.
 //
 // Two environments: `src/` is browser code (JSX, browser globals, the
-// hooks rules), while the configs and `e2e/` are Node code — the e2e
+// hooks rules), while the configs, `scripts/` and `e2e/` are Node code — the e2e
 // specs also hold callbacks that Playwright evaluates in the page, so
 // they get the browser globals too.
 import js from '@eslint/js';
@@ -33,7 +33,7 @@ export default [
     },
   },
   {
-    files: ['e2e/**/*.js', '*.config.js'],
+    files: ['e2e/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

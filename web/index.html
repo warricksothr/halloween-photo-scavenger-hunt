@@ -9,6 +9,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Arkham Hunt</title>
   <link rel="manifest" href="/manifest.webmanifest">
+  <!-- iOS takes its home-screen icon from here, not from the manifest,
+       and falls back to a page snapshot without it (scripts/render-icons.mjs). -->
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Arkham Hunt">
   <!-- Theme fonts: Rajdhani (headings/body) + Orbitron (numerals/glyphs).
        Loaded once here; theme CSS only references the families. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">

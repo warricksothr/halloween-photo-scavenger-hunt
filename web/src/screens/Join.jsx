@@ -10,6 +10,7 @@
 // new player with an empty drawer, so rejoining is one tap instead.
 import { useEffect, useState } from 'preact/hooks';
 
+import { InstallHint } from '../components/InstallHint';
 import { join, resumableGames, resume } from '../store';
 import { DEFAULT_THEME, loadTheme } from '../theme';
 
@@ -69,6 +70,10 @@ export function JoinScreen() {
       <main style={{ flex: 1, padding: '32px 16px' }}>
         <h1 class="headline headline-rule" style={{ marginBottom: 8 }}>{c.headline}</h1>
         <p class="dim" style={{ marginBottom: 24 }}>{c.subtext}</p>
+
+        {/* Before joining on purpose: an iPhone's installed app does not
+            share Safari's storage, so install first, then join there. */}
+        <InstallHint copy={copy} joinCode={joinCode} />
 
         {games.length > 0 && (
           <section aria-labelledby="resume-heading" style={{ marginBottom: 24 }}>
