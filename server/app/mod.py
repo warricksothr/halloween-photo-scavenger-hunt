@@ -261,7 +261,7 @@ def queue(
     the submitted evidence."""
     conn = reader(request)
     rows = conn.execute(
-        "SELECT s.id, s.created_at, s.claimed_by, s.team_id,"
+        "SELECT s.id, s.created_at, s.claimed_by, s.claimed_at, s.team_id,"
         "       r.id AS riddle_id, r.text AS riddle_text,"
         "       r.sort_order AS riddle_sort,"
         "       p.id AS player_id, p.display_name,"
@@ -293,8 +293,14 @@ def queue(
                 # endpoint 404s anyone outside the owning team.
                 "photo_url": f"/api/mod/evidence/{r['evidence_id']}/photo",
             },
+            # claimed_at lets the console tell a moderator viewing now from
+            # a claim left hours ago (ADR 0038).
             "claimed_by": (
-                {"id": r["claimed_by"], "label": r["claimer_label"]}
+                {
+                    "id": r["claimed_by"],
+                    "label": r["claimer_label"],
+                    "claimed_at": r["claimed_at"],
+                }
                 if r["claimed_by"]
                 else None
             ),

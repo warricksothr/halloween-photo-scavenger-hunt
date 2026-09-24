@@ -18,6 +18,8 @@ vi.mock('../api', () => ({ api: mocks.api }));
 vi.mock('../store', () => ({ subscribeDeltas: mocks.subscribeDeltas }));
 
 import { ModConsoleScreen, nextToReview } from './ModConsole';
+import { ago } from './mod/ago';
+import { QueueList } from './mod/QueueList';
 
 const item = {
   id: 'sub-1',
@@ -84,7 +86,8 @@ const make = (id, name, extra = {}) => ({
 
 describe('choosing the next submission', () => {
   const me = 'mod-me';
-  const other = { id: 'mod-other', label: 'Oracle' };
+  // Claimed a moment ago: someone viewing now.
+  const other = { id: 'mod-other', label: 'Oracle', claimed_at: Date.now() / 1000 - 30 };
 
   it('takes the oldest item that no other moderator is viewing', () => {
     const queue = [
@@ -102,6 +105,34 @@ describe('choosing the next submission', () => {
 
   it('returns nothing when every remaining item is someone else\'s', () => {
     expect(nextToReview([make('b', 'Toad', { claimed_by: other })], 'a', me)).toBeNull();
+  });
+
+  it('frees an item whose claim was left behind (ADR 0038)', () => {
+    const left = { id: 'mod-other', label: 'Oracle', claimed_at: Date.now() / 1000 - 11 * 60 };
+    expect(nextToReview([make('b', 'Toad', { claimed_by: left })], 'a', me).id).toBe('b');
+  });
+});
+
+describe('queue claim labels (ADR 0038)', () => {
+  const now = Date.now() / 1000;
+  const rows = [
+    make('a', 'Robin', { claimed_by: { id: 'mod-me', label: 'Drew', claimed_at: now - 15 * 3600 } }),
+    make('b', 'Toad', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at: now - 60 } }),
+    make('c', 'Selina', { claimed_by: { id: 'mod-other', label: 'Oracle', claimed_at: now - 3 * 3600 } }),
+  ];
+
+  it('tells your own claims, a colleague viewing now, and a claim left behind apart', () => {
+    render(<QueueList queue={rows} openId={null} onOpen={vi.fn()} moderatorId="mod-me" />);
+    expect(screen.getByRole('button', { name: /Robin/ }).textContent).toContain('OPENED BY YOU');
+    expect(screen.getByRole('button', { name: /Toad/ }).textContent).toContain('ORACLE IS VIEWING');
+    expect(screen.getByRole('button', { name: /Selina/ }).textContent).toContain('ORACLE OPENED 3 H AGO');
+  });
+
+  it('counts in hours and days once minutes stop reading well', () => {
+    expect(ago(now - 20, now)).toBe('just now');
+    expect(ago(now - 45 * 60, now)).toBe('45 min ago');
+    expect(ago(now - 745 * 60, now)).toBe('12 h ago');
+    expect(ago(now - 3 * 86400, now)).toBe('3 d ago');
   });
 });
 

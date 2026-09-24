@@ -23,6 +23,7 @@ import { ConductPanel } from './mod/ConductPanel';
 import { DecisionPanel } from './mod/DecisionPanel';
 import { HistoryPanel } from './mod/HistoryPanel';
 import { Lightbox } from './mod/Lightbox';
+import { claimState } from './mod/claims';
 import { QueueList } from './mod/QueueList';
 import { ReviewPane } from './mod/ReviewPane';
 import { TeamsPanel } from './mod/TeamsPanel';
@@ -34,12 +35,13 @@ const VERDICT_KEYS = ['verified', 'obscured', 'too_small', 'misaligned', 'not_fo
 // other moderator is viewing. Auto-advance must not walk this moderator
 // into someone else's claim (ADR 0002: claims are advisory, but they are
 // how two moderators avoid judging the same photo twice).
-export function nextToReview(queue, resolvedId, moderatorId) {
+export function nextToReview(queue, resolvedId, moderatorId, now = Date.now() / 1000) {
+  // A colleague viewing an item now keeps it; an unclaimed item, one of
+  // this moderator's own, or a claim left behind is free (ADR 0038).
   return (
     queue.find(
       (item) =>
-        item.id !== resolvedId &&
-        (!item.claimed_by || item.claimed_by.id === moderatorId),
+        item.id !== resolvedId && claimState(item, moderatorId, now) !== 'viewing',
     ) ?? null
   );
 }
@@ -229,7 +231,7 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
             <div><p class="subtext">{error}</p></div>
           </div>
         )}
-        <QueueList queue={queue} openId={openId} onOpen={open} />
+        <QueueList queue={queue} openId={openId} onOpen={open} moderatorId={moderatorId} />
       </aside>
 
       {view === 'teams' ? (

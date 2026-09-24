@@ -1,8 +1,9 @@
 // The pending queue: oldest first, with each item's flag and claim state.
 // The open item is marked so the rail shows where the moderator is.
 import { ago } from './ago';
+import { claimState } from './claims';
 
-export function QueueList({ queue, openId, onOpen }) {
+export function QueueList({ queue, openId, onOpen, moderatorId = null }) {
   if (queue === null) return <p class="dim">Opening the queue…</p>;
   if (queue.length === 0) {
     return <p class="dim">Queue is clear. Nothing awaiting review.</p>;
@@ -26,14 +27,28 @@ export function QueueList({ queue, openId, onOpen }) {
           </span>
           <span class="mod-queue-tags">
             {item.flag && <span class="mod-tag mod-tag-alert">⚠ SHARED?</span>}
-            {item.claimed_by && (
-              <span class="mod-tag mod-tag-amber">
-                {item.claimed_by.label.toUpperCase()} IS VIEWING
-              </span>
-            )}
+            <ClaimTag item={item} moderatorId={moderatorId} />
           </span>
         </button>
       ))}
     </div>
   );
+}
+
+// Your own claim, a colleague viewing now, or a claim left behind
+// (ADR 0038).
+function ClaimTag({ item, moderatorId }) {
+  const state = claimState(item, moderatorId);
+  if (state === 'mine') return <span class="mod-tag mod-tag-dim">OPENED BY YOU</span>;
+  if (state === 'viewing') {
+    return <span class="mod-tag mod-tag-amber">{item.claimed_by.label.toUpperCase()} IS VIEWING</span>;
+  }
+  if (state === 'stale') {
+    return (
+      <span class="mod-tag mod-tag-dim">
+        {item.claimed_by.label.toUpperCase()} OPENED {ago(item.claimed_by.claimed_at).toUpperCase()}
+      </span>
+    );
+  }
+  return null;
 }

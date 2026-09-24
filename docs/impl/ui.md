@@ -136,6 +136,10 @@ strike interstitial, and the drawer restricted variant.
 - **The console has a way out** — a Leave console button in its header
   ends this browser's moderator session and goes to `/`: the game when
   a player session exists, otherwise the join screen (ADR 0032).
+- **A claim says whose and how old** — the queue marks your own claims
+  "OPENED BY YOU", another moderator's claim from the last 10 minutes
+  "<NAME> IS VIEWING", and an older one "<NAME> OPENED 3 H AGO"; only a
+  live viewer keeps an item out of the automatic next pick (ADR 0038).
 - **The console advances itself** — after a verdict or a removal it opens
   the oldest pending item nobody else is viewing, shows a flagged photo
   beside its match, and enlarges either photo on click (ADR 0029;

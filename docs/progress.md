@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The moderator queue tells your claims from a colleague's.**
+  TKT-01M3AB3E2. Kobal's rows showed both "DREW SHORT IS VIEWING" tags were
+  Drew's own claims from 15 hours earlier. The queue now reads "OPENED BY
+  YOU", "<NAME> IS VIEWING" (claimed in the last 10 minutes) or "<NAME>
+  OPENED 3 H AGO", the next pick skips only a live viewer, and times read
+  in hours and days (ADR 0038).
+
 - **2026-09-24 — Back and the edge swipe stay in the game; a riddle gets
   its photo back.** TKT-01M390Y0QY and TKT-01M390Y0S6. Every screen change
   pushes a history entry, so Back and the iOS swipe move between screens.
