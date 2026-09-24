@@ -30,7 +30,7 @@ function joinedAt(epochSeconds) {
 // two guests can pick the same one, and a player whose session ended used
 // to rejoin as a new player (TKT-01M3AFZWA1GWCGPTZ4G6RW3MXS). A repeated
 // name gets when it joined and its device; if even that repeats, its
-// place in join order.
+// place in the list.
 export function playerLabels(players) {
   const byName = new Map();
   for (const player of players) {

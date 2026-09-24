@@ -481,11 +481,42 @@ class TestAdminPlayerView:
             joined.append(resp.json()["player"]["id"])
             guest.close()
 
+        # Both can join within one second, so compare by id, not by order.
+        players = {
+            p["id"]: p
+            for p in admin.get(f"/api/admin/events/{event['id']}/players").json()
+        }
+        assert set(players) == set(joined)
+        assert {p["display_name"] for p in players.values()} == {"Robin"}
+        assert players[joined[0]]["device_label"] == "Drew's phone"
+        assert players[joined[1]]["device_label"] == "Sam's tablet"
+        assert all(isinstance(p["joined_at"], int) for p in players.values())
+
+    def test_a_player_shows_the_device_it_used_last(self, admin, client):
+        """A player seen on two devices is labelled with the newer one."""
+        event = admin.post("/api/admin/events", json={"name": "Two devices"}).json()
+        guest = arm_csrf(TestClient(client.app))
+        player_id = guest.post(
+            f"/api/join/{event['join_code']}",
+            json={"display_name": "Robin", "device_label": "Old phone"},
+        ).json()["player"]["id"]
+        guest.close()
+        db = client.app.state.db
+        # A later session on another device, and an older one on a third.
+        for sid, label, at in (
+            ("s-new", "New tablet", 2**31),
+            ("s-old", "Ancient laptop", 1),
+        ):
+            db.execute(
+                "INSERT INTO session (id, token_hash, player_id, device_label,"
+                " user_agent, created_at, last_seen_at)"
+                " VALUES (?, ?, ?, ?, '', ?, ?)",
+                (sid, f"hash-{sid}", player_id, label, at, at),
+            )
+        db.commit()
+
         players = admin.get(f"/api/admin/events/{event['id']}/players").json()
-        assert [p["id"] for p in players] == joined
-        assert [p["display_name"] for p in players] == ["Robin", "Robin"]
-        assert [p["device_label"] for p in players] == ["Drew's phone", "Sam's tablet"]
-        assert all(isinstance(p["joined_at"], int) for p in players)
+        assert players[0]["device_label"] == "New tablet"
 
     def test_unknown_event_404(self, admin):
         assert admin.get("/api/admin/events/nope/players").status_code == 404
