@@ -6,6 +6,7 @@
 // fresh snapshot — the client never maintains its own version of
 // server-owned data.
 import { api } from './api';
+import { isModPath } from './paths';
 import { loadTheme } from './theme';
 import { reportError } from './errors';
 
@@ -79,9 +80,16 @@ function scheduleStreamReconnect() {
   }, delay);
 }
 
-function startStream() {
-  if (eventSource) return;
-  eventSource = new EventSource('/api/events/stream');
+// The role the open stream serves. A browser can hold a player and a
+// moderator session at once, so the stream names its role (?as=) and a
+// tab whose role changed rebuilds it rather than keep the other one's.
+let streamRole = null;
+
+function startStream(role) {
+  if (eventSource && streamRole === role) return;
+  if (eventSource) stopStream();
+  streamRole = role;
+  eventSource = new EventSource(`/api/events/stream?as=${role}`);
   let opened = false;
   eventSource.onopen = () => {
     streamRetries = 0;
@@ -118,6 +126,7 @@ function stopStream() {
   }
   eventSource?.close();
   eventSource = null;
+  streamRole = null;
 }
 
 export function getState() {
@@ -178,7 +187,10 @@ function reportFailure(result, context) {
 // The resync point. Called on boot, after every mutation, and on SSE
 // deltas (increment 7). Role detection: the player snapshot 401s for a
 // mod-only cookie, so a 401 means "try the moderator probe" before
-// concluding the visitor is unauthenticated.
+// concluding the visitor is unauthenticated. On a moderator path the
+// order flips: the moderator session is probed first and the player
+// snapshot never consulted, so a browser that also holds a player session
+// (the host who plays) reaches the console or its sign-in, not the game.
 //
 // Refresh retries for up to a few seconds, and it is called from boot, from
 // mutations, and from SSE deltas, so several can overlap. Each run takes a
@@ -191,33 +203,19 @@ export async function refresh() {
   const generation = ++refreshGeneration;
   const stale = () => generation !== refreshGeneration;
 
+  if (isModPath(window.location.pathname)) {
+    const mod = await withRetry(api.modState);
+    if (stale()) return;
+    await settleModerator(mod, stale);
+    return;
+  }
+
   const result = await withRetry(api.snapshot);
   if (stale()) return;
   if (result.unauthenticated) {
     const mod = await withRetry(api.modState);
     if (stale()) return;
-    if (mod.error) {
-      // The probe failed too, so this is a connection problem, not an
-      // unauthenticated visitor — do not drop them on the join screen.
-      reportFailure(mod, { where: 'refresh.modState' });
-      stopStream();
-      set({ phase: 'error', error: mod.message });
-      return;
-    }
-    if (mod.event) {
-      const copy =
-        state.copy && state.themeName === mod.event.theme
-          ? state.copy
-          : await loadTheme(mod.event.theme);
-      if (stale()) return;
-      set({ phase: 'ready', role: 'moderator', modEvent: mod.event,
-            moderator: mod.moderator, copy, themeName: mod.event.theme,
-            snapshot: null });
-      startStream();
-      return;
-    }
-    set({ phase: 'join', role: null, snapshot: null, modEvent: null });
-    stopStream();
+    await settleModerator(mod, stale);
     return;
   }
   if (result.error) {
@@ -234,7 +232,34 @@ export async function refresh() {
   if (stale()) return;
   set({ phase: 'ready', role: 'player', snapshot: result, copy,
         themeName: result.event.theme, modEvent: null });
-  startStream();
+  startStream('player');
+}
+
+// The moderator probe's outcome: the console, the join screen, or the
+// connection-error screen.
+async function settleModerator(mod, stale) {
+  if (mod.error) {
+    // The probe failed, so this is a connection problem, not an
+    // unauthenticated visitor — do not drop them on the join screen.
+    reportFailure(mod, { where: 'refresh.modState' });
+    stopStream();
+    set({ phase: 'error', error: mod.message });
+    return;
+  }
+  if (mod.event) {
+    const copy =
+      state.copy && state.themeName === mod.event.theme
+        ? state.copy
+        : await loadTheme(mod.event.theme);
+    if (stale()) return;
+    set({ phase: 'ready', role: 'moderator', modEvent: mod.event,
+          moderator: mod.moderator, copy, themeName: mod.event.theme,
+          snapshot: null });
+    startStream('moderator');
+    return;
+  }
+  set({ phase: 'join', role: null, snapshot: null, modEvent: null });
+  stopStream();
 }
 
 // The retry affordance on the connection-error screen: back to booting so
@@ -255,6 +280,10 @@ export async function modJoin(modCode) {
     reportFailure(result, { where: 'modJoin' });
     return result; // the mod join screen shows the message
   }
+  // Leave the link for the console's own path: the shell renders the join
+  // screen for any /m/<code>, so staying there would loop, and a reload
+  // of the console must not rejoin (and write another moderator.joined).
+  window.history.replaceState(null, '', '/mod');
   await refresh();
   return result;
 }

@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { oidcLoginUrl } from '../api';
+import { modLinkCode } from '../paths';
 import { modJoin } from '../store';
 import { DEFAULT_THEME, loadTheme } from '../theme';
 
@@ -46,8 +47,8 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
   // render the bare frame rather than flash unstyled markup.
   const [styled, setStyled] = useState(false);
 
-  const pathMatch = window.location.pathname.match(/^\/m\/([A-Za-z0-9]+)/);
-  const modCode = pathMatch ? normalise(pathMatch[1]) : null;
+  const linkCode = modLinkCode(window.location.pathname);
+  const modCode = linkCode ? normalise(linkCode) : null;
   const marker = new URLSearchParams(window.location.search).get('sso');
   const refusal = REFUSALS[marker] ?? null;
 

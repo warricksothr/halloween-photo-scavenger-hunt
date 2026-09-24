@@ -75,6 +75,22 @@ describe('app entry', () => {
     expect(screen.queryByTestId('join')).toBeNull();
   });
 
+  it('routes a mod link to the moderator join even over a ready player session', async () => {
+    // TKT-01M394KVSC6GCC1EDW4NSXZRW3: the host who also plays opens the
+    // mod link on the same phone; the link must join, not show the game.
+    window.history.replaceState({}, '', '/m/MODCODE1');
+    mocks.getState.mockReturnValue({
+      phase: 'ready',
+      role: 'player',
+      snapshot: { event: { status: 'open', name: 'Party' }, me: { display_name: 'Robin' } },
+      copy: {},
+    });
+
+    await import('./main.jsx');
+
+    await waitFor(() => expect(screen.getByTestId('mod-join')).toBeTruthy());
+  });
+
   it('renders the boot line from the default theme pack', async () => {
     mocks.getState.mockReturnValue({ phase: 'booting' });
 

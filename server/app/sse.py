@@ -22,8 +22,9 @@ import json
 import logging
 import threading
 from collections.abc import AsyncIterator
+from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -187,12 +188,23 @@ def _resolve_sessions(
 
 
 @router.get("/events/stream")
-async def events_stream(request: Request):
-    """The one SSE endpoint, role-scoped by whichever session cookie the
-    request carries (api.md: one stream per role-scoped session). A
-    moderator cookie wins if both are present — the mod console and a
-    player tab on the same phone must not confuse the stream."""
+async def events_stream(
+    request: Request,
+    as_: Literal["player", "moderator"] | None = Query(None, alias="as"),
+):
+    """The one SSE endpoint, role-scoped by the session cookie the request
+    carries (api.md: one stream per role-scoped session).
+
+    A browser can hold both a player and a moderator session (the host who
+    also plays), and each tab shows one of them, so the client names its
+    role with ``?as=player|moderator`` and gets that session's stream, or a
+    401 if the browser has no such session. Without ``as`` the moderator
+    cookie wins, as before."""
     mod, player = await run_in_threadpool(_resolve_sessions, request)
+    if as_ == "player":
+        mod = None
+    elif as_ == "moderator":
+        player = None
     if mod is not None:
         role, event_id, team_id = "moderator", mod.event_id, None
     elif player is not None:
