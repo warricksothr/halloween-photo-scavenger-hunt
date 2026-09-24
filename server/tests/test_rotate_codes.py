@@ -106,3 +106,28 @@ def test_rotation_refuses_unknown_kinds_events_and_strangers(admin, client):
         "join_code": event["join_code"],
         "mod_code": event["mod_code"],
     }
+
+
+def test_rotation_never_keeps_the_leaked_code(admin, client, monkeypatch):
+    """Terva on PR #63: the database accepts a row's own value, so a new
+    code equal to the current one must be drawn again, not saved."""
+    event = _event(admin)
+    fresh = iter([event["join_code"], event["mod_code"], "FRESHCODE1"])
+    monkeypatch.setattr("app.events.ids.new_code", lambda: next(fresh))
+
+    codes = admin.post(f"/api/admin/events/{event['id']}/codes/join/rotate").json()
+    assert codes["join_code"] == "FRESHCODE1"
+    assert codes["mod_code"] == event["mod_code"]
+
+
+def test_rotation_gives_up_rather_than_keep_a_code(admin, client, monkeypatch):
+    event = _event(admin)
+    monkeypatch.setattr("app.events.ids.new_code", lambda: event["join_code"])
+
+    resp = admin.post(f"/api/admin/events/{event['id']}/codes/join/rotate")
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "code_collision"
+    rows = client.app.state.db.execute(
+        "SELECT COUNT(*) FROM audit_event WHERE action = 'event.code_rotated'"
+    ).fetchone()[0]
+    assert rows == 0

@@ -174,15 +174,21 @@ def rotate_code(
     if column is None:
         return _err(404, "not_found", "No such code; use join or mod.")
     with locked_transaction(request) as writer:
-        if _get_event(writer, event_id) is None:
+        current = _get_event(writer, event_id)
+        if current is None:
             return _err(404, "event_not_found", "No such event.")
         # Codes are UNIQUE across events; a collision in a 10-character
-        # code is vanishingly rare, but a retry costs nothing.
+        # code is vanishingly rare, but a retry costs nothing. So does
+        # refusing the event's own codes: the database would accept the
+        # current value, and the leaked link would live on.
         for _attempt in range(3):
+            candidate = ids.new_code()
+            if candidate in (current["join_code"], current["mod_code"]):
+                continue
             try:
                 writer.execute(
                     f"UPDATE event SET {column} = ? WHERE id = ?",
-                    (ids.new_code(), event_id),
+                    (candidate, event_id),
                 )
                 break
             except sqlite3.IntegrityError:
