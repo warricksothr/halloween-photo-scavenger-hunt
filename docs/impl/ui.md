@@ -8,8 +8,10 @@ pack, so the design tokens transfer almost verbatim.
 
 Mocking conventions:
 
-- Mobile-first phone frame (party screens live on phones); the moderator
-  console shares the frame because moderation happens from the floor.
+- Mobile-first phone frame (party screens live on phones). The moderator
+  console keeps it under 700px; wider, it drops the frame for a queue rail
+  plus review (tablet) or queue | photo | decision columns (desktop), per
+  ADR 0029. The mock shows the phone layout only.
 - **No real photos** — the no-player-photos-in-git policy applies to
   mocks; `.photo-ph` placeholders stand in.
 - States of one route are stacked on a single page with divider labels
@@ -114,6 +116,10 @@ strike interstitial, and the drawer restricted variant.
   client-side and the server enforces 1–1440 (`server/app/mod.py`).
 - **Player history is a moderator-console panel**, not its own route —
   mods under queue load never need a second screen.
+- **The console advances itself** — after a verdict or a removal it opens
+  the oldest pending item nobody else is viewing, shows a flagged photo
+  beside its match, and enlarges either photo on click (ADR 0029;
+  `web/src/screens/ModConsole.jsx`, `web/src/screens/mod/`).
 - **The lobby screen exists** — joining before the round opens needs a
   holding state; without it, early joiners hit a dead end.
 - **The round-open action is gated on content** — "open the round" is

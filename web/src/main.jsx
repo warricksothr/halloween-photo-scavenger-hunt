@@ -114,10 +114,15 @@ function PlayerApp() {
   // queue, not the game").
   const { snapshot, modEvent, copy } = state;
   if (state.role === 'moderator') {
+    // mod-frame lets the console outgrow the phone frame on a tablet or a
+    // desktop (ADR 0029); the header names who is moderating.
     return (
-      <div class="frame" data-testid="app-frame">
-        <Header eventName={`${modEvent.name} — Moderator`} playerName="console" />
-        <ModConsoleScreen copy={copy} />
+      <div class="frame mod-frame" data-testid="app-frame">
+        <Header
+          eventName={`${modEvent.name} — Moderator`}
+          playerName={state.moderator?.label ?? 'console'}
+        />
+        <ModConsoleScreen copy={copy} moderatorId={state.moderator?.id ?? null} />
       </div>
     );
   }

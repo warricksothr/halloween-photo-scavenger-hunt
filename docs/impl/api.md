@@ -235,7 +235,15 @@ POST   /api/mod/join/{mod_code}         requires someone who may moderate:
                                         (429 after repeated bad codes)
 GET    /api/mod/queue                   → pending subs, oldest first, with
                                           photo URL, player, riddle, claim
-                                          state, duplicate flags
+                                          state, duplicate flags. A flagged
+                                          item's `flag` also carries
+                                          `other_photo_url` (the matched
+                                          photo, via the mod photo route)
+                                          and `other_team_label` (team
+                                          name, else first member's
+                                          display name) for the side-by-
+                                          side compare (ADR 0029); an
+                                          unflagged item has `flag: null`
 POST   /api/mod/queue/{sub_id}/claim    soft claim (advisory; ADR 0002)
 POST   /api/mod/queue/{sub_id}/verdict  { verdict, flavor_text? }
                                         conditional UPDATE WHERE status =

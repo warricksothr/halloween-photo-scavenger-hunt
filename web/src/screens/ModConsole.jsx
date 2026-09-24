@@ -1,37 +1,50 @@
-// Moderator console — the queue (increment 7).
+// Moderator console — the queue (increment 7), laid out per screen size
+// (ADR 0029).
 //
-// Layout follows docs/impl/mocks/moderator.html: a work queue, not the
-// game — queue list on top (oldest first, claim state, flag badge),
-// the open item below with photo + riddle/player panel, one-tap
-// verdicts, and an optional flavor-text picker.
+// Content follows docs/impl/mocks/moderator.html: a work queue, not the
+// game — queue list (oldest first, claim state, flag badge), the open
+// item's photo with the riddle it answers, one-tap verdicts, an optional
+// flavor line, the player's history, and the separated conduct action.
+// A phone stacks all of that in one column, as it always has; a tablet
+// puts the queue in a rail beside the review; a desktop gives the queue,
+// the photo, and the decision a column each (mod-console.css).
 //
 // Concurrency is the server's (ADR 0002): a lost verdict race comes
 // back 409 and the queue refetches; the claim is advisory and shown to
 // other moderators, never a lock. Queue freshness comes from the
 // store's SSE stream: submission_new and queue_resolved deltas trigger
 // a refetch — no polling.
-import { useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useState } from 'preact/hooks';
 
+import '../mod-console.css';
 import { api } from '../api';
 import { subscribeDeltas } from '../store';
+import { ConductPanel } from './mod/ConductPanel';
+import { DecisionPanel } from './mod/DecisionPanel';
+import { HistoryPanel } from './mod/HistoryPanel';
+import { Lightbox } from './mod/Lightbox';
+import { QueueList } from './mod/QueueList';
+import { ReviewPane } from './mod/ReviewPane';
+import { TeamsPanel } from './mod/TeamsPanel';
 
-// One-tap verdict buttons, in the mock's order and severity. The
-// canned flavor lines come from the theme pack's verdict bank so the
-// moderator can attach in-fiction copy without typing.
-const VERDICTS = [
-  { key: 'verified', label: '✓ Riddle Solved', style: { background: 'var(--green)' } },
-  { key: 'obscured', label: 'Obscured', secondary: true },
-  { key: 'too_small', label: 'Too Small', secondary: true },
-  { key: 'misaligned', label: 'Misaligned', secondary: true },
-  { key: 'not_found', label: 'Subject Not Found', danger: true },
-];
+// The verdicts whose theme-pack subtext offers canned flavor lines.
+const VERDICT_KEYS = ['verified', 'obscured', 'too_small', 'misaligned', 'not_found'];
 
-function ago(createdAt) {
-  const mins = Math.max(0, Math.round((Date.now() / 1000 - createdAt) / 60));
-  return mins < 1 ? 'just now' : `${mins} min ago`;
+// The next item to open after a decision: the oldest pending one that no
+// other moderator is viewing. Auto-advance must not walk this moderator
+// into someone else's claim (ADR 0002: claims are advisory, but they are
+// how two moderators avoid judging the same photo twice).
+export function nextToReview(queue, resolvedId, moderatorId) {
+  return (
+    queue.find(
+      (item) =>
+        item.id !== resolvedId &&
+        (!item.claimed_by || item.claimed_by.id === moderatorId),
+    ) ?? null
+  );
 }
 
-export function ModConsoleScreen({ copy }) {
+export function ModConsoleScreen({ copy, moderatorId = null }) {
   const [queue, setQueue] = useState(null); // null = loading
   const [openId, setOpenId] = useState(null);
   const [flavor, setFlavor] = useState('');
@@ -43,11 +56,10 @@ export function ModConsoleScreen({ copy }) {
   // (strikes included) loads lazily for consistency of judgment.
   const [confirming, setConfirming] = useState(false);
   const [history, setHistory] = useState(null);
-  // Team management (stretch): a collapsible roster below the queue.
+  // Team management (stretch): the rosters, one switch away from the queue.
   // Removal is a danger action — same armed-confirm pattern as
   // INAPPROPRIATE — and copy stays plain by rule (conduct-adjacent
   // surface; nothing themed).
-  const [showTeams, setShowTeams] = useState(false);
   const [teams, setTeams] = useState(null);
   const [confirmRemove, setConfirmRemove] = useState(null); // {team, member}
   // Conduct inputs for the INAPPROPRIATE action. The backend accepts a
@@ -55,6 +67,11 @@ export function ModConsoleScreen({ copy }) {
   // instead of sending an empty default. Labels stay plain by rule.
   const [note, setNote] = useState('');
   const [cooldown, setCooldown] = useState('15');
+  // The rail shows the queue or the team rosters; on a wide screen the
+  // rosters take the main area, so the two never compete for space.
+  const [view, setView] = useState('queue');
+  const [zoom, setZoom] = useState(null); // { src, label } of the full-size photo
+  const closeZoom = useCallback(() => setZoom(null), []);
 
   async function reload() {
     const result = await api.modQueue();
@@ -67,6 +84,16 @@ export function ModConsoleScreen({ copy }) {
     // closed), close the detail — the queue is the source of truth.
     setOpenId((current) =>
       current && result.some((item) => item.id === current) ? current : null);
+    return result;
+  }
+
+  // After a decision, move straight to the next submission (ADR 0029), or
+  // show the empty state when nothing is left that is free to review.
+  async function advance(resolvedId) {
+    const fresh = await reload();
+    const next = fresh ? nextToReview(fresh, resolvedId, moderatorId) : null;
+    if (next) open(next);
+    else setOpenId(null);
   }
 
   useEffect(() => {
@@ -80,6 +107,7 @@ export function ModConsoleScreen({ copy }) {
   }, []);
 
   function open(item) {
+    setView('queue');
     setOpenId(item.id);
     setError(null);
     setConfirming(false);
@@ -103,11 +131,11 @@ export function ModConsoleScreen({ copy }) {
       // already_resolved is the race loss — the refetch shows the item
       // gone, which is feedback enough; everything else gets a banner.
       if (result.error !== 'already_resolved') setError(result.message);
+      await reload();
     } else {
       setFlavor('');
-      setOpenId(null);
+      await advance(item.id);
     }
-    await reload();
     setBusy(false);
   }
 
@@ -129,13 +157,13 @@ export function ModConsoleScreen({ copy }) {
     const result = await api.modInappropriate(item.id, note.trim(), minutes);
     if (result?.error) {
       if (result.error !== 'already_resolved') setError(result.message);
+      await reload();
     } else {
       setConfirming(false);
-      setOpenId(null);
       setNote('');
       setCooldown('15');
+      await advance(item.id);
     }
-    await reload();
     setBusy(false);
   }
 
@@ -151,13 +179,12 @@ export function ModConsoleScreen({ copy }) {
     else setTeams(result.teams);
   }
 
-  function toggleTeams() {
-    const next = !showTeams;
-    setShowTeams(next);
+  function showView(next) {
+    setView(next);
     setConfirmRemove(null);
     // Load on open only — membership changes are deliberate moderator
     // acts, not a stream; there is no SSE delta for them.
-    if (next && teams === null) loadTeams();
+    if (next === 'teams' && teams === null) loadTeams();
   }
 
   async function removeMember() {
@@ -174,344 +201,84 @@ export function ModConsoleScreen({ copy }) {
 
   const openItem = queue?.find((item) => item.id === openId) ?? null;
   const cannedLines = openItem
-    ? VERDICTS.map((v) => copy.verdicts[v.key]?.subtext).filter(Boolean)
+    ? VERDICT_KEYS.map((key) => copy.verdicts[key]?.subtext).filter(Boolean)
     : [];
 
   return (
-    <main style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h1 class="headline headline-rule" style={{ fontSize: '1rem' }}>
-        Analysis Queue
-        <span class="dim" style={{ marginLeft: 'auto', fontFamily: 'var(--font-num)' }}>
-          {queue === null ? '…' : `${queue.length} pending`}
-        </span>
-      </h1>
-
-      {error && (
-        <div class="verdict-banner sev-red">
-          <div class="verdict-chip">!</div>
-          <div><p class="subtext">{error}</p></div>
-        </div>
-      )}
-
-      {queue === null ? (
-        <p class="dim">Opening the queue…</p>
-      ) : queue.length === 0 ? (
-        <p class="dim">Queue is clear. Nothing awaiting review.</p>
-      ) : (
-        <div class="panel" style={{ padding: '4px 16px' }}>
-          {queue.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              class="list-row"
-              onClick={() => open(item)}
-            >
-              <img
-                src={item.evidence.photo_url}
-                alt=""
-                loading="lazy"
-                style={{ width: 44, height: 44, flex: 'none', objectFit: 'cover', borderRadius: 'var(--radius)' }}
-              />
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <span style={{ display: 'block', fontSize: '0.85rem' }}>
-                  #{item.riddle.sort_order} — {item.player.display_name}
-                </span>
-                <span class="dim" style={{ display: 'block', fontSize: '0.75rem' }}>{ago(item.created_at)}</span>
-              </span>
-              {item.flag && (
-                <span class="dim" style={{ fontSize: '0.7rem', fontFamily: 'var(--font-head)', letterSpacing: '0.1em', color: 'var(--alert)' }}>
-                  ⚠ SHARED?
-                </span>
-              )}
-              {item.claimed_by && (
-                <span class="dim" style={{ fontSize: '0.7rem', fontFamily: 'var(--font-head)', letterSpacing: '0.1em', color: 'var(--amber)' }}>
-                  {item.claimed_by.label.toUpperCase()} IS VIEWING
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {openItem && (
-        <section>
-          <div style={{ position: 'relative', marginBottom: 12 }}>
-            <img
-              src={openItem.evidence.photo_url}
-              alt="Submission photo"
-              style={{ width: '100%', borderRadius: 'var(--radius)', display: 'block' }}
-            />
-          </div>
-          <div class="panel" style={{ borderLeft: '3px solid var(--green)', marginBottom: 12, padding: '10px 14px' }}>
-            <div class="dim" style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--green)' }}>
-              Riddle #{openItem.riddle.sort_order} — {openItem.player.display_name} submitted
-            </div>
-            <div style={{ marginTop: 4 }}>{openItem.riddle.text}</div>
-          </div>
-
-          {openItem.flag && (
-            <div class="verdict-banner sev-red" style={{ marginBottom: 12 }}>
-              <div class="verdict-chip">⚠</div>
-              <div style={{ flex: 1 }}>
-                <div class="verdict-headline">Possible shared photo</div>
-                <p class="subtext" style={{ marginTop: 6 }}>
-                  Near-duplicate of another team's evidence
-                  (distance {openItem.flag.distance}).
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button class="btn secondary" style={{ width: 'auto', padding: '6px 12px', fontSize: '0.7rem' }}
-                          onClick={() => resolveFlag(openItem, 'cleared')}>
-                    Clear flag
-                  </button>
-                  <button class="btn secondary" style={{ width: 'auto', padding: '6px 12px', fontSize: '0.7rem', color: 'var(--alert)', borderColor: 'var(--alert)' }}
-                          onClick={() => resolveFlag(openItem, 'confirmed')}>
-                    Confirm duplicate
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <button
-            class="btn"
-            style={{ background: 'var(--green)', marginBottom: 8 }}
-            disabled={busy}
-            onClick={() => sendVerdict(openItem, 'verified')}
-          >
-            ✓ Riddle Solved
+    <main class="mod-console">
+      <aside class="mod-rail">
+        <h1 class="headline headline-rule mod-title">
+          Analysis Queue
+          <span class="dim mod-count">
+            {queue === null ? '…' : `${queue.length} pending`}
+          </span>
+        </h1>
+        <div class="mod-switch" role="group" aria-label="Console view">
+          <button type="button" class="btn secondary mod-btn-small"
+                  aria-pressed={view === 'queue'} onClick={() => showView('queue')}>
+            Queue
           </button>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
-            {VERDICTS.filter((v) => v.secondary).map((v) => (
-              <button
-                key={v.key}
-                class="btn secondary"
-                style={{ color: 'var(--amber)', borderColor: 'var(--amber)', padding: '10px 4px', fontSize: '0.7rem' }}
-                disabled={busy}
-                onClick={() => sendVerdict(openItem, v.key)}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <button
-            class="btn secondary"
-            style={{ color: 'var(--alert)', borderColor: 'var(--alert)', marginBottom: 14 }}
-            disabled={busy}
-            onClick={() => sendVerdict(openItem, 'not_found')}
-          >
-            Subject Not Found
+          <button type="button" class="btn secondary mod-btn-small"
+                  aria-pressed={view === 'teams'} onClick={() => showView('teams')}>
+            Teams
           </button>
-
-          <div class="field">
-            <label for="flavor">
-              Flavor text <span class="dim">(optional — canned line or custom)</span>
-            </label>
-            <input
-              type="text"
-              id="flavor"
-              value={flavor}
-              onInput={(e) => setFlavor(e.target.value)}
-              maxLength={280}
-              placeholder={cannedLines[0] ?? ''}
-            />
+        </div>
+        {error && (
+          <div class="verdict-banner sev-red">
+            <div class="verdict-chip">!</div>
+            <div><p class="subtext">{error}</p></div>
           </div>
-          {cannedLines.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-              {cannedLines.map((line) => (
-                <button
-                  key={line}
-                  class="btn secondary"
-                  style={{ width: 'auto', padding: '6px 12px', fontSize: '0.7rem', textAlign: 'left', textTransform: 'none', letterSpacing: 0 }}
-                  onClick={() => setFlavor(line)}
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          )}
+        )}
+        <QueueList queue={queue} openId={openId} onOpen={open} />
+      </aside>
 
-          {/* Player history (mocks/moderator.html): consistency of
-              judgment — verdicts so far, and the derived strike state
-              (ADR 0001: there is no stored level to display, only the
-              non-reversed strike rows). */}
-          {history && (
-            <section style={{ borderTop: '1px dashed var(--border-dim)', marginTop: 14, paddingTop: 10 }}>
-              <h2 class="headline headline-rule" style={{ fontSize: '0.8rem', marginBottom: 6 }}>
-                {openItem.player.display_name} — History
-              </h2>
-              <div class="panel" style={{ padding: '4px 16px' }}>
-                {history.submissions.slice(0, 5).map((s) => (
-                  <div key={s.id} class="list-row" style={{ fontSize: '0.8rem' }}>
-                    <span style={{ color: s.status === 'verified' ? 'var(--green)' : 'var(--amber)' }}>
-                      {s.status === 'verified' ? '✓' : '!'}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      Riddle #{s.riddle.sort_order} — {s.status}{' '}
-                      <span class="dim">· {ago(s.created_at)}</span>
-                    </div>
-                  </div>
-                ))}
-                <div class="list-row" style={{ fontSize: '0.8rem' }}>
-                  <span class="icon-chip" style={{ width: 24, height: 24, fontSize: '0.7rem' }}>⛨</span>
-                  <div style={{ flex: 1 }}>
-                    {history.strikes.filter((s) => !s.reversed_at).length === 0 ? (
-                      <>Strikes: <b>none</b> <span class="dim">— clean record</span></>
-                    ) : (
-                      <>
-                        Strikes:{' '}
-                        <b style={{ color: 'var(--alert)' }}>
-                          {history.strikes.filter((s) => !s.reversed_at).length} active
-                        </b>
-                        {history.strikes.map((s) => (
-                          <div key={s.id} class="dim" style={{ fontSize: '0.72rem' }}>
-                            Level {s.level}
-                            {s.cooldown_until ? ` · cooldown to ${new Date(s.cooldown_until * 1000).toLocaleTimeString()}` : ''}
-                            {s.reversed_at ? ' · reversed' : ''}
-                            {s.note ? ` · “${s.note}”` : ''}
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Conduct: INAPPROPRIATE — visually separated, danger-styled
-              (mocks/moderator.html). Issues verdict + strike in one
-              action; copy stays plain by rule. */}
-          <section style={{ borderTop: '1px dashed var(--border-dim)', marginTop: 14, paddingTop: 14 }}>
-            <div class="field">
-              <label for="strike-note">
-                Note <span class="dim">(optional — recorded on the player's history)</span>
-              </label>
-              <input
-                type="text"
-                id="strike-note"
-                value={note}
-                onInput={(e) => setNote(e.target.value)}
-                maxLength={280}
-                placeholder="Why this photo was removed"
-              />
-            </div>
-            <div class="field">
-              <label for="strike-cooldown">
-                Cooldown minutes <span class="dim">(strike 2 only — default 15)</span>
-              </label>
-              <input
-                type="number"
-                id="strike-cooldown"
-                value={cooldown}
-                onInput={(e) => setCooldown(e.target.value)}
-                min={1}
-                max={1440}
-                inputMode="numeric"
-              />
-            </div>
-            {confirming ? (
-              <>
-                <button
-                  class="btn danger"
-                  disabled={busy}
-                  onClick={() => sendInappropriate(openItem)}
-                >
-                  Confirm: remove photo and issue strike
-                </button>
-                <button
-                  class="btn secondary"
-                  style={{ marginTop: 8 }}
-                  disabled={busy}
-                  onClick={() => setConfirming(false)}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button class="btn danger" onClick={() => setConfirming(true)}>
-                ⚠ Flag Inappropriate — issue strike
-              </button>
-            )}
-            <p class="dim" style={{ fontSize: '0.75rem', marginTop: 6, textAlign: 'center' }}>
-              Removes the photo, issues the next strike level. Plain notice to
-              the player — no game flavor.
-            </p>
+      {view === 'teams' ? (
+        <section class="mod-main" aria-label="Team rosters">
+          <TeamsPanel
+            teams={teams}
+            busy={busy}
+            confirmRemove={confirmRemove}
+            setConfirmRemove={setConfirmRemove}
+            onRemove={removeMember}
+          />
+        </section>
+      ) : openItem ? (
+        <div class="mod-detail">
+          <section class="mod-review" aria-label="Submission">
+            <ReviewPane item={openItem} onZoom={setZoom} />
           </section>
+          <section class="mod-decide" aria-label="Decision">
+            <DecisionPanel
+              item={openItem}
+              busy={busy}
+              flavor={flavor}
+              setFlavor={setFlavor}
+              cannedLines={cannedLines}
+              onVerdict={sendVerdict}
+              onResolveFlag={resolveFlag}
+            />
+            {history && <HistoryPanel player={openItem.player} history={history} />}
+            <ConductPanel
+              busy={busy}
+              note={note}
+              setNote={setNote}
+              cooldown={cooldown}
+              setCooldown={setCooldown}
+              confirming={confirming}
+              setConfirming={setConfirming}
+              onRemove={() => sendInappropriate(openItem)}
+            />
+          </section>
+        </div>
+      ) : (
+        <section class="mod-main mod-placeholder">
+          <p class="dim">
+            {queue?.length ? 'Pick a submission from the queue.' : 'Nothing to review right now.'}
+          </p>
         </section>
       )}
 
-      {/* Team management (stretch; design.md moderation additions):
-          the roster view with per-member removal. Collapsed by default
-          — the queue is the work; rosters are the exception. */}
-      <section style={{ borderTop: '1px dashed var(--border-dim)', paddingTop: 10 }}>
-        <button
-          class="btn secondary"
-          style={{ width: 'auto', padding: '6px 12px', fontSize: '0.7rem' }}
-          onClick={toggleTeams}
-        >
-          {showTeams ? 'Hide teams' : 'Teams'}
-        </button>
-        {showTeams && (
-          teams === null ? (
-            <p class="dim" style={{ marginTop: 8 }}>Loading rosters…</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-              {teams.map((team) => (
-                <div key={team.id} class="panel" style={{ padding: '8px 16px' }}>
-                  <div class="dim" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                    {team.name ?? team.members[0]?.display_name ?? '(empty)'}
-                    {' · '}{team.members.length} / {team.size_limit}
-                    {team.open_invites > 0 && ` · ${team.open_invites} invite${team.open_invites > 1 ? 's' : ''} open`}
-                  </div>
-                  {team.members.map((member) => (
-                    <div key={member.id} class="list-row" style={{ fontSize: '0.8rem' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        {member.display_name}
-                        <span class="dim" style={{ fontSize: '0.72rem' }}>
-                          {' '}{member.device_label ? `${member.device_label} · ` : ''}{ago(member.last_seen_at ?? 0)}
-                        </span>
-                      </div>
-                      {confirmRemove?.member.id === member.id ? (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            class="btn danger"
-                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem' }}
-                            disabled={busy}
-                            onClick={removeMember}
-                          >
-                            Confirm remove
-                          </button>
-                          <button
-                            class="btn secondary"
-                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem' }}
-                            disabled={busy}
-                            onClick={() => setConfirmRemove(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          class="btn secondary"
-                          style={{ width: 'auto', padding: '4px 10px', fontSize: '0.68rem', color: 'var(--alert)', borderColor: 'var(--alert)' }}
-                          onClick={() => setConfirmRemove({ team, member })}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
-              <p class="dim" style={{ fontSize: '0.72rem' }}>
-                Removing a member parks them on their own team and revokes
-                their sessions — their evidence stays with the old team.
-                They can rejoin with the join code or a team invite.
-              </p>
-            </div>
-          )
-        )}
-      </section>
+      {zoom && <Lightbox photo={zoom} onClose={closeZoom} />}
     </main>
   );
 }

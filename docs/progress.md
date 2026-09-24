@@ -46,6 +46,17 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The moderator console fits a laptop and a tablet.**
+  TKT-01M395WVC7B97J93YTHVAXWKM6. The layout changes with the screen width:
+  one column on a phone, a queue rail with a review column at 700px, and
+  queue | photo | decision at 1100px, each column scrolling on its own. After
+  a verdict the console opens the next unclaimed item. A flagged photo is
+  shown beside its match (the queue item's flag now carries
+  `other_photo_url`/`other_team_label`), and either photo enlarges on click
+  (ADR 0029). Found while verifying: concurrent requests race on the shared
+  reader connection. That bug predates this change and is filed as
+  TKT-01M396FF6CS39ZYQ9HFTRPCDW7.
+
 - **2026-09-24 — A mod link reaches the console in a browser that plays.**
   TKT-01M394KVSC6GCC1EDW4NSXZRW3. When a browser holds a player and a
   moderator session, the path decides: on `/m`/`/mod` the store probes the
