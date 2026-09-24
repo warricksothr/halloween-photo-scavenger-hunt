@@ -13,6 +13,8 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { Blurhash } from '../components/Blurhash';
+import { latestSubmissionByPhoto, photoState, riddleNumber } from '../evidenceState';
 import { refresh } from '../store';
 
 // submission.status → banner severity. pending gets the cyan scan
@@ -62,8 +64,8 @@ export function RiddleDetailScreen({
   // One riddle per photo (ADR 0035): a photo pending or solved on a
   // riddle is shown but cannot be picked, labelled with the riddle's
   // number on the board. The server refuses it anyway; this says why
-  // before the player tries.
-  const inUse = photosInUse(snapshot);
+  // before the player tries. What each photo may show is ADR 0040's.
+  const latestByPhoto = latestSubmissionByPhoto(snapshot);
 
   if (!riddle) {
     // Riddle vanished from the snapshot (moderator edit) — retreat
@@ -109,6 +111,11 @@ export function RiddleDetailScreen({
   // the player needs the "why" while they re-shoot.
   const bannerStatus = pending ? 'pending' : latest?.status;
   const banner = bannerStatus && copy.verdicts[bannerStatus];
+  // While it scans, the photo shows through the banner as its blurhash
+  // (ADR 0040), so the player sees what they sent without the photo.
+  const scanningHash = pending
+    ? drawer?.find((item) => item.id === latest?.evidence_item_id)?.blurhash ?? null
+    : null;
 
   return (
     <main style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -122,7 +129,8 @@ export function RiddleDetailScreen({
 
       {banner && (
         <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius)' }}>
-          <div class={`verdict-banner ${SEVERITY[bannerStatus] ?? 'sev-amber'}`}>
+          {scanningHash && <Blurhash hash={scanningHash} class="banner-blurhash" />}
+          <div class={`verdict-banner ${SEVERITY[bannerStatus] ?? 'sev-amber'}`} style={{ position: 'relative' }}>
             <div class="verdict-chip">{bannerStatus === 'verified' ? '✓' : bannerStatus === 'pending' ? '…' : '!'}</div>
             <div>
               <div class="verdict-headline">{banner.headline}</div>
@@ -186,19 +194,25 @@ export function RiddleDetailScreen({
           ) : (
             <>
               <div class="tile-grid" style={{ padding: 0, marginBottom: 12 }}>
-                {drawer.map((item, index) => {
-                  const use = inUse.get(item.id);
-                  const note = use && (use.status === 'pending'
-                    ? c.inUsePending(riddleNumber(snapshot, use.riddle_id))
-                    : c.inUseSolved(riddleNumber(snapshot, use.riddle_id)));
+                {/* A flagged photo cannot be submitted, so the picker
+                    leaves it out; the Drawer tab still shows its blurhash. */}
+                {drawer.filter((item) => !item.quarantined).map((item, index) => {
+                  const { state, riddleId } = photoState(item, latestByPhoto);
+                  const inUse = state === 'pending' || state === 'verified';
+                  const n = riddleNumber(snapshot, riddleId);
+                  const note =
+                    state === 'pending' ? c.inUsePending(n)
+                      : state === 'verified' ? c.inUseSolved(n)
+                        : state === 'rejected' ? c.rejectedOn(n)
+                          : null;
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      class={use ? `tile in-use ${use.status}` : 'tile'}
+                      class={inUse ? `tile in-use ${state}` : state === 'rejected' ? 'tile rejected' : 'tile'}
                       aria-label={note ? `${c.evidenceOption(index + 1)}, ${note}` : c.evidenceOption(index + 1)}
                       aria-pressed={selected === item.id}
-                      disabled={Boolean(use)}
+                      disabled={inUse}
                       style={{
                         aspectRatio: '1',
                         borderColor: selected === item.id ? 'var(--cyan-bright)' : undefined,
@@ -206,13 +220,17 @@ export function RiddleDetailScreen({
                       }}
                       onClick={() => setSelected(item.id)}
                     >
-                      <img
-                        src={item.photo_url}
-                        alt=""
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
-                        loading="lazy"
-                      />
-                      {note && <span class="in-use-label" aria-hidden="true">{note}</span>}
+                      {state === 'pending' && item.blurhash ? (
+                        <Blurhash hash={item.blurhash} class="tile-fill" />
+                      ) : (
+                        <img
+                          src={item.photo_url}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius)' }}
+                          loading="lazy"
+                        />
+                      )}
+                      {inUse && <span class="in-use-label" aria-hidden="true">{note}</span>}
                     </button>
                   );
                 })}
@@ -232,22 +250,4 @@ export function RiddleDetailScreen({
       )}
     </main>
   );
-}
-
-// Photo id → the submission holding it, for photos pending or solved on
-// some riddle. Snapshot submissions are the team's, newest first, and a
-// photo holds at most one such submission (ADR 0035).
-function photosInUse(snapshot) {
-  const held = new Map();
-  for (const s of snapshot.submissions) {
-    if ((s.status === 'pending' || s.status === 'verified') && s.evidence_item_id && !held.has(s.evidence_item_id)) {
-      held.set(s.evidence_item_id, s);
-    }
-  }
-  return held;
-}
-
-// A riddle's number as the board shows it: its position in the list.
-function riddleNumber(snapshot, riddleId) {
-  return snapshot.riddles.findIndex((r) => r.id === riddleId) + 1;
 }

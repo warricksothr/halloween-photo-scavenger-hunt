@@ -103,10 +103,12 @@ submission was removed for violating the event rules.
   automation here.
 - **Reversible**: the host/admin can reduce or clear strikes (mis-tap,
   disputed call). Reversals are recorded on the player's history.
-- **Content handling**: the flagged evidence item is quarantined —
-  removed from the team's drawer and the player-facing app immediately,
-  retained in a moderator-only view until the event ends (evidence if
-  there's a dispute), then purged with the event data.
+- **Content handling**: the flagged evidence item is quarantined — the
+  photo is withdrawn from the team's drawer and the player-facing app
+  immediately, and players see only its blurhash, marked as removed
+  (ADR 0040). The photo is retained in a moderator-only view until the
+  event ends (evidence if there's a dispute), then purged with the event
+  data.
 - **Notifications**: the affected player sees the strike state and its
   consequence; teammates see only that the photo is gone (the drawer
   doesn't announce *why* — conduct matters stay between player, mods,
@@ -451,9 +453,9 @@ additive (invites, roster UI, multi-member drawers) with no migration.
   photo_path, phash, quarantined, created_at) — MVP uploads go straight
   here; "submit" picks from the drawer even for a team of one. `phash`
   is the perceptual hash from the upload pipeline (trust & abuse
-  section); `quarantined` hides the item from the drawer and the app
-  (conduct section), and is a no-op flag until the conduct increment
-  lands.
+  section); `quarantined` withdraws the photo from players, who see only
+  its `blurhash` (conduct section, ADR 0040). `blurhash` (migration 0005)
+  is also what players see while a submission of the photo is pending.
 - `Submission` (id, riddle_id, team_id, submitted_by player_id,
   evidence_item_id, status, created_at)
 - `Verdict` (id, submission_id, moderator, verdict, flavor_text, created_at)

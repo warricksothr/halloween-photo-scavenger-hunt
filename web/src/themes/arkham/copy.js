@@ -107,6 +107,7 @@ export default {
       // Always offered under the picker; the drawer returns here with the
       // new photo selected.
       takeNew: 'Take a new photo',
+      rejectedOn: (n) => `rejected on Riddle ${n}`,
       photoTaken: (n) => `That photo is already on Riddle ${n}. Pick another or take a new one.`,
       // The hint ladder. Nothing shows until the player asks, and each
       // press costs them one more level of the reveal.
@@ -124,6 +125,14 @@ export default {
       // Opened from a riddle: a way back, and a promise of where the photo
       // goes.
       backToRiddle: (n) => `← Back to Riddle ${n}`,
+      // Each photo's state on its tile (ADR 0040). A scanning photo and a
+      // removed one show only as a blur.
+      scanning: (n) => `Scanning · Riddle ${n}`,
+      scanningAlt: 'Your photo, blurred while it is scanned',
+      solved: (n) => `Solved · Riddle ${n}`,
+      rejected: (n) => `Rejected · Riddle ${n}`,
+      removed: 'Removed by a moderator',
+      removedAlt: 'A photo a moderator removed, shown blurred',
       forRiddle: (n) => `Shooting for Riddle ${n}. The photo will be ready to submit there.`,
     },
     standings: {

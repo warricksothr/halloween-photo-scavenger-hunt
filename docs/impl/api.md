@@ -234,7 +234,13 @@ POST   /api/evidence                    multipart photo + optional riddle_id
                                         Logs evidence.uploaded; raises
                                         duplicate_flag.raised on cross-team
                                         phash collision.
-GET    /api/evidence                    → my team's drawer (thumbnails, tags)
+GET    /api/evidence                    → my team's drawer (thumbnails, tags):
+                                        [{ id, riddle_id, uploaded_by,
+                                        uploaded_by_name, created_at,
+                                        blurhash, quarantined, photo_url }].
+                                        A flagged photo stays listed with
+                                        photo_url null: players get only its
+                                        blurhash (ADR 0040)
 GET    /api/evidence/{id}/photo         derivative only; owner team or
                                         moderator, else 404 (not 403 — don't
                                         confirm existence)

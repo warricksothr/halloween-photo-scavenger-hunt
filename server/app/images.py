@@ -39,6 +39,7 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 
+import blurhash
 from PIL import Image, ImageOps
 
 # Caps. Phone photos today run 12+ MP; 1920px is plenty for a party
@@ -78,6 +79,7 @@ class ProcessedPhoto:
     phash: str  # 16 hex chars (64-bit aHash)
     width: int  # derivative dimensions (post-transpose, post-cap)
     height: int
+    blurhash: str  # ~28 chars; players' stand-in for the photo (ADR 0040)
 
 
 def sniff_format(data: bytes) -> str:
@@ -147,6 +149,7 @@ def process_upload(data: bytes) -> ProcessedPhoto:
     img = ImageOps.exif_transpose(img)
 
     phash = average_hash(img)
+    placeholder = blurhash_of(img)
 
     # Cap the long edge, preserving aspect ratio; no-op when smaller.
     if max(img.size) > MAX_DIMENSION:
@@ -164,4 +167,25 @@ def process_upload(data: bytes) -> ProcessedPhoto:
         phash=phash,
         width=img.width,
         height=img.height,
+        blurhash=placeholder,
     )
+
+
+# 4x3 components: enough for the photo's broad colour and layout, too
+# coarse to show what is in it, which is the point for a photo flagged
+# inappropriate (ADR 0040).
+BLURHASH_COMPONENTS = (4, 3)
+# The hash only keeps a few cosine components, so encoding a 32px
+# thumbnail gives the same string as the full image, in milliseconds.
+_BLURHASH_SAMPLE = 32
+
+
+def blurhash_of(img: Image.Image) -> str:
+    """The blurhash of an oriented image (ADR 0040)."""
+    sample = img.convert("RGB")
+    sample.thumbnail((_BLURHASH_SAMPLE, _BLURHASH_SAMPLE))
+    rows = [
+        [sample.getpixel((x, y)) for x in range(sample.width)]
+        for y in range(sample.height)
+    ]
+    return blurhash.encode(rows, *BLURHASH_COMPONENTS)

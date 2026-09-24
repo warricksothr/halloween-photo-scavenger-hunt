@@ -162,9 +162,13 @@ CREATE TABLE IF NOT EXISTS evidence_item (
     phash        TEXT NOT NULL,                -- hex string; compared by
                                                -- Hamming distance in code
     quarantined  INTEGER NOT NULL DEFAULT 0    -- boolean; conduct system
-                                               -- (hidden from drawer/app)
+                                               -- (players see only the
+                                               -- blurhash; ADR 0040)
                                                CHECK (quarantined IN (0, 1)),
-    created_at   INTEGER NOT NULL
+    created_at   INTEGER NOT NULL,
+    blurhash     TEXT                          -- migration 0005; players'
+                                               -- stand-in while pending or
+                                               -- flagged; NULL before 0005
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_team ON evidence_item(team_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_event_phash

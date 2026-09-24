@@ -171,6 +171,31 @@ class TestPipelineUnit:
         c = process_upload(split_image((30, 220, 30), (220, 220, 30)))
         assert c.phash != a.phash
 
+        # The blurhash (ADR 0040) is deterministic too, and tells the
+        # two layouts apart, which is all a stand-in needs to do.
+        assert a.blurhash == b.blurhash
+        assert c.blurhash != a.blurhash
+        # 4x3 components: 1 size + 1 max-AC + 4 DC + 2 per AC (11) = 28.
+        assert len(a.blurhash) == 28
+
+    def test_blurhash_follows_the_photo_orientation(self):
+        # A photo taken sideways is stored upright (exif_transpose), and
+        # its stand-in must match what players will see once it clears.
+        img = Image.new("RGB", (300, 100))
+        for x in range(300):
+            for y in range(100):
+                img.putpixel((x, y), (230, 20, 20) if x < 150 else (20, 20, 230))
+        exif = img.getexif()
+        exif[0x0112] = 6  # rotate 90° clockwise on display
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", exif=exif.tobytes())
+        rotated = process_upload(buf.getvalue())
+
+        upright = img.rotate(-90, expand=True)
+        buf = io.BytesIO()
+        upright.save(buf, format="JPEG")
+        assert rotated.blurhash == process_upload(buf.getvalue()).blurhash
+
 
 class TestUploadEndpoint:
     def test_upload_round_trip(self, admin, client):
@@ -179,6 +204,7 @@ class TestUploadEndpoint:
         assert resp.status_code == 201, resp.text
         item = resp.json()
         assert item["photo_url"].endswith("/photo")
+        assert item["blurhash"] and item["quarantined"] is False
 
         drawer = client.get("/api/evidence").json()
         assert len(drawer) == 1
@@ -195,6 +221,7 @@ class TestUploadEndpoint:
             "SELECT * FROM evidence_item WHERE id = ?", (item["id"],)
         ).fetchone()
         assert len(row["phash"]) == 16
+        assert row["blurhash"] == item["blurhash"]
         audit = conn.execute(
             "SELECT details FROM audit_event WHERE action = 'evidence.uploaded'"
         ).fetchone()
