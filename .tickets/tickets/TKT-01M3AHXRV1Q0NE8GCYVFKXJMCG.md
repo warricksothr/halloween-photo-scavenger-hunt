@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T20:32:46Z
-updated_at: 2026-09-24T20:59:22Z
+updated_at: 2026-09-24T21:07:47Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -53,10 +53,29 @@ A **Sign out of this phone** control, kept out of the way of the everyday Switch
 
 ## Acceptance criteria
 
-- [ ] A player can sign out of the game on this phone after a confirmation step, placed apart from Switch game.
-- [ ] Afterwards the landing page no longer lists that game on this device.
+- [x] A player can sign out of the game on this phone after a confirmation step, placed apart from Switch game.
+- [x] Afterwards the landing page no longer lists that game on this device.
 - [ ] Deployed to kobal, and Drew checks it on his phone.
 
 ## Implementation plan
 
 Wire the existing store.logout() (which already revokes the session and this device's resume token) to a 'Hand Off This Phone' section at the foot of the Team tab. It is two-step: 'Sign out of this phone' shows the consequence and then 'Sign out' / 'Keep playing'. The copy lives in the pack (screens.team.signOut*). logout() now also resets the URL to /, so a /j or /t path cannot reopen its link. Tests: the theme-copy test drives the confirm, cancel and confirm again, checking logout is called once; a store test for the URL reset; a server test that logout still empties Open Cases; and the tail of e2e/player-switch.spec.js, where signing out removes Gotham from Open Cases while Blackgate stays. Built with TKT-01M3AHXRSWN97AMT49NYYBB38W.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:07:47Z
+
+### PR #56 (built together with its sibling ticket, as Drew asked)
+https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/56. Base 14f838e.
+
+### Terva reviews
+- **r1** (`player-switch-r1`): head a6c0621, review 514.
+  - **high, accepted:** `logout()` went to the join screen whatever the server answered. A failed sign-out on a shared phone would look signed out while the session and rejoin cookie stayed live. Fixed in a9ef919: only a confirmed logout, or a 401 (the session was already gone), leaves the game. The Team tab shows the error beside the confirm buttons. Store and Team tests cover the failure path.
+  - **low, declined:** "no .tickets change in the PR". Ticket commits go straight to main, and the plan commit 14f838e is the PR base.
+- **r2** (`player-switch-r2`): head a9ef919, review 515, status success. It marks the high finding resolved and repeats only the declined one. CI success.
+
+### Verification on a9ef919
+- `bash scripts/check-quality.sh` passes: 563 server tests and 204 web tests.
+- The full Playwright suite passes: 6 specs, including e2e/player-switch.spec.js at 390px, which covers switch, join a second game, switch, rejoin the first, then sign out.
+
+Not merged: Drew asked to build these, not to deploy. Waiting for his go-ahead.

@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T20:32:46Z
-updated_at: 2026-09-24T20:59:22Z
+updated_at: 2026-09-24T21:07:47Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -63,11 +63,30 @@ A **Switch game** control in the game header, beside the codename, as the consol
 
 ## Acceptance criteria
 
-- [ ] The game header offers Switch game; it ends this session and lands on the landing page with this game still listed in Open Cases.
-- [ ] Rejoining that game from Open Cases returns the same player.
-- [ ] The server keeps the resume token on a switch and logs session.revoked with reason switch; api.md and an ADR amending 0031 record it.
+- [x] The game header offers Switch game; it ends this session and lands on the landing page with this game still listed in Open Cases.
+- [x] Rejoining that game from Open Cases returns the same player.
+- [x] The server keeps the resume token on a switch and logs session.revoked with reason switch; api.md and an ADR amending 0031 record it.
 - [ ] Deployed to kobal, and Drew switches between two games on his phone.
 
 ## Implementation plan
 
 Server: POST /api/leave (players.py), behind require_player. It revokes this session only, logs session.revoked with reason switch, deletes the player cookie and leaves the resume token and cookie alone. Client: api.leave and store.switchGame(), which goes straight to the join phase and resets the URL to /. It does not refresh: a refresh at / falls through to a moderator session if the browser holds one. A SwitchGame button (copy.screens.header.switchGame, 'Switch Case') is the Header action in both the lobby and the game shell. The header action styles move from mod-console.css into components/header.css (class header-action), shared with Leave console. Docs: ADR 0033 (amends 0031), api.md, audit-actions.md (reason switch), ui.md, progress.md. Tests: server (leave keeps the cookie and rejoins; 401 without a session), store (switch, offline failure), shell (the button in game and lobby), and e2e/player-switch.spec.js at 390px (switch, join a second game, switch, rejoin the first as the same codename). Built on one branch with TKT-01M3AHXRV1Q0NE8GCYVFKXJMCG, as Drew asked.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:07:47Z
+
+### PR #56 (built together with its sibling ticket, as Drew asked)
+https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/56. Base 14f838e.
+
+### Terva reviews
+- **r1** (`player-switch-r1`): head a6c0621, review 514.
+  - **high, accepted:** `logout()` went to the join screen whatever the server answered. A failed sign-out on a shared phone would look signed out while the session and rejoin cookie stayed live. Fixed in a9ef919: only a confirmed logout, or a 401 (the session was already gone), leaves the game. The Team tab shows the error beside the confirm buttons. Store and Team tests cover the failure path.
+  - **low, declined:** "no .tickets change in the PR". Ticket commits go straight to main, and the plan commit 14f838e is the PR base.
+- **r2** (`player-switch-r2`): head a9ef919, review 515, status success. It marks the high finding resolved and repeats only the declined one. CI success.
+
+### Verification on a9ef919
+- `bash scripts/check-quality.sh` passes: 563 server tests and 204 web tests.
+- The full Playwright suite passes: 6 specs, including e2e/player-switch.spec.js at 390px, which covers switch, join a second game, switch, rejoin the first, then sign out.
+
+Not merged: Drew asked to build these, not to deploy. Waiting for his go-ahead.
