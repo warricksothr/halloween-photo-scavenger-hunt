@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:20:55Z
-updated_at: 2026-09-24T18:39:56Z
+updated_at: 2026-09-24T18:46:22Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -127,3 +127,7 @@ Drew confirmed the likely cause: the moderator link was not clickable or right-c
 **agent:claude-code/t3code-bf267378** at 2026-09-24T18:39:56Z
 
 PR #52, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/52: head 34aa6487d4c3fa56f5ae17391cb1024038af0834, base 60a89f0f4b75769d8ec3e4a9b7560bc4a0213633. Terva r1 (mod-link-anchor-r1), run ad1b78e0, Actions #653, clean-status comment 12282: clean, no findings. Not merged yet: waiting for Drew's go-ahead. After the deploy, AC5 needs Drew to tap or long-press the mod link on the phone.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T18:46:22Z
+
+Drew authorized the merge. PR #52 merged at the reviewed head 34aa648 as 7062d34 (CI quality gate success, Terva r1 clean). Deployed to kobal: container healthy, schema 3. The live bundle renders the card URL as <a class=admin-code-url href target=_blank>. AC5 still needs Drew to tap or long-press the mod link on the phone.
