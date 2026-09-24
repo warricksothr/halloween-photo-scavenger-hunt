@@ -33,7 +33,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:02:45Z
-updated_at: 2026-09-24T07:02:46Z
+updated_at: 2026-09-24T07:17:15Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -57,10 +57,10 @@ Fix it on the host side: the host can join an event's moderator console through 
 
 ## Acceptance criteria
 
-- [ ] A host signed in through Authentik (admin group) who opens an event's mod link lands in that event's moderator console, joined under their own SSO subject and name.
-- [ ] A host signed in with the local break-glass password can do the same, under a fixed host identity.
-- [ ] A plain SSO moderator still joins as before; anyone else, and the admin API token, is still refused.
-- [ ] An ADR amends ADR 0020, and api.md and progress.md match.
+- [x] A host signed in through Authentik (admin group) who opens an event's mod link lands in that event's moderator console, joined under their own SSO subject and name.
+- [x] A host signed in with the local break-glass password can do the same, under a fixed host identity.
+- [x] A plain SSO moderator still joins as before; anyone else, and the admin API token, is still refused.
+- [x] An ADR amends ADR 0020, and api.md and progress.md match.
 - [ ] Verified on kobal: the host reaches the demo event's moderator console.
 
 ## Implementation plan
@@ -91,3 +91,32 @@ Fix it on the host side: the host can join an event's moderator console through 
 - An ADR amending 0020.
 - api.md markers.
 - progress.md.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:17:15Z
+
+PR #48, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/48. It was merged at the reviewed head c0e2eedd8af7b7c2ce60cd60fcb02e116023f158, as merge commit 7d94385f546ab68748090515ff145f00d60b7a94, onto base 35f006a608ead1d50ecd1d83cb2e70630773831a.
+
+### Terva reviews
+- **r1** (`host-moderates-r1`): head ad27291, run 88dd0134, Actions #611, review 369.
+  - **medium, accepted:** a provider subject starting with `local:` could share the password host's moderator row. The callback now refuses subjects in that reserved namespace, with a test that fails without the fix.
+  - **medium, accepted:** a failed theme-chunk load left the mod sign-in blank forever. The screen now shows unstyled on rejection, with a test that fails without the fix.
+  - **low, declined:** no .tickets/ change in the PR. In this repo ticket commits go straight to main, as on PR #47.
+- **r2** (`host-moderates-r2`): head c0e2eed, run b2dfc1b7, Actions #613, review 371, status success. Both mediums are resolved; only the declined low remains.
+- The CI quality gate passed on c0e2eed.
+
+### Deploy on kobal (2026-09-24)
+- The checkout and `ARKHAM_RELEASE` are at 7d94385, and I ran `docker compose build && up -d`. The container is healthy with schema 3.
+- In the running container, `app.oidc.require_moderator_identity` exists and `require_oidc_moderator` does not.
+- The live bundle contains "Open moderator console" and no longer contains the host refusal copy.
+
+### Local end-to-end check (headless Chromium, built app)
+- `/mod` signed out renders with the Arkham theme.
+- The password host logged in, opened Links & QR, revealed the mod link, followed "Open moderator console", and landed in the demo event's queue. The join returned 201.
+
+**AC5 is not ticked.** The host path on kobal goes through Drew's Authentik login, which I cannot perform. The restart also cleared every in-memory session, so Drew signs in again first.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:17:15Z
+
+AC1 (the SSO host joins as themselves) and AC2 (the password host joins under local:<username>) are ticked on the strength of server tests that go through the real routes, plus the local browser run for AC2. AC5, the live check on kobal, is still open for Drew.
