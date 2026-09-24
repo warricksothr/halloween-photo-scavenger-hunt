@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T18:35:13Z
-updated_at: 2026-09-24T18:48:13Z
+updated_at: 2026-09-24T19:06:29Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -55,11 +55,11 @@ Raised by Drew on 2026-09-24. On a return visit the site did not remember the ga
 
 ## Acceptance criteria
 
-- [ ] Joining, redeeming an invite, or rejoining leaves this browser a per-event resume credential that scripts on the page cannot read.
-- [ ] The landing and join screens list this browser's live games, with the codename used in each, and one tap rejoins as the same player with their drawer, solves and team.
-- [ ] Closed, purged and banned games are not listed and cannot be rejoined, and their credentials are cleared.
-- [ ] Logout on a device, moderator team removal and an invite switch revoke the credential as they revoke sessions; the session TTL itself is unchanged.
-- [ ] An ADR records the credential and its bounds and amends ADR 0021; api.md, schema.md and audit-actions.md describe the endpoints, table and action.
+- [x] Joining, redeeming an invite, or rejoining leaves this browser a per-event resume credential that scripts on the page cannot read.
+- [x] The landing and join screens list this browser's live games, with the codename used in each, and one tap rejoins as the same player with their drawer, solves and team.
+- [x] Closed, purged and banned games are not listed and cannot be rejoined, and their credentials are cleared.
+- [x] Logout on a device, moderator team removal and an invite switch revoke the credential as they revoke sessions; the session TTL itself is unchanged.
+- [x] An ADR records the credential and its bounds and amends ADR 0021; api.md, schema.md and audit-actions.md describe the endpoints, table and action.
 - [ ] Deployed to kobal, and Drew rejoins a live game from the landing page after his session has ended.
 
 ## Implementation plan
@@ -115,3 +115,26 @@ Drew, 2026-09-24: keep each game a person has joined in browser storage, and let
 **agent:claude-code/t3code-bf267378** at 2026-09-24T18:38:47Z
 
 Drew, 2026-09-24: no stopgap wanted. The party is about a month out, so leave ARKHAM_SESSION_TTL_SECONDS as it is on kobal and design the real rejoin instead.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T19:06:29Z
+
+### PR #53
+https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/53. Base 9277576e8788ed3c19c441c49d53ccf1cb27fe5c; heads 093ca9b (r1), then 992dbca2ecd9d7975aa0a83c0398b6325b028cdf (r2).
+
+### Terva reviews
+- **r1** (`rejoin-games-r1`): head 093ca9b, run 4f347167, Actions #661, review 484.
+  - **medium, accepted:** a rejoin did not re-set the resume cookie, so its 30 days still counted from the first join. Fixed in 992dbca: the rejoin re-sets the same token. A test pins the Max-Age, Path and HttpOnly on the rejoin response.
+  - **low, accepted:** the rejoined session took the device label of the player's newest session, which can be another device's. Fixed in 992dbca: `player_resume.device_label` is stored per token (added to migration 0004, which has not shipped). A test puts a newer session from another device beside it.
+  - **low, declined:** "no .tickets change in the PR". Ticket commits go straight to main, and this ticket's plan commit 9277576 is the PR base.
+- **r2** (`rejoin-games-r2`): head 992dbca, run 009d42ab, Actions #663, review 485, status success. It marks both accepted findings resolved and repeats only the declined ticket-store finding.
+
+### Verification
+- `bash scripts/check-quality.sh` passes on 992dbca: 554 server tests at 96% coverage (resume.py 98%) and 189 web tests.
+- A local headless Chromium run against the built app:
+  - One browser joined two games.
+  - Both resume cookies are HttpOnly with `path=/api`, and `document.cookie` does not show them.
+  - With the session cookie dropped, `/` listed both games with their codenames.
+  - Tapping Gotham landed in it as the same player.
+- Observed along the way, and not changed here: a browser with a live player session that opens another event's `/j/` link lands back in its current game. That is existing behaviour.
+
+AC6 (deploy and Drew's live rejoin) waits on the merge.
