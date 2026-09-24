@@ -18,14 +18,14 @@ origin: null
 dependencies: []
 blocks_on: none
 references:
-  - ref: ticket:TKT-01M33S9D3SV6RRDC7N5A6NWDK0
-    path: null
   - ref: adr:0020
     path: docs/adr/0020-moderator-link-selects-event-oidc-identity.md
+  - ref: ticket:TKT-01M33S9D3C15QT20SEBR3MDDQY
+    path: null
 claim: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T06:24:40Z
+updated_at: 2026-09-24T06:25:00Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
