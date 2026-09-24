@@ -36,7 +36,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-10T01:53:44Z
-updated_at: 2026-09-24T05:30:07Z
+updated_at: 2026-09-24T05:30:14Z
 created_by:
   id: agent:terva/mieli
   name: Mieli
@@ -153,3 +153,7 @@ Demo data loaded on kobal on 2026-09-24, at Drew's request. The host-side detail
 - **Checks:** with no token or a wrong bearer token, `/api/admin/events` answers 401 publicly.
 
 AC2 is still unticked. The database now holds real rows, but there are no photos or submissions until the AC3 smoke is run against this event. Rerun the backup and restore after that.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T05:30:14Z
+
+Correction to the previous note: the kobal ledger commit for the token and demo seed is f27b526.
