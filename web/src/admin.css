@@ -430,6 +430,20 @@ body:has(.admin-shell) {
   margin-top: 8px;
 }
 
+/* A code rotation's confirm step takes the full row, warning first. */
+.admin-rotate {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.admin-rotate .admin-note {
+  flex-basis: 100%;
+  color: var(--admin-danger);
+}
+
 /* Phone width (TKT-01M3AFZWB4RERA95SKVN0QVA6F). The console is laid out for
    a laptop; on a phone every row that put content and controls side by side
    squeezed the content, and the event picker's natural width pushed the

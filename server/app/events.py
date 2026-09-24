@@ -154,6 +154,55 @@ def event_codes(event_id: str, request: Request, _: str = Depends(auth.require_a
     return {"join_code": row["join_code"], "mod_code": row["mod_code"]}
 
 
+# Which code a rotation replaces, and its column. A fixed map, so the
+# column name in the UPDATE never comes from the request.
+_CODE_COLUMNS = {"join": "join_code", "mod": "mod_code"}
+
+
+@router.post("/events/{event_id}/codes/{kind}/rotate")
+def rotate_code(
+    event_id: str, kind: str, request: Request, _: str = Depends(auth.require_admin)
+):
+    """Replace the event's join or mod code (ADR 0039).
+
+    For a link that leaked: the old code stops working at once, because
+    joins look the event up by its current code. Who already joined keeps
+    playing, and moderators already in the console stay (Drew's decision,
+    2026-09-24); an intruder already in is removed with the moderator's
+    team removal. Audited with which code changed, never the codes."""
+    column = _CODE_COLUMNS.get(kind)
+    if column is None:
+        return _err(404, "not_found", "No such code; use join or mod.")
+    with locked_transaction(request) as writer:
+        if _get_event(writer, event_id) is None:
+            return _err(404, "event_not_found", "No such event.")
+        # Codes are UNIQUE across events; a collision in a 10-character
+        # code is vanishingly rare, but a retry costs nothing.
+        for _attempt in range(3):
+            try:
+                writer.execute(
+                    f"UPDATE event SET {column} = ? WHERE id = ?",
+                    (ids.new_code(), event_id),
+                )
+                break
+            except sqlite3.IntegrityError:
+                continue
+        else:
+            return _err(500, "code_collision", "Could not mint a new code; try again.")
+        log_action(
+            writer,
+            event_id=event_id,
+            actor_type=ActorType.ADMIN,
+            actor_id=None,
+            action=Action.EVENT_CODE_ROTATED,
+            entity_type="event",
+            entity_id=event_id,
+            details={"code": kind},
+        )
+        row = _get_event(writer, event_id)
+    return {"join_code": row["join_code"], "mod_code": row["mod_code"]}
+
+
 @router.post("/events", status_code=201)
 def create_event(
     body: EventCreate, request: Request, _: str = Depends(auth.require_admin)

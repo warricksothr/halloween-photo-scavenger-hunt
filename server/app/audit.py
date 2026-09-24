@@ -27,6 +27,7 @@ class Action(StrEnum):
     EVENT_CLOSED = "event.closed"
     EVENT_PURGED = "event.purged"
     EVENT_UPDATED = "event.updated"
+    EVENT_CODE_ROTATED = "event.code_rotated"
     # Riddles (increment 2)
     RIDDLE_CREATED = "riddle.created"
     RIDDLE_EDITED = "riddle.edited"

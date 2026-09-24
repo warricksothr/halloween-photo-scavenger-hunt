@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     adminCloseEvent: vi.fn(),
     adminPurgeEvent: vi.fn(),
     adminEventCodes: vi.fn(),
+    adminRotateCode: vi.fn(),
   },
 }));
 
@@ -186,6 +187,42 @@ describe('admin event management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide links' }));
     expect(screen.queryByText(`${origin}/j/JOIN123`)).toBeNull();
     expect(document.querySelector('.admin-print-sheet')).toBeNull();
+  });
+
+  it('replaces a leaked join code after a warning, and shows the new link (ADR 0039)', async () => {
+    mocks.api.adminRotateCode.mockResolvedValue({ join_code: 'JOIN999', mod_code: 'MOD456' });
+    render(<AdminEvents initialEvents={[lobby]} />);
+    const origin = window.location.origin;
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New join code' }));
+
+    // Nothing happens until the host confirms, and the warning says why.
+    expect(mocks.api.adminRotateCode).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('group', { name: 'New join code' });
+    expect(confirm.textContent).toContain('every printed QR stop working');
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the code' }));
+
+    expect(await screen.findByText(`${origin}/j/JOIN999`, { selector: 'code' })).toBeTruthy();
+    expect(mocks.api.adminRotateCode).toHaveBeenCalledWith('ev-1', 'join');
+    expect(screen.queryByText(`${origin}/j/JOIN123`, { selector: 'code' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'New join code' })).toBeTruthy();
+  });
+
+  it('rotates the moderator code from the revealed card, and Cancel changes nothing', async () => {
+    mocks.api.adminRotateCode.mockResolvedValue({ join_code: 'JOIN123', mod_code: 'MOD777' });
+    render(<AdminEvents initialEvents={[lobby]} />);
+    const origin = window.location.origin;
+    fireEvent.click(screen.getByRole('button', { name: 'Links & QR' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reveal moderator link' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New moderator code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mocks.api.adminRotateCode).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New moderator code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the code' }));
+    expect(await screen.findByText(`${origin}/m/MOD777`)).toBeTruthy();
+    expect(mocks.api.adminRotateCode).toHaveBeenCalledWith('ev-1', 'mod');
   });
 
   it('puts a large join QR print sheet on the body and prints it', async () => {
