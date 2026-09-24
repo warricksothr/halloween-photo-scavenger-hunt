@@ -26,7 +26,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T19:58:58Z
-updated_at: 2026-09-24T20:05:31Z
+updated_at: 2026-09-24T20:27:49Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -58,11 +58,34 @@ Keep the laptop layout as it is. Verify at 390px and 1280px in headless Chromium
 
 ## Acceptance criteria
 
-- [ ] At 390px no admin tab scrolls sideways, including with a long event name.
-- [ ] Event, riddle and strike rows show their content at full width with the controls below it, and the header and pickers fit the screen.
-- [ ] The laptop layout is unchanged.
+- [x] At 390px no admin tab scrolls sideways, including with a long event name.
+- [x] Event, riddle and strike rows show their content at full width with the controls below it, and the header and pickers fit the screen.
+- [x] The laptop layout is unchanged.
 - [ ] Deployed to kobal, and Drew checks the console on his phone.
 
 ## Implementation plan
 
 One @media (max-width: 600px) block in web/src/admin.css; the laptop rules above it are unchanged. It does the following: the header wraps; admin-main and panel padding shrink; panel heads wrap, and inline fields become a full-width column with min-width 0 (the event picker was what pushed the page sideways); rows wrap, with the event name on its own line and the actions on the next; riddle and strike rows keep the number and text on one line and put the actions under the text, indented past the number; the reversal reason and the Add to board row wrap. Verification: headless Chromium on the built app, with a long event name, 12 riddles and two Robins, at 390px and 1280px. Each tab (Events, Riddles, riddle edit, Host actions) is screenshotted, and document scrollWidth minus clientWidth is checked (0 everywhere).
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T20:27:49Z
+
+### PR #55 (built together with its sibling ticket, as Drew asked)
+https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/55. Base 78929c4.
+
+### Terva reviews
+- **r1** (`admin-mobile-r1`): head da5426c, review 502.
+  - **low, accepted:** "the phone-width CSS has no regression test". ed97ebc adds `web/e2e/admin-phone.spec.js` to the Playwright suite. At 390px it asserts no horizontal overflow and that controls sit under their content; at 1280px it asserts they stay beside it. Run against the old stylesheet, the phone test fails.
+  - **low, declined:** "no .tickets change in the PR". Ticket commits go straight to main, and the plan commit 78929c4 is the PR base.
+- **r2** (`admin-mobile-r2`): head ed97ebc, review 503.
+  - **low, accepted:** "the spec never renders a strike row". 8be9f58 seeds a flagged submission (the host moderates on the admin sign-in) and asserts the strike row's layout at both widths.
+- **r3** (`admin-mobile-r3`): head 8be9f58, review 504.
+  - **low, accepted:** "no proof the newest device wins". 8015a60 adds a test with a newer and an older session for one player.
+  - CI failed on 8be9f58. The new server test assumed join order, but two players who join within one second tie on created_at and are then ordered by random id. 8015a60 compares by id instead. The browser spec had the same assumption and was fixed in 8be9f58.
+- **r4** (`admin-mobile-r4`): head 8015a60, review 506. It marks the earlier findings resolved and repeats only the declined ticket-store finding. CI success.
+
+### Merge and deploy
+- Drew's "build and deploy together" was the go-ahead. Merged at 8015a60 as 12dd59e.
+- Deployed to kobal: the container is healthy at schema 4. The live CSS carries `@media (width<=600px){.admin-header`, and the live JS carries the "joined" label.
+- The local quality gate passes: 560 server tests and 197 web tests. The full Playwright suite passes: 5 specs, including admin-phone, which also passed three repeated runs.
