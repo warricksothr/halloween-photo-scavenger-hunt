@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T07:20:55Z
-updated_at: 2026-09-24T07:20:56Z
+updated_at: 2026-09-24T07:34:48Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -49,10 +49,10 @@ Raised by Drew on 2026-09-24. The host of the real event will also moderate, and
 
 ## Acceptance criteria
 
-- [ ] In a browser holding a player session, /m/<code> joins that event's moderator console, and /mod shows the moderator console or its sign-in, never the game.
-- [ ] In the same browser, the player paths still show the game, so the host can keep a game tab and a moderator tab side by side.
-- [ ] Each tab's live-update stream matches the role it shows, even when both cookies are present.
-- [ ] Reloading the console does not rejoin or write another moderator.joined row, and following a different event's mod link switches to that event.
+- [x] In a browser holding a player session, /m/<code> joins that event's moderator console, and /mod shows the moderator console or its sign-in, never the game.
+- [x] In the same browser, the player paths still show the game, so the host can keep a game tab and a moderator tab side by side.
+- [x] Each tab's live-update stream matches the role it shows, even when both cookies are present.
+- [x] Reloading the console does not rejoin or write another moderator.joined row, and following a different event's mod link switches to that event.
 - [ ] Verified on kobal.
 
 ## Implementation plan
@@ -71,3 +71,30 @@ Raised by Drew on 2026-09-24. The host of the real event will also moderate, and
 - **store:** refresh ordering on mod and player paths; modJoin replaces the URL; the stream URL carries the role.
 - **main shell:** `/m/<code>` with a ready player session renders ModJoin.
 - **server:** `as=` selection, a 401 for a missing role, and the default unchanged.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T07:34:48Z
+
+PR #49, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/49. It was merged at the reviewed head b7550d8682a5131f11076ebdc17dce01a0545557, as merge commit 675faec81149a5b638449123b511f076c54186c0, onto base e7002ec624d4c0641274cf0f5cb68b523069e5d4.
+
+### Terva reviews
+- **r1** (`mod-link-wins-r1`): head efb0265, run 16cf1deb, Actions #619, review 375.
+  - **high, disputed with evidence:** "a reconnect calls startStream() without a role, so the stream opens with ?as=undefined". The reconnect timer calls `refresh()`, which resolves the role and reopens the stream through the only two `startStream` calls, and both pass a role.
+  - The evidence was posted on the PR (issue comment 11502), and b7550d8 adds tests pinning `?as=player` and `?as=moderator` after a fatal `onerror`.
+- **r2** (`mod-link-wins-r2`): head b7550d8, run 27911e84, Actions #622, clean-status comment 11504, status success. It marks the finding resolved, and its text agrees the reconnect path goes through refresh().
+- The CI quality gate passed on b7550d8.
+
+### Local end-to-end check (headless Chromium, one browser context, built app)
+1. A player joined, and the tab showed the game.
+2. The password host signed in, and the mod link opened in a new tab moved to `/mod` with the console.
+3. A reload of the console stayed on the console, and the server logged one `mod/join` in total.
+4. A reload of the game tab stayed on the game.
+- The stream requests were `?as=player`, `?as=moderator`, `?as=moderator`, `?as=player`.
+
+### Deploy on kobal (2026-09-24)
+- The checkout and `ARKHAM_RELEASE` are at 675faec, and I ran `docker compose build && up -d`. The container is healthy with schema 3.
+- Publicly, the stream answers 401 with no session for no `as`, `?as=player` and `?as=moderator`, and 422 for `?as=admin`.
+- The live bundle requests `events/stream?as=`.
+
+**AC5 is not ticked.** The live check needs a real player session and Drew's host sign-in in one browser. I did not add a test player to the live demo event.
