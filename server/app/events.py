@@ -41,8 +41,8 @@ def _get_event(conn: sqlite3.Connection, event_id: str) -> sqlite3.Row | None:
 
 
 def _event_json(row: sqlite3.Row, *, with_codes: bool = False) -> dict:
-    """Codes leave the server exactly twice: in the create response and
-    in this serializer when explicitly requested. List/summary views
+    """Codes leave the server in the create response and in
+    ``GET /events/{id}/codes``, never here otherwise. List/summary views
     omit them — a leaked summary shouldn't leak credentials."""
     event = {
         "id": row["id"],
@@ -139,6 +139,19 @@ def list_events(request: Request, _: str = Depends(auth.require_admin)):
         .fetchall()
     )
     return [_event_json(r) for r in rows]
+
+
+@router.get("/events/{event_id}/codes")
+def event_codes(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
+    """The event's join and mod codes, on demand (ADR 0026).
+
+    Its own route so the list stays code-free: a summary that leaks (a
+    screenshot, a log) still leaks no codes, and reading them is always a
+    deliberate admin call. A read, so no audit row (ADR 0004)."""
+    row = _get_event(reader(request), event_id)
+    if row is None:
+        return _err(404, "event_not_found", "No such event.")
+    return {"join_code": row["join_code"], "mod_code": row["mod_code"]}
 
 
 @router.post("/events", status_code=201)

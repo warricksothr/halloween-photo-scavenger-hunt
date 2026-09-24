@@ -57,7 +57,8 @@ Alternatives considered:
 - A failure after the create (a riddle or the open) leaves a partial event
   that the API cannot remove: purge takes only a closed event, and close
   only an open one. Resuming it is no better, because the join and mod
-  codes leave the server only in the create response. The seeder names
+  codes leave the server only in the create response (since ADR 0026 an
+  admin can read them back, but a fresh event is still simpler). The seeder names
   the partial event in its error instead. Nobody saw its codes, so no
   player can join it, and a rerun with `--allow-duplicate` builds a fresh
   one. The error does not claim a status: a lost response to the open

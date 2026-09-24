@@ -46,6 +46,15 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — Each event card shows its join link and QR on demand.**
+  TKT-01M391CVFHW62D1KF3E5Y3KACC. "Links & QR" on an event row fetches
+  `GET /api/admin/events/{id}/codes` and shows the join link with a small
+  QR, Copy, Print (a one-page sheet with a 12 cm code) and SVG/PNG
+  downloads; the moderator link stays hidden until revealed. The QR is now
+  drawn as inline SVG and on a canvas, because the production CSP
+  (`img-src 'self'`) blocked the old data: URI image. Rotation is split out
+  as TKT-01M391W15BT0AJXSY4V33TNEZK (ADR 0026).
+
 - **2026-09-23 — A seeder builds the demo event.**
   TKT-01M384GE6JEAN6SN72N4FGCMNA. `python -m app.seed` creates the Riddler
   demo event from `server/app/fixtures/demo-event.json` (twelve riddles,

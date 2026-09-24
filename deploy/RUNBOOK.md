@@ -68,7 +68,9 @@ directory (an unmounted mount point).
 3. Add the 12–15 riddles in `sort_order` order.
 4. Print two QR codes — the **join link** (`https://<host>/j/<code>`)
    for players and the **mod link** (`https://<host>/m/<code>`) for
-   moderators. The codes appear only in the create response.
+   moderators. The event's **Links & QR** shows them at any time; its
+   **Print** button prints a one-page join sheet, and **SVG**/**PNG**
+   save the join QR. The mod link stays hidden until you reveal it.
 5. Check free disk before opening: `df -h ~/arkham/data /tmp` and
    `du -sh ~/arkham/data/photos/originals`. Uploads refuse below 256 MiB
    free on the data volume **and** on the multipart spool filesystem
