@@ -395,22 +395,48 @@ def current_oidc_identity(request: Request) -> OidcIdentity | None:
     return identity
 
 
-def require_oidc_moderator(request: Request) -> OidcIdentity:
-    """FastAPI dependency: 401 unless an SSO moderator is signed in.
+# The subject a host signed in with the local password joins under. The
+# password login names no person, so the admin username stands in; the
+# prefix keeps it from ever colliding with an identity provider's subject.
+LOCAL_HOST_SUBJECT_PREFIX = "local:"
+
+
+def require_moderator_identity(request: Request) -> OidcIdentity:
+    """FastAPI dependency: 401 unless someone who may moderate is signed in.
 
     S9CW puts this on ``POST /api/mod/join/{mod_code}`` so the mod link is
-    a selector, not a credential.
+    a selector, not a credential. Two kinds of person pass (ADR 0027):
+
+    - an SSO identity with the moderator role, or with the admin role — the
+      host acts as moderator (design.md), so an admin sign-in carries its
+      identity too;
+    - the host on the local break-glass password, whose admin cookie names
+      no person, under a fixed ``local:<username>`` identity.
+
+    The admin API token does not pass: it is a script credential, and a
+    moderator session is a browser cookie a script has no use for.
     """
     identity = current_oidc_identity(request)
-    if identity is None or identity.role != "moderator":
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "not_authenticated",
-                "message": "Moderator sign-in required.",
-            },
+    if identity is not None and identity.role in ("moderator", "admin"):
+        return identity
+    token = auth.current_admin(request)
+    if token is not None and token != auth.API_TOKEN_SENTINEL:
+        config = request.app.state.admin_config
+        username = config[0] if config else "host"
+        return OidcIdentity(
+            subject=f"{LOCAL_HOST_SUBJECT_PREFIX}{username}",
+            name=username,
+            email=None,
+            role="admin",
+            expires_at=int(time.time()) + request.app.state.session_ttl,
         )
-    return identity
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "error": "not_authenticated",
+            "message": "Moderator sign-in required.",
+        },
+    )
 
 
 def _err(status: int, code: str, message: str) -> JSONResponse:
@@ -692,18 +718,7 @@ async def callback(
     if not isinstance(subject, str) or not subject:
         return _failure(401, "oidc_bad_token", "The identity token had no subject.")
 
-    # The host who followed a moderator link is not a moderator. Mint the
-    # admin session — they really are the host — but return to the app with
-    # a marker so the mod screen can say so instead of looping back into a
-    # sign-in the person already completed.
-    marker = (
-        "not_moderator"
-        if role == "admin" and requested is not None and _is_mod_surface(requested)
-        else None
-    )
     target = requested or ("/admin" if role == "admin" else "/mod")
-    if marker is not None:
-        target = _with_marker(target, marker)
     response = RedirectResponse(target, status_code=303)
     if role == "admin":
         token_value = auth.issue_admin_session(request)
@@ -715,21 +730,24 @@ async def callback(
             samesite="strict",
             max_age=request.app.state.session_ttl,
         )
-    else:
-        identity_token = issue_identity(
-            request,
-            subject=subject,
-            name=display_name(claims),
-            email=claims.get("email") if isinstance(claims.get("email"), str) else None,
-            role=role,
-        )
-        response.set_cookie(
-            OIDC_COOKIE_NAME,
-            identity_token,
-            httponly=True,
-            secure=request.app.state.cookie_secure,
-            samesite="lax",
-            max_age=request.app.state.session_ttl,
-        )
+    # Everyone who signs in carries their identity, the host included: the
+    # host also moderates (design.md, ADR 0027), and a moderator row needs
+    # the person's subject and name. A host who followed a mod link is sent
+    # straight back to it, and the join goes through.
+    identity_token = issue_identity(
+        request,
+        subject=subject,
+        name=display_name(claims),
+        email=claims.get("email") if isinstance(claims.get("email"), str) else None,
+        role=role,
+    )
+    response.set_cookie(
+        OIDC_COOKIE_NAME,
+        identity_token,
+        httponly=True,
+        secure=request.app.state.cookie_secure,
+        samesite="lax",
+        max_age=request.app.state.session_ttl,
+    )
     response.delete_cookie(TXN_COOKIE_NAME, path="/")
     return response

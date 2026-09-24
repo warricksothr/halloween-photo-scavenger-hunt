@@ -378,6 +378,14 @@ function EventLinks({ event, codes }) {
             title="Moderator link"
             url={modUrl(codes.mod_code)}
             note="Send privately to whoever runs the review queue. Never project this one."
+            actions={
+              // The host moderates too (ADR 0027): one click from the card
+              // into this event's queue, in its own tab so the console stays.
+              <a class="admin-btn secondary" href={modUrl(codes.mod_code)}
+                 target="_blank" rel="noopener">
+                Open moderator console
+              </a>
+            }
           />
         ) : (
           <div class="admin-code">

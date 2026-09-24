@@ -13,6 +13,7 @@ import json
 import time
 import uuid
 
+from conftest import ADMIN_PASSWORD, ADMIN_USER
 from fastapi.testclient import TestClient
 from support import arm_csrf, sign_in_moderator
 from test_evidence import make_jpeg
@@ -150,13 +151,47 @@ class TestModJoin:
         assert conn.execute("SELECT COUNT(*) FROM moderator").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM moderator_session").fetchone()[0] == 0
 
-    def test_admin_identity_is_not_a_moderator(self, admin, client):
-        """The host may open a mod link; the mod surface still needs a
-        moderator, and the code must not be redeemed as one."""
+    def test_sso_host_joins_as_themselves(self, admin, client):
+        """ADR 0027: the host acts as moderator (design.md), under the
+        identity they signed in with."""
         p = _party(admin, client)
-        mod = arm_csrf(TestClient(client.app))
-        sign_in_moderator(mod, subject="host-1", name="Host", role="admin")
-        assert mod.post(f"/api/mod/join/{p['mod_code']}").status_code == 401
+        host = arm_csrf(TestClient(client.app))
+        sign_in_moderator(host, subject="host-1", name="Harleen", role="admin")
+        assert host.post(f"/api/mod/join/{p['mod_code']}").status_code == 201
+        assert host.get("/api/mod/state").json()["moderator"]["label"] == "Harleen"
+        row = client.app.state.db.execute("SELECT subject FROM moderator").fetchone()
+        assert row["subject"] == "host-1"
+
+    def test_password_host_joins_under_the_local_host_identity(self, admin, client):
+        """The break-glass login names no person, so the host joins as
+        ``local:<admin username>``, and a second visit reuses that row."""
+        p = _party(admin, client)
+        host = arm_csrf(TestClient(client.app))
+        login = host.post(
+            "/api/admin/login",
+            json={"username": ADMIN_USER, "password": ADMIN_PASSWORD},
+        )
+        assert login.status_code == 200
+        assert host.post(f"/api/mod/join/{p['mod_code']}").status_code == 201
+        assert host.post(f"/api/mod/join/{p['mod_code']}").status_code == 201
+        rows = client.app.state.db.execute(
+            "SELECT subject, label FROM moderator"
+        ).fetchall()
+        assert [(r["subject"], r["label"]) for r in rows] == [
+            (f"local:{ADMIN_USER}", ADMIN_USER)
+        ]
+        assert host.get("/api/mod/state").status_code == 200
+
+    def test_admin_api_token_cannot_join(self, admin, client):
+        """A script's bearer token is not a person at a keyboard."""
+        p = _party(admin, client)
+        client.app.state.admin_api_token = "script-token"
+        bot = arm_csrf(TestClient(client.app))
+        resp = bot.post(
+            f"/api/mod/join/{p['mod_code']}",
+            headers={"Authorization": "Bearer script-token"},
+        )
+        assert resp.status_code == 401
         assert (
             client.app.state.db.execute("SELECT COUNT(*) FROM moderator").fetchone()[0]
             == 0

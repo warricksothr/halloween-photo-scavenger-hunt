@@ -173,6 +173,10 @@ describe('admin event management', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reveal moderator link' }));
     expect(screen.getByText(`${origin}/m/MOD456`)).toBeTruthy();
+    // The host moderates too (ADR 0027): the card opens the queue directly.
+    const open = screen.getByRole('link', { name: 'Open moderator console' });
+    expect(open.getAttribute('href')).toBe(`${origin}/m/MOD456`);
+    expect(open.getAttribute('target')).toBe('_blank');
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide links' }));
     expect(screen.queryByText(`${origin}/j/JOIN123`)).toBeNull();

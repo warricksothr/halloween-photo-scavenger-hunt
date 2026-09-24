@@ -7,9 +7,10 @@ bearer-cookie story as players, with the label kept so the queue can
 say "ORACLE IS VIEWING".
 
 Since S9CW the mod link is a selector, not a credential: joining also
-requires a signed-in OIDC moderator (``oidc.require_oidc_moderator``),
-and the row records that identity's subject and name. The code picks the
-event; SSO picks the person.
+requires someone who may moderate (``oidc.require_moderator_identity``):
+an SSO moderator, or the host, who acts as moderator too (ADR 0027). The
+row records that person's subject and name. The code picks the event;
+the sign-in picks the person.
 
 The queue itself, verdicts, flags, and player history follow this
 module's conventions:
@@ -48,7 +49,7 @@ def _err(status: int, code: str, message: str) -> JSONResponse:
 def join(
     mod_code: str,
     request: Request,
-    identity: oidc.OidcIdentity = Depends(oidc.require_oidc_moderator),
+    identity: oidc.OidcIdentity = Depends(oidc.require_moderator_identity),
 ):
     # SSO first, brute-force gate second: an anonymous caller is sent to
     # sign in (401) rather than being counted, and a code-guesser without

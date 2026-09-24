@@ -164,7 +164,9 @@ Create these once in the Authentik admin UI:
 
 1. **Groups → Create.** Two groups whose names match the app's
    defaults: `arkham-admin` and `arkham-moderator`. Put your host account
-   in the first and any moderator accounts in the second.
+   in the first and any moderator accounts in the second. The host can
+   also moderate: opening an event's mod link while signed in as host
+   joins its queue under the host's own name (ADR 0027).
 2. **Property Mappings → Create → OAuth2 Provider scope mapping**
    (type: Scope mapping) that emits the caller's group names. Give it the
    scope name **`groups`** (the app reads the `groups` claim, so the
