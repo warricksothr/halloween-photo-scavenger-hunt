@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AHXRV1Q0NE8GCYVFKXJMCG
 title: Let a player sign out of a game on a shared phone
 type: task
-status: ready
+status: in-progress
 status_reason: null
 priority: low
 due_on: null
@@ -16,10 +16,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/player-leave
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: 9fb00e430ac077a9e9a9cc81ba6198568a64e9ec
+  session: null
+  claimed_at: 2026-09-24T20:56:07Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T20:32:46Z
-updated_at: 2026-09-24T20:32:46Z
+updated_at: 2026-09-24T20:59:22Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -49,3 +56,7 @@ A **Sign out of this phone** control, kept out of the way of the everyday Switch
 - [ ] A player can sign out of the game on this phone after a confirmation step, placed apart from Switch game.
 - [ ] Afterwards the landing page no longer lists that game on this device.
 - [ ] Deployed to kobal, and Drew checks it on his phone.
+
+## Implementation plan
+
+Wire the existing store.logout() (which already revokes the session and this device's resume token) to a 'Hand Off This Phone' section at the foot of the Team tab. It is two-step: 'Sign out of this phone' shows the consequence and then 'Sign out' / 'Keep playing'. The copy lives in the pack (screens.team.signOut*). logout() now also resets the URL to /, so a /j or /t path cannot reopen its link. Tests: the theme-copy test drives the confirm, cancel and confirm again, checking logout is called once; a store test for the URL reset; a server test that logout still empties Open Cases; and the tail of e2e/player-switch.spec.js, where signing out removes Gotham from Open Cases while Blackgate stays. Built with TKT-01M3AHXRSWN97AMT49NYYBB38W.
