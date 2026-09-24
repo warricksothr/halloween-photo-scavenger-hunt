@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T20:32:46Z
-updated_at: 2026-09-24T21:07:47Z
+updated_at: 2026-09-24T21:13:08Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -90,3 +90,7 @@ https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/p
 - The full Playwright suite passes: 6 specs, including e2e/player-switch.spec.js at 390px, which covers switch, join a second game, switch, rejoin the first, then sign out.
 
 Not merged: Drew asked to build these, not to deploy. Waiting for his go-ahead.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T21:13:08Z
+
+Drew authorized the merge. PR #56 was merged at the reviewed head a9ef919 as 32f2145. Deployed to kobal: the container is healthy at schema 4. POST /api/leave answers 401 without a session. The live bundle carries Switch Case, /api/leave and Sign out of this phone. The last criterion waits for Drew's check on his phone.
