@@ -1,0 +1,116 @@
+{
+  "name": "The Riddler's Halloween — Demo Event",
+  "theme": "arkham",
+  "leaderboard_visibility": "final-reveal",
+  "team_size_limit": 1,
+  "riddles": [
+    {
+      "sort_order": 1,
+      "text": "Every face in this city wears one, and nobody reads it aloud. Bring me one long enough to need four of your digits.",
+      "hints": [
+        "Letters need it to find their way home.",
+        "It hangs beside a door, on a gate, or over a shop.",
+        "A street number with four or more digits, photographed where it hangs."
+      ]
+    },
+    {
+      "sort_order": 2,
+      "text": "I speak three words and never finish a sentence. The drivers listen. The walkers wait for my smaller cousin.",
+      "hints": [
+        "I stand at the corner and I never sleep.",
+        "Red, amber, green.",
+        "A traffic light: the drivers' signal, not the walking figure."
+      ]
+    },
+    {
+      "sort_order": 3,
+      "text": "Tonight half the city is lying about who they are. Catch one of the liars in the act.",
+      "hints": [
+        "The lie is sewn, painted, or glued on.",
+        "Look for someone who came as something else.",
+        "A person in costume. Ask before you take the photo."
+      ]
+    },
+    {
+      "sort_order": 4,
+      "text": "A door no one knocks on, cut for a guest who never uses the handle. Prove your hand is bigger than its welcome.",
+      "hints": [
+        "The guest has four legs.",
+        "It swings both ways, set into a bigger door.",
+        "A pet flap, with your hand beside it for scale."
+      ]
+    },
+    {
+      "sort_order": 5,
+      "text": "Tomorrow I will be wrong, and someone will wipe me away. Find where tonight is written in something that does not last.",
+      "hints": [
+        "Look for a hand, not a printer.",
+        "Chalkboards, whiteboards, marker on card.",
+        "Today's date, handwritten somewhere temporary."
+      ]
+    },
+    {
+      "sort_order": 6,
+      "text": "Some of this city would fall if it were let go. Show me what is holding on.",
+      "hints": [
+        "Look up.",
+        "Wires, bolts, brackets, scaffolds.",
+        "Anything braced, cabled, or bolted to stop it falling."
+      ]
+    },
+    {
+      "sort_order": 7,
+      "text": "The planners drew a promise in straight lines. Find where they broke it.",
+      "hints": [
+        "The map says go on. The ground says no.",
+        "A dead end, a road that stops, a stair to nowhere.",
+        "A place where a street or path simply ends."
+      ]
+    },
+    {
+      "sort_order": 8,
+      "text": "An eye, open and awake, with no one behind it.",
+      "hints": [
+        "The city has thousands of these after dark.",
+        "Glass, lit from inside.",
+        "A lit window with nobody in view: an empty room, a closed shop."
+      ]
+    },
+    {
+      "sort_order": 9,
+      "text": "I was here before the road, and the road was laid around me.",
+      "hints": [
+        "Age shows in the edges.",
+        "Carved or cut, set into a wall or the ground.",
+        "Worked stone older than the pavement: a cornerstone, a lintel, a boundary marker."
+      ]
+    },
+    {
+      "sort_order": 10,
+      "text": "I still point the way to somewhere that is gone. Follow me no further than the photograph.",
+      "hints": [
+        "Read the old walls.",
+        "The paint faded. The name outlived the shop.",
+        "A sign for a business or place that no longer exists."
+      ]
+    },
+    {
+      "sort_order": 11,
+      "text": "Someone on this street cannot wait. Catch them celebrating the wrong season.",
+      "hints": [
+        "It is October, and they have skipped ahead.",
+        "Tinsel, snowflakes, a man in a red suit.",
+        "Winter holiday decorations or sales, up before Halloween is over."
+      ]
+    },
+    {
+      "sort_order": 12,
+      "text": "What have you walked past a hundred times? Tonight, bring it to me.",
+      "hints": [
+        "You have been looking harder all night.",
+        "Small is fine. Ordinary is better.",
+        "Anything you noticed only because the hunt made you look."
+      ]
+    }
+  ]
+}
