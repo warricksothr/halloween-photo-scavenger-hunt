@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-24T18:33:31Z
-updated_at: 2026-09-24T22:58:41Z
+updated_at: 2026-09-24T23:07:24Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -67,3 +67,16 @@ Checked kobal read-only first, as the ticket asked: the event has one moderator 
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
 
 Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:07:24Z
+
+PR #61 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/61), branch t3code/own-claims, stacked on #59 (base t3code/back-navigation).
+
+Terva reviews:
+- pr61-own-claims-1, run 724, head ff0c2ea. Three findings:
+  - medium: freshness compared the server's claimed_at with the browser's clock. Fixed in 66e378a: the queue sends claim_age, and api.modQueue converts it to claimed_at_local on receipt.
+  - low: an idle queue never aged a label from viewing to stale. Fixed: QueueList re-reads the time every 30 s, with a fake-timer test.
+  - low: no .tickets change in the PR. Declined, because ticket changes are committed to main.
+- pr61-own-claims-2, run 725 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/725), head 66e378a50c16636b3f0ed0d39300336210c76bae: clean apart from the declined .tickets low (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/61#issuecomment-12650).
+
+CI does not report on a stacked PR. The local gate passes, and npm run test:e2e passes 10/10. Awaiting Drew's merge authorization.

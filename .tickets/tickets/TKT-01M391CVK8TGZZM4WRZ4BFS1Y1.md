@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M391CVK8TGZZM4WRZ4BFS1Y1
 title: Link the admin, moderator and player views to each other
 type: task
-status: ready
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -17,10 +17,17 @@ dependencies:
   - TKT-01M391CVFHW62D1KF3E5Y3KACC
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/view-links
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: ff0c2eae001d2c192d874c6ec2667bc1738d0d1b
+  session: null
+  claimed_at: 2026-09-24T22:59:50Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T06:24:40Z
-updated_at: 2026-09-24T22:08:03Z
+updated_at: 2026-09-24T23:07:24Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -47,8 +54,12 @@ Reported by Drew on 2026-09-24: the admin console has no link to the moderator c
 
 ## Acceptance criteria
 
-- [ ] The admin console links to the moderator view and the player view, and the moderator console links back to the host console for an admin.
-- [ ] Links that need an event (a mod link) are available per event row.
+- [x] The admin console links to the moderator view and the player view, and the moderator console links back to the host console for an admin.
+- [x] Links that need an event (a mod link) are available per event row.
+
+## Implementation plan
+
+Admin → moderator: the event card's revealed mod card already has 'Open moderator console' (PR #48), which covers AC2. The admin header adds a 'Moderator console' link to /mod (the console this browser last joined) and a 'Player view' link to / (the landing page, whose Open Cases lists this browser's games). Moderator → host: /api/mod/state's moderator object gains host = auth.current_admin(request) is not None; the console header shows a 'Host console' link to /admin beside Leave console when it is true. It is a hint only; /api/admin checks every call. Tests: test_mod (host flag true for a password host, false for an SSO moderator, false after admin logout), Admin.test and main.test for the links, and an admin-phone e2e that follows the links at 390px with no overflow.
 
 ## Notes
 

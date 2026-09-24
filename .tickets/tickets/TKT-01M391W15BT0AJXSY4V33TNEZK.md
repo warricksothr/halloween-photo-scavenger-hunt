@@ -21,7 +21,7 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-24T06:32:57Z
-updated_at: 2026-09-24T22:08:03Z
+updated_at: 2026-09-24T23:07:24Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -57,3 +57,7 @@ There is no way to replace an event's join or mod code today (`server/app/events
 **agent:claude-code/t3code-bf267378** at 2026-09-24T22:08:03Z
 
 Promoted to ready 2026-09-24 at Drew's request as batch 2, to follow batch 1.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-24T23:07:24Z
+
+Drew decided 2026-09-24: rotate the join code and the mod code separately (two actions on the event card). Players who already joined keep their sessions and rejoin cookies, and an intruder already in is removed individually with moderator team removal. Moderators already in the console stay signed in; they got in with SSO identity plus the code.
