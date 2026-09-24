@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M384GE6JEAN6SN72N4FGCMNA
 title: Ship a demo event and riddles (seed script + content fixture)
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -25,17 +25,10 @@ references:
     path: docs/adr/0025-demo-seeder-in-the-app-package.md
   - ref: pr:46
     path: null
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/demo-seeder
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 7f5b8c54d45c3d08f0d02378b169956c367e68f2
-  session: null
-  claimed_at: 2026-09-24T00:27:08Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-23T21:59:49Z
-updated_at: 2026-09-24T00:48:03Z
+updated_at: 2026-09-24T01:00:14Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
@@ -142,3 +135,13 @@ Terva review r3 on PR #46: request `demo-seeder-r3`, run `363bb8b2-8fc0-4cc8-88e
 **agent:claude-code/t3code-bf267378** at 2026-09-24T00:48:03Z
 
 Terva review r4 on PR #46: request `demo-seeder-r4`, run `7889d59d-61ca-47a6-a752-55166638f7ae` (Actions run #584). It is clean: no findings at the failure threshold. Reviewed head fc02a084c50198225777f82e3076334e5538052c against base 7f5b8c54d45c3d08f0d02378b169956c367e68f2. The review marked r3 finding 1 resolved. CI Quality passed on the same head (run #585). The PR is mergeable. It has not been merged yet; merging waits on the user. This note is committed locally only, so the reviewed head stays the PR head.
+
+## Summary
+
+Merged in PR #46 as e67bceb5973100e89f830a9123d4511075ae4c96. The reviewed head was fc02a084c50198225777f82e3076334e5538052c; Terva round 4 was clean and CI Quality passed on it.
+
+`python -m app.seed` builds the Riddler demo event from `server/app/fixtures/demo-event.json` through the admin API, using `ARKHAM_ADMIN_API_TOKEN` as a bearer token. The fixture has twelve riddles with three-level hint ladders. The seeder opens the event and prints the join and mod codes. It validates the whole fixture before any write and rejects unknown keys. A rerun will not reuse an existing event name unless `--allow-duplicate` is passed, and `--no-open` leaves the event in the lobby. A failure after the create names the partial event and gives the recovery. ADR 0025 records where the seeder lives and why, and RUNBOOK §2 gives the verified `podman exec arkham-hunt python -m app.seed` command.
+
+Across four Terva rounds, three medium findings were fixed and one was declined: the race between two seeders started at the same instant, which only a server-side unique event name would close.
+
+The riddle content has had one review round. The user still has to review this copy (round 2); changes are edits to the fixture.
