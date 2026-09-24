@@ -76,6 +76,29 @@ directory (an unmounted mount point).
    disk breaks SQLite writes too — so clear space now, not mid-round.
 6. Press **open** only when players are physically present.
 
+### A demo event, from the bundled fixture
+
+For a demo or a rehearsal, the seeder creates the Riddler demo event
+(twelve riddles, three hint levels each) through the admin API, opens it,
+and prints the join and mod codes. It needs `ARKHAM_ADMIN_API_TOKEN` set on
+the running server (§6, "Scripted access"). `podman exec` inherits the
+container's environment, so nothing else is passed:
+
+```sh
+podman exec arkham-hunt python -m app.seed
+```
+
+- `--no-open` leaves the event in the lobby, so you can review the riddles
+  in the console first.
+- A second run refuses to create another event with the same name, and
+  names the one that exists. Pass `--allow-duplicate` to create it anyway.
+- From outside the container, use the server venv and point it at the
+  app: `server/.venv/bin/python -m app.seed --base-url http://127.0.0.1:8000`.
+- `answered 403 (csrf_failed ...)` or `401 not_authenticated` means the
+  token did not match the server's. Check both sides.
+
+The riddle text is in `server/app/fixtures/demo-event.json`. Edit it there.
+
 ## 3. Full smoke walkthrough (do this with a second phone)
 
 Two players, one moderator — the whole game loop against the real
