@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3AB6H937Y7ET5M0HDR23NM4
 title: Let a returning device rejoin a live game it already joined
 type: task
-status: draft
+status: in-progress
 status_reason: null
 priority: normal
 due_on: null
@@ -18,10 +18,17 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim: null
+claim:
+  actor: agent:claude-code/t3code-bf267378
+  branch: t3code/rejoin-games
+  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
+  commit: bb0bb2cf2f81e1939ad51a90256bfc5c4dfe8d1c
+  session: null
+  claimed_at: 2026-09-24T18:46:32Z
+  expires_at: null
 archive: null
 created_at: 2026-09-24T18:35:13Z
-updated_at: 2026-09-24T18:38:47Z
+updated_at: 2026-09-24T18:46:32Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
