@@ -290,6 +290,21 @@ def test_mod_link_refusal_returns_to_the_screen(oidc_client, stub):
     assert oidc_client.cookies.get(oidc.TXN_COOKIE_NAME) is None
 
 
+def test_a_provider_subject_in_the_local_namespace_is_refused(oidc_client, stub):
+    """``local:`` belongs to the password host (ADR 0027). A provider
+    subject there would share that host's moderator row, so the callback
+    refuses it before minting anything."""
+    _, query = start_login(oidc_client, next_path="/m/MODCODE1")
+    stub.nonce = query["nonce"][0]
+    stub.claims["groups"] = [MODERATOR_GROUP]
+    stub.claims["sub"] = "local:admin"
+    response = callback(oidc_client, query)
+    assert response.status_code == 401
+    assert response.json()["error"] == "oidc_bad_token"
+    assert oidc_client.cookies.get(auth.COOKIE_NAME) is None
+    assert oidc_client.cookies.get(oidc.OIDC_COOKIE_NAME) is None
+
+
 def test_host_following_a_mod_link_returns_to_it_signed_in(oidc_client, stub):
     """ADR 0027: the host moderates too, so a host who followed a mod link
     goes straight back to it, holding both the admin session and their

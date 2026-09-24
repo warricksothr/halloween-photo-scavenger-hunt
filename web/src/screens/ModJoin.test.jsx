@@ -110,4 +110,11 @@ describe('moderator join', () => {
     expect(await screen.findByText(/doesn.t match any event/)).toBeTruthy();
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
+
+  it('still shows the sign-in when the stylesheet fails to load', async () => {
+    visit('/mod');
+    mocks.loadTheme.mockRejectedValueOnce(new Error('chunk failed'));
+    render(<ModJoinScreen navigate={mocks.navigate} />);
+    expect(await screen.findByLabelText('Moderator code')).toBeTruthy();
+  });
 });

@@ -69,7 +69,11 @@ export function ModJoinScreen({ navigate = (url) => window.location.assign(url) 
   }
 
   useEffect(() => {
-    loadTheme(DEFAULT_THEME).then(() => setStyled(true));
+    // A failed stylesheet load (a stale chunk after a deploy) still shows
+    // the screen, unstyled: a moderator who cannot sign in is worse than
+    // one who sees plain markup.
+    const show = () => setStyled(true);
+    loadTheme(DEFAULT_THEME).then(show, show);
   }, []);
 
   useEffect(() => {

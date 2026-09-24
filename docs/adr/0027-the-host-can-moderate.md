@@ -29,8 +29,9 @@ could have run the review queue.
   - otherwise, a live admin **cookie** session, meaning the host on the
     local break-glass password. That login names no person, so the host
     joins under the fixed subject `local:<admin username>`, labelled with
-    the username. The prefix cannot collide with a provider's subject, and
-    a rejoin reuses the row.
+    the username, and a rejoin reuses the row. The `local:` prefix is
+    reserved: the callback refuses a provider subject inside it, so no SSO
+    identity can share the password host's row (Terva, PR #48).
 - **The admin API token cannot join.** It is a script credential, and a
   moderator cookie gives a script nothing.
 - **Nothing else changes.** Moderation still goes through the per-event

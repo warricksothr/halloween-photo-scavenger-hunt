@@ -396,8 +396,9 @@ def current_oidc_identity(request: Request) -> OidcIdentity | None:
 
 
 # The subject a host signed in with the local password joins under. The
-# password login names no person, so the admin username stands in; the
-# prefix keeps it from ever colliding with an identity provider's subject.
+# password login names no person, so the admin username stands in. The
+# prefix is reserved: the callback refuses a provider subject inside it,
+# so no SSO identity can land on the password host's moderator row.
 LOCAL_HOST_SUBJECT_PREFIX = "local:"
 
 
@@ -717,6 +718,17 @@ async def callback(
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
         return _failure(401, "oidc_bad_token", "The identity token had no subject.")
+    if subject.startswith(LOCAL_HOST_SUBJECT_PREFIX):
+        # The password host's namespace (require_moderator_identity). A
+        # provider subject in it would share that host's moderator row,
+        # and with it the queue label, the audit and the verdicts.
+        logger.warning(
+            "oidc subject in the reserved local namespace",
+            extra={"event": "oidc.callback_rejected", "reason": "reserved_subject"},
+        )
+        return _failure(
+            401, "oidc_bad_token", "The identity token's subject is reserved."
+        )
 
     target = requested or ("/admin" if role == "admin" else "/mod")
     response = RedirectResponse(target, status_code=303)
