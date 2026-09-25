@@ -10,6 +10,7 @@
 // new player with an empty drawer, so rejoining is one tap instead.
 import { useEffect, useState } from 'preact/hooks';
 
+import { BuildTag } from '../components/BuildTag';
 import { InstallHint } from '../components/InstallHint';
 import { ScanQr } from '../components/ScanQr';
 import { join, resumableGames, resume } from '../store';
@@ -161,6 +162,7 @@ export function JoinScreen() {
             {c.submit}
           </button>
         </form>
+        <BuildTag />
       </main>
     </div>
   );

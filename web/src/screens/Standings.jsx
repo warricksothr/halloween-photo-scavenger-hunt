@@ -25,6 +25,7 @@ function recapLine(entry, recapCopy) {
   switch (entry.kind) {
     case 'opened': return recapCopy.opened(entry.operatives);
     case 'closed': return recapCopy.closed(entry.expired_pending);
+    case 'reopened': return recapCopy.reopened();
     case 'first_solve': return recapCopy.firstSolve(entry);
     case 'lead_change': return recapCopy.leadChange(entry);
     case 'solve':

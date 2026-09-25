@@ -6,7 +6,8 @@ its writes + log_action call in one ``with conn:`` block; a failure
 anywhere in the block rolls back both.
 
 Lifecycle rules (design.md event state machine):
-- lobby → open only; open → closed only; wrong-source transitions 409.
+- lobby → open; open → closed; closed → open (a reopen, ADR 0042);
+  wrong-source transitions 409.
 - Open is gated on ≥1 riddle (decision surfaced by the mocks, ui.md).
 - Close is one transaction: flip status, expire all pending submissions,
   stamp closed_at, log event.closed with the expired count.
@@ -412,6 +413,62 @@ def close_event(event_id: str, request: Request, _: str = Depends(auth.require_a
     # moment the round closes, throttle or no throttle.
     publish_leaderboard(request, event_id, force=True)
     return _event_json(_get_event(conn, event_id))
+
+
+@router.post(
+    "/events/{event_id}/reopen",
+    dependencies=[Depends(hold_request_lock)],
+)
+def reopen_event(event_id: str, request: Request, _: str = Depends(auth.require_admin)):
+    """Undo a close (ADR 0042): closed → open, nothing else.
+
+    What the close did to submissions stands. Expired ones are terminal
+    (ADR 0002), so a player whose scan expired submits again, and the
+    photo is free for it because only pending and verified submissions
+    hold one (ADR 0035). closed_at is cleared, since the event is no
+    longer closed, and the audit trail keeps both moments."""
+    conn = reader(request)
+    row = _get_event(conn, event_id)
+    if row is None:
+        return _err(404, "event_not_found", "No such event.")
+    if row["status"] != "closed":
+        return _err(
+            409,
+            "bad_transition",
+            f"Event is {row['status']}; only a closed event can reopen.",
+        )
+    with locked_transaction(request) as writer:
+        # Re-check on the writer (ADR 0013): a purge can land between the
+        # read above and this transaction, and a purged event must stay
+        # gone rather than be half-revived.
+        row = _get_event(writer, event_id)
+        if row is None:
+            return _err(404, "event_not_found", "No such event.")
+        if row["status"] != "closed":
+            return _err(
+                409,
+                "bad_transition",
+                f"Event is {row['status']}; only a closed event can reopen.",
+            )
+        writer.execute(
+            "UPDATE event SET status = 'open', closed_at = NULL WHERE id = ?",
+            (event_id,),
+        )
+        log_action(
+            writer,
+            event_id=event_id,
+            actor_type=ActorType.ADMIN,
+            actor_id=None,
+            action=Action.EVENT_REOPENED,
+            entity_type="event",
+            entity_id=event_id,
+        )
+        reopened = _get_event(writer, event_id)
+    # The same deltas an open sends: every client refetches its snapshot,
+    # and standings go back to the event's visibility setting.
+    sse.publish(request, event_id, "event_status", {"status": "open"})
+    publish_leaderboard(request, event_id, force=True)
+    return _event_json(reopened)
 
 
 # ── Conduct: strike reversal ─────────────────────────────────────────

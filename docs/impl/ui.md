@@ -116,6 +116,11 @@ strike interstitial, and the drawer restricted variant.
   marked removed, and is left out of the picker; a rejected photo shows as
   itself in a dashed amber frame (ADR 0040; `web/src/evidenceState.js`,
   `web/src/components/Blurhash.jsx`).
+- **The build is named in small print** — the join screen, the Case
+  screen and the moderator console end with `Build <id>`, the web
+  bundle's own release. The host console's footer adds the server's
+  release and schema from `readyz`, and offers Reload when the page is
+  older than the server (ADR 0041; `web/src/version.js`).
 - **A photo serves one riddle** — the picker shows a photo pending or
   solved elsewhere greyed out and labelled with its riddle (ADR 0035).
 - **Verdict notifications are banners, not routes** — they appear on the

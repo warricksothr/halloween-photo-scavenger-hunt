@@ -159,6 +159,19 @@ body:has(.admin-shell) {
   margin: 0 0 10px;
 }
 
+/* Confirming a close or reopen (ADR 0042): a plain panel, not the purge's
+   danger red, since either can be undone by the other. */
+.admin-lifecycle {
+  border: 1px solid var(--admin-accent);
+  border-radius: var(--admin-radius);
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+}
+
+.admin-lifecycle p {
+  margin: 0 0 10px;
+}
+
 .admin-grid {
   display: grid;
   gap: 12px;
@@ -596,4 +609,22 @@ body:has(.admin-shell) {
     margin: 0;
     overflow-wrap: anywhere;
   }
+}
+
+/* Web build, server release and schema (ADR 0041). */
+.admin-version {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8px 24px 24px;
+  color: var(--admin-dim);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-version-stale {
+  color: var(--admin-danger);
 }

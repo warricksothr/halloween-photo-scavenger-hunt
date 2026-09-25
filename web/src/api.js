@@ -209,6 +209,9 @@ export const api = {
       reportUnauthorized: true,
     }),
   adminLogout: () => request('/api/admin/logout', { method: 'POST' }),
+  // The operator's readiness body; the host console reads its release and
+  // schema version to compare with the page's own build (ADR 0041).
+  adminReadyz: () => request('/api/admin/readyz'),
   // ── Admin event management (S9CY) ──
   // These keep the default 401 handling on purpose: they are only called
   // from behind the console, so a 401 means the admin session died and
@@ -225,6 +228,8 @@ export const api = {
     request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
   adminCloseEvent: (eventId) =>
     request(`/api/admin/events/${eventId}/close`, { method: 'POST' }),
+  adminReopenEvent: (eventId) =>
+    request(`/api/admin/events/${eventId}/reopen`, { method: 'POST' }),
   // The server wants the event NAME re-typed as the confirmation
   // (events.py), so the caller passes it through rather than an id.
   adminPurgeEvent: (eventId, confirm) =>
