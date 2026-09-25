@@ -11,9 +11,9 @@ describe('scanTarget (ADR 0043)', () => {
     expect(scanTarget(`  ${ORIGIN}/m/MODE234567\n`, ORIGIN)).toBe('/m/MODE234567');
   });
 
-  it('keeps only the path, never a query or fragment', () => {
-    expect(scanTarget(`${ORIGIN}/j/ABCD234567?next=https://evil.example#x`, ORIGIN))
-      .toBe('/j/ABCD234567');
+  it('refuses a hunt link carrying a query or fragment, rather than trimming it', () => {
+    expect(scanTarget(`${ORIGIN}/j/ABCD234567?next=https://evil.example`, ORIGIN)).toBeNull();
+    expect(scanTarget(`${ORIGIN}/j/ABCD234567#x`, ORIGIN)).toBeNull();
   });
 
   it('refuses another origin, even with a hunt-shaped path', () => {

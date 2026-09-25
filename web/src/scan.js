@@ -15,9 +15,10 @@
 const HUNT_PATH = /^\/([jtm])\/([A-Za-z0-9]{4,32})\/?$/;
 
 // The in-app path a decoded QR should open, or null when it is not one of
-// this site's hunt links. Only the path is kept, so a QR can never send the
-// app to another origin or smuggle in a query string: it opens exactly
-// what the printed link would.
+// this site's hunt links. The QRs the host prints are a bare origin and
+// path, so anything more (another origin, a query string, a fragment) is
+// not one of ours and is refused rather than trimmed: the app opens only
+// exactly what a printed link would.
 export function scanTarget(text, origin = window.location.origin) {
   let url;
   try {
@@ -25,7 +26,7 @@ export function scanTarget(text, origin = window.location.origin) {
   } catch {
     return null;
   }
-  if (url.origin !== origin) return null;
+  if (url.origin !== origin || url.search || url.hash) return null;
   const match = url.pathname.match(HUNT_PATH);
   return match ? `/${match[1]}/${match[2]}` : null;
 }
