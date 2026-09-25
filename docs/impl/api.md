@@ -125,7 +125,9 @@ falling behind and recovering via reconnect), `release` (`ARKHAM_RELEASE`,
 else `unknown`), `uptime_seconds`, and `metrics` (below). A read-only or
 full database reports `db_writable: false` rather than raising, so the
 endpoint answers precisely when things are wrong. `GET /api/health` stays
-the public liveness check and never reveals the build or counts.
+the public liveness check and never reveals the build or counts. The host
+console's footer reads `release` and `schema_version` from here to compare
+with the page's own build (ADR 0041).
 
 `metrics` is the process's in-memory counters (`app/metrics.py`): `uploads`
 keyed by outcome (`accepted` plus `upload_restricted`, `too_large_bytes`,

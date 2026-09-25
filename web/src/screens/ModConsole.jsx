@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 
 import '../mod-console.css';
 import { api } from '../api';
+import { BuildTag } from '../components/BuildTag';
 import { subscribeDeltas } from '../store';
 import { ConductPanel } from './mod/ConductPanel';
 import { DecisionPanel } from './mod/DecisionPanel';
@@ -232,6 +233,7 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
           </div>
         )}
         <QueueList queue={queue} openId={openId} onOpen={open} moderatorId={moderatorId} />
+        <BuildTag />
       </aside>
 
       {view === 'teams' ? (
