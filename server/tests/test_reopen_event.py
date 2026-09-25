@@ -107,3 +107,43 @@ def test_the_recap_shows_the_reopen(admin, client):
 
 def _mod_code(admin, event_id):
     return admin.get(f"/api/admin/events/{event_id}/codes").json()["mod_code"]
+
+
+def _stale_first_read(monkeypatch, status="closed"):
+    """Make the handler's first lookup (on the reader) see a closed event,
+    whatever the database says, as if a purge or a reopen had committed
+    after that read. The writer's own lookup then decides (ADR 0013)."""
+    from app import events
+
+    real = events._get_event
+    calls = {"n": 0}
+
+    def first_read_is_stale(conn, event_id):
+        calls["n"] += 1
+        row = real(conn, event_id)
+        if calls["n"] == 1:
+            return {**(dict(row) if row else {"id": event_id}), "status": status}
+        return row
+
+    monkeypatch.setattr(events, "_get_event", first_read_is_stale)
+
+
+def test_the_writer_recheck_refuses_an_event_already_reopened(
+    admin, client, monkeypatch
+):
+    p = _party(admin, client)  # open, so the writer sees "open"
+    _stale_first_read(monkeypatch)
+    resp = admin.post(f"/api/admin/events/{p['event_id']}/reopen")
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "bad_transition"
+    assert _audit(admin, "event.reopened") == []
+
+
+def test_the_writer_recheck_refuses_an_event_purged_meanwhile(
+    admin, client, monkeypatch
+):
+    _stale_first_read(monkeypatch)
+    resp = admin.post("/api/admin/events/purged-meanwhile/reopen")
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "event_not_found"
+    assert _audit(admin, "event.reopened") == []
