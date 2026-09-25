@@ -27,7 +27,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T16:07:31Z
-updated_at: 2026-09-25T16:07:32Z
+updated_at: 2026-09-25T16:16:34Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -50,11 +50,32 @@ Of the three options offered, Drew chose "Project page + mocks": a project page 
 
 ## Acceptance criteria
 
-- [ ] The Pages root is a project page with current screenshots and links to the repo and deploy/README.md
-- [ ] The mocks are published under /mocks/ and labelled as a design-phase archive
-- [ ] The site's source and a build script live on main, with a written publish procedure
+- [x] The Pages root is a project page with current screenshots and links to the repo and deploy/README.md
+- [x] The mocks are published under /mocks/ and labelled as a design-phase archive
+- [x] The site's source and a build script live on main, with a written publish procedure
 - [ ] gh-pages is updated as a fast-forward commit, with no force-push
 
 ## Implementation plan
 
 Source on main: docs/site/index.html (the project page, which reuses the mocks' stylesheet), scripts/build-pages.sh (copies the page, docs/screenshots and docs/impl/mocks into OUT_DIR and writes .nojekyll; refuses a non-empty OUT_DIR), docs/site/README.md (what is published from where, and the publish procedure), a banner on the mocks index, and a README link. After merge, publish by replacing gh-pages' tree with the build as one new commit on top of b93c62c, then push as a fast-forward. Rejected: a Pages workflow on GitHub Actions. The mirror runs no workflows by design, and a workflow would need a settings change to the Pages source.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T16:16:34Z
+
+PR #70: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/70 (branch t3code/pages-site).
+
+- pages-site-70-r1, run 802, head c19fa6c: failure.
+- pages-site-70-r2, run 803, head 60b3b51, base e295ae2: failure on the declined medium only. Quality gate green on 60b3b51.
+
+Disposition of `pages-site-70-r1` / `-r2`:
+
+- **medium "advertises unsupported team invitations": declined.** "The MVP is a team of one" in AGENTS.md describes the MVP's schema. The project state at the top of the same file, and `docs/progress.md` "Phase 3 — Stretch", record team invites, rosters and multi-member drawers as shipped:
+  - `server/app/teams.py` issues `/t/<token>` invite URLs, and `web/src/screens/TeamJoin.jsx` redeems them.
+  - ADR 0006 covers moderator team removal.
+  - `team_invite.*` rows are in `docs/impl/audit-actions.md`.
+  The bullet describes the shipped game.
+- **low "builder only syntax-checked": accepted**, fixed in 60b3b51. r2 marks it resolved.
+- **low ".tickets not in the PR": declined.** By project practice the ticket store is committed straight to main. TKT-01M3CN4T3VNNQ05ZCKPCZNDWPM is there.
+
+The publish procedure was dry-run against the real gh-pages branch (tip b93c62c) with the push left out. It produced one commit on top of b93c62c, a fast-forward. Not merged and not published: waiting for Drew.
