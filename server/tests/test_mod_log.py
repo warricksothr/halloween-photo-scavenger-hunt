@@ -88,3 +88,36 @@ def test_the_log_stays_moderator_only(admin, client):
     p = _multi_party(admin, client, ("Batman",))
     assert p["players"]["Batman"]["client"].get("/api/mod/audit").status_code == 401
     assert arm_csrf(TestClient(client.app)).get("/api/mod/audit").status_code == 401
+
+
+def test_duplicate_flags_name_the_flagged_photo_and_its_team(admin, client):
+    """Both duplicate-flag actions are logged against the flagged
+    evidence item (audit-actions.md), so they resolve like any photo."""
+    from test_submissions import _party
+
+    p = _party(admin, client)  # Batman uploads first
+    robin = arm_csrf(TestClient(client.app))
+    robin.post(f"/api/join/{p['join_code']}", json={"display_name": "Robin"})
+    dup = robin.post(
+        "/api/evidence", files={"photo": ("b.jpg", make_jpeg(), "image/jpeg")}
+    ).json()
+    mod = _mod(client, _mod_code(admin, p["event_id"]), name="Oracle")
+    resolved = mod.post(
+        f"/api/mod/flags/{dup['id']}/resolve", json={"resolution": "cleared"}
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    [raised] = _rows(mod, "duplicate_flag.raised")
+    assert raised["actor_name"] == "System"
+    assert raised["about"] == {
+        "evidence_id": dup["id"],
+        "team": "Robin",
+        "player": "Robin",
+    }
+    [cleared] = _rows(mod, "duplicate_flag.resolved")
+    assert cleared["actor_name"] == "Oracle"
+    assert cleared["about"] == raised["about"]
+
+
+def _mod_code(admin, event_id):
+    return admin.get(f"/api/admin/events/{event_id}/codes").json()["mod_code"]
