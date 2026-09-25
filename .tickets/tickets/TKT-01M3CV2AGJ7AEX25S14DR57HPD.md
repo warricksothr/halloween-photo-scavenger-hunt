@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T17:51:01Z
-updated_at: 2026-09-25T18:09:30Z
+updated_at: 2026-09-25T18:13:23Z
 created_by:
   id: agent:claude-code/t3code-55409a8b
   name: ""
@@ -90,3 +90,7 @@ Review pr71-mod-nickname-1. The first attempt (run 810, head eb03699) did not re
 - finding-1 (medium): max_length=40 was checked on the raw value before the trim, so 40 characters plus padding got a 422. Accepted. NicknameBody now uses StringConstraints(strip_whitespace=True, max_length=40). A boundary test sends two spaces, 40 characters and a space; it was confirmed to fail without the fix.
 - finding-2 (low): my scripted insert split `.sev-green .verdict-headline` into `.sev-green .verdict-by`, leaving an unqualified green headline rule. Accepted. The selector is restored from main, and `.verdict-by` is its own rule.
 Gate passes (600 server, 272 web); game-loop e2e passes.
+
+**agent:claude-code/t3code-55409a8b** at 2026-09-25T18:13:23Z
+
+Review pr71-mod-nickname-2 (run 814, id 11471, head 3d21804, base 457f0cb, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/71#issuecomment-13584): passed, no findings; it marks finding-1 and finding-2 from review 737 resolved. Quality CI run 813 passed on 3d21804. Waiting for the user to decide on merging. Commits after 3d21804 are ticket bookkeeping only.
