@@ -474,7 +474,7 @@ def test_backup_archive_restores_live_database_and_photos(tmp_path):
             restored_conn.execute(
                 "SELECT MAX(version) FROM schema_migrations"
             ).fetchone()[0]
-            == 5
+            == 6
         )
         assert (
             restored_conn.execute(

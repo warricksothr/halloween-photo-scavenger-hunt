@@ -53,9 +53,23 @@ describe('log lines (ADR 0044)', () => {
       .toBe('Host: future.thing');
   });
 
+  it('says how a nickname changed (ADR 0045)', () => {
+    const row = (old_nickname, new_nickname) => ({
+      action: 'moderator.nickname_set', actor_name: 'Drew Short (Batgirl)',
+      details: { old_nickname, new_nickname },
+    });
+    expect(logLine(row(null, 'Oracle')).text).toBe('Drew Short (Batgirl) set their nickname to Oracle');
+    expect(logLine(row('Oracle', 'Batgirl')).text)
+      .toBe('Drew Short (Batgirl) changed their nickname from Oracle to Batgirl');
+    expect(logLine(row('Batgirl', null))).toEqual({
+      text: 'Drew Short (Batgirl) cleared their nickname', detail: 'was Batgirl',
+    });
+  });
+
   it('keeps moderator decisions in the Moderation filter, not player traffic', () => {
     expect(MODERATION_ACTIONS.has('verdict.issued')).toBe(true);
     expect(MODERATION_ACTIONS.has('strike.issued')).toBe(true);
+    expect(MODERATION_ACTIONS.has('moderator.nickname_set')).toBe(true);
     expect(MODERATION_ACTIONS.has('player.joined')).toBe(false);
     expect(MODERATION_ACTIONS.has('evidence.uploaded')).toBe(false);
   });

@@ -136,6 +136,9 @@ export default {
       // press costs them one more level of the reveal.
       needNudge: 'Need a nudge?',
       noMoreHints: 'That is every hint for this one.',
+      // Under a verdict, when the moderator who gave it chose a nickname
+      // for players (ADR 0045). No nickname, no line.
+      verdictBy: (name) => `Analysis by ${name}`,
     },
     drawer: {
       headline: 'Evidence Drawer',

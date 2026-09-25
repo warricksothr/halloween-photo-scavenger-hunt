@@ -53,6 +53,11 @@ and the player photographed the right area from the wrong position.
   Photo, player name, and riddle text side by side.
 - **One-tap verdicts** with optional flavor-text picker/override.
 - **Per-player history** so moderators stay consistent.
+- **Nickname**: a moderator may choose a name players see on the game
+  verdicts they give. Their sign-in name stays between moderators and the
+  host; with no nickname, players see no name. The moderation log shows
+  both, as "name (nickname)". A conduct call is never attributed to a
+  moderator for players (ADR 0045).
 - Moderator role assigned at event setup (host creates event, gets a mod link/code).
 - Multiple moderators can work the queue simultaneously. Opening a
   submission **soft-claims** it: the server records `claimed_by` +

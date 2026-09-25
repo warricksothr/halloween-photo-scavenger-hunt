@@ -346,7 +346,17 @@ class _Names:
             )
         }
         self.riddles = by_id("SELECT id, sort_order FROM riddle WHERE event_id = ?")
-        self.moderators = by_id("SELECT id, label FROM moderator WHERE event_id = ?")
+        # A moderator reads as their name with the nickname players see
+        # beside it, "Drew Short (Oracle)" (ADR 0045): the log is for
+        # moderators, who need to know the person, and the nickname is how
+        # a player will describe them.
+        self.moderators = {
+            r["id"]: f"{r['label']} ({r['nickname']})" if r["nickname"] else r["label"]
+            for r in conn.execute(
+                "SELECT id, label, nickname FROM moderator WHERE event_id = ?",
+                (event_id,),
+            )
+        }
         self.submissions = by_id(
             "SELECT s.id, s.riddle_id, s.team_id, s.submitted_by, s.evidence_item_id"
             " FROM submission s JOIN riddle r ON r.id = s.riddle_id"
@@ -370,8 +380,7 @@ class _Names:
 
     def actor(self, actor_type: str, actor_id: str | None) -> str:
         if actor_type == "moderator":
-            row = self.moderators.get(actor_id)
-            return row["label"] if row else "A moderator"
+            return self.moderators.get(actor_id, "A moderator")
         if actor_type == "player":
             row = self.players.get(actor_id)
             return row["display_name"] if row else "A player"
@@ -431,9 +440,7 @@ class _Names:
             if row is not None:
                 about["riddle"] = row["sort_order"]
         elif entity_type == "moderator":
-            row = self.moderators.get(entity_id)
-            if row is not None:
-                about["moderator"] = row["label"]
+            about["moderator"] = self.moderators.get(entity_id)
         return {k: v for k, v in about.items() if v is not None}
 
 

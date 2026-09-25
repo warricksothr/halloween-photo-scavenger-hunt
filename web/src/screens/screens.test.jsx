@@ -25,6 +25,7 @@ const copy = {
   tiles: { unsolvedGlyph: '?' },
   verdicts: {
     pending: { headline: 'SCANNING', subtext: 'Checking the evidence.' },
+    too_small: { headline: 'ENHANCE FAILED', subtext: 'Get closer.' },
   },
   screens: {
     drawer: {
@@ -60,6 +61,7 @@ const copy = {
       submitting: 'Submitting',
       takeNew: 'Take a new photo',
       rejectedOn: (n) => `rejected on riddle ${n}`,
+      verdictBy: (name) => `Analysis by ${name}`,
     },
     riddles: {
       headline: 'Riddle Board',
@@ -160,6 +162,34 @@ describe('player screens', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Need a nudge?' })).toBeNull();
+  });
+
+  it('names the moderator behind a verdict by their nickname (ADR 0045)', async () => {
+    const snap = snapshot();
+    snap.submissions = [
+      { id: 'sub-1', riddle_id: 'riddle-1', status: 'too_small', verdict_flavor: null, verdict_by: 'Oracle' },
+    ];
+    render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+
+    expect(screen.getByText('ENHANCE FAILED')).toBeTruthy();
+    expect(screen.getByText('Analysis by Oracle')).toBeTruthy();
+    await waitFor(() => expect(mocks.api.drawer).toHaveBeenCalled());
+  });
+
+  it('names nobody when the moderator chose no nickname', async () => {
+    const snap = snapshot();
+    snap.submissions = [
+      { id: 'sub-1', riddle_id: 'riddle-1', status: 'too_small', verdict_flavor: null, verdict_by: null },
+    ];
+    render(
+      <RiddleDetailScreen snapshot={snap} copy={copy} riddleId="riddle-1" onBack={vi.fn()} onOpenDrawer={vi.fn()} />,
+    );
+
+    expect(screen.getByText('ENHANCE FAILED')).toBeTruthy();
+    expect(screen.queryByText(/Analysis by/)).toBeNull();
+    await waitFor(() => expect(mocks.api.drawer).toHaveBeenCalled());
   });
 
   it('starts a different riddle with its hints hidden again', async () => {

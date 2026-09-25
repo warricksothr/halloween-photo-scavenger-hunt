@@ -32,6 +32,13 @@ import { StrikeNoticeScreen } from './screens/StrikeNotice';
 // theme pack. App stays hook-free — the hooks live in the two branches —
 // so the switch cannot break the rules of hooks. The match is by path
 // segment: `/administrator` is a player path, not the console.
+// The console header names the moderator as the moderation log does: the
+// sign-in name, then the nickname players see in parentheses (ADR 0045).
+function moderatorName(moderator) {
+  if (!moderator) return 'console';
+  return moderator.nickname ? `${moderator.label} (${moderator.nickname})` : moderator.label;
+}
+
 function isAdminPath(pathname) {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
@@ -121,7 +128,7 @@ function PlayerApp() {
       <div class="frame mod-frame" data-testid="app-frame">
         <Header
           eventName={`${modEvent.name} — Moderator`}
-          playerName={state.moderator?.label ?? 'console'}
+          playerName={moderatorName(state.moderator)}
           action={
             <span class="header-actions">
               {/* The host moderating from the same browser can get back
@@ -137,7 +144,12 @@ function PlayerApp() {
             </span>
           }
         />
-        <ModConsoleScreen copy={copy} moderatorId={state.moderator?.id ?? null} />
+        <ModConsoleScreen
+          copy={copy}
+          moderatorId={state.moderator?.id ?? null}
+          nickname={state.moderator?.nickname ?? null}
+          onNicknameSaved={refresh}
+        />
       </div>
     );
   }

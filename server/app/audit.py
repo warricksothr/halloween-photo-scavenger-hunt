@@ -48,6 +48,8 @@ class Action(StrEnum):
     DUPLICATE_FLAG_RESOLVED = "duplicate_flag.resolved"
     # Moderators (S9CW)
     MODERATOR_JOINED = "moderator.joined"
+    # The name players see on verdicts (ADR 0045)
+    MODERATOR_NICKNAME_SET = "moderator.nickname_set"
     # Conduct (increment 8)
     STRIKE_ISSUED = "strike.issued"
     STRIKE_REVERSED = "strike.reversed"

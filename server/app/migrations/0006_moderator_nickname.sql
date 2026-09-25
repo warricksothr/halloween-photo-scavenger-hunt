@@ -1,0 +1,11 @@
+-- 0006_moderator_nickname.sql — the name players see on a verdict
+-- (TKT-01M3CV2AGJ7AEX25S14DR57HPD, ADR 0045).
+--
+-- `label` is the moderator's SSO display name or email, which stays
+-- between moderators and the host. The nickname is one the moderator
+-- picks for players. It lives on the moderator row, which is one per
+-- person per event (0002), so a rejoin keeps it.
+--
+-- Nullable: NULL means no nickname, and players then see no moderator
+-- name at all rather than the label.
+ALTER TABLE moderator ADD COLUMN nickname TEXT;

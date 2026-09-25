@@ -90,6 +90,14 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
       moderator.getByRole('heading', { name: 'Analysis Queue' }),
     ).toBeVisible();
     await expect(moderator.getByText('1 pending')).toBeVisible();
+
+    // The moderator picks the name players will see (ADR 0045); the
+    // header shows it after their sign-in name.
+    await moderator.getByText('Players see no name for you').click();
+    await moderator.getByLabel(/^Nickname/).fill('Oracle');
+    await moderator.getByRole('button', { name: 'Save nickname' }).click();
+    await expect(moderator.getByText('Players see you as')).toBeVisible();
+    await expect(moderator.locator('.player-name')).toHaveText(/\(Oracle\)$/);
     await moderator.getByText('#1 — Batman', { exact: true }).click();
     await expect(
       moderator.getByRole('button', { name: '✓ Riddle Solved' }),
@@ -104,6 +112,8 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     const log = moderator.getByRole('list', { name: 'Moderation log' });
     const verdictRow = log.getByRole('listitem').filter({ hasText: 'marked Batman' });
     await expect(verdictRow).toContainText("photo for Riddle #1 solved");
+    // The ledger keeps the moderator's name, the nickname beside it.
+    await expect(verdictRow).toContainText('(Oracle) marked Batman');
     await verdictRow.getByRole('button', { name: 'Photo' }).click();
     const lightbox = moderator.getByRole('dialog');
     await expect(lightbox).toBeVisible();
@@ -112,6 +122,7 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
     await moderator.getByRole('button', { name: 'Queue', exact: true }).click();
 
     await expect(player.getByText('RIDDLE SOLVED.')).toBeVisible();
+    await expect(player.getByText('Analysis by Oracle')).toBeVisible();
     await player.getByRole('button', { name: '← Back to the board' }).click();
     await expect(player.getByText('1/1', { exact: true })).toBeVisible();
     await player.getByRole('link', { name: 'Standings' }).click();

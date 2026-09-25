@@ -25,6 +25,7 @@ import { DecisionPanel } from './mod/DecisionPanel';
 import { HistoryPanel } from './mod/HistoryPanel';
 import { Lightbox } from './mod/Lightbox';
 import { LogPanel } from './mod/LogPanel';
+import { NicknameForm } from './mod/NicknameForm';
 import { claimState } from './mod/claims';
 import { QueueList } from './mod/QueueList';
 import { ReviewPane } from './mod/ReviewPane';
@@ -48,7 +49,9 @@ export function nextToReview(queue, resolvedId, moderatorId, now = Date.now() / 
   );
 }
 
-export function ModConsoleScreen({ copy, moderatorId = null }) {
+// nickname and onNicknameSaved come from the shell, which owns the
+// moderator state the header reads (ADR 0045).
+export function ModConsoleScreen({ copy, moderatorId = null, nickname = null, onNicknameSaved }) {
   const [queue, setQueue] = useState(null); // null = loading
   const [openId, setOpenId] = useState(null);
   const [flavor, setFlavor] = useState('');
@@ -255,6 +258,7 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
             Log
           </button>
         </div>
+        <NicknameForm nickname={nickname} onSaved={onNicknameSaved} />
         {error && (
           <div class="verdict-banner sev-red">
             <div class="verdict-chip">!</div>

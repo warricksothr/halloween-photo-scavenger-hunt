@@ -137,6 +137,12 @@ export function RiddleDetailScreen({
               <p class="subtext" style={{ marginTop: 6 }}>
                 {latest?.verdict_flavor ?? banner.subtext}
               </p>
+              {/* Who judged it, by the nickname they chose (ADR 0045).
+                  The server sends none for a pending photo or a conduct
+                  call, so this never names anyone on either. */}
+              {!pending && latest?.verdict_by && (
+                <p class="dim verdict-by">{c.verdictBy(latest.verdict_by)}</p>
+              )}
             </div>
           </div>
           {pending && <div class="scan-sweep" />}
