@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { WEB_BUILD } from '../version';
 import { AdminEvents } from './AdminEvents';
 import { AdminHost } from './AdminHost';
 import { AdminRiddles } from './AdminRiddles';
@@ -129,7 +130,50 @@ function Shell({ children, signedIn = false }) {
         )}
       </header>
       <main class="admin-main">{children}</main>
+      {signedIn && <AdminVersion />}
     </div>
+  );
+}
+
+// Which build is running where (ADR 0041). The page's own build is baked
+// into the bundle; the server's release and schema come from readyz, which
+// is admin-only so the release is never a public fingerprint. A page left
+// open across a deploy keeps its old bundle, and the service worker cannot
+// swap code under a running page, so the mismatch is the host's cue to
+// reload. A failed readyz leaves just the page's build: this line is
+// informational and must not block the console.
+export function AdminVersion({ build = WEB_BUILD }) {
+  const [server, setServer] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    api.adminReadyz().then((result) => {
+      if (live && result && !result.error && !result.unauthenticated) setServer(result);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const stale = server && server.release !== 'unknown' && server.release !== build;
+  return (
+    <footer class="admin-version">
+      <span>Web {build}</span>
+      {server && (
+        <>
+          <span>Server {server.release}</span>
+          <span>Schema {server.schema_version}</span>
+        </>
+      )}
+      {stale && (
+        <span class="admin-version-stale" role="status">
+          This page is an older build than the server.{' '}
+          <button class="admin-btn secondary" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </span>
+      )}
+    </footer>
   );
 }
 

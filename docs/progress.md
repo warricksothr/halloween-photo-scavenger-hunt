@@ -53,6 +53,13 @@ when the increment runs and its tests pass.
   stay expired and players resubmit them; the recap shows the reopen
   (ADR 0042).
 
+- **2026-09-24 — The frontend names its build.** TKT-01M3B0EWQAPS240GZX1TJF348G.
+  The join screen, the Case screen and the moderator console end with
+  `Build <id>`, the release baked into the bundle (`dev` locally). The
+  host console's footer shows the web build, the server release and the
+  schema version from readyz, and offers Reload when the page is older
+  than the server. The server's release stays admin-only (ADR 0041).
+
 - **2026-09-24 — The join screen suggests installing the app, and the
   icons are real.** TKT-01M390Y0VQ. On an iPhone, a dismissible panel says
   how to add the app to the home screen before joining and names the join

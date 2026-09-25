@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { BuildTag } from '../components/BuildTag';
 import { logout, refresh } from '../store';
 
 // Last-seen in minutes, or null when the member has never been seen. The
@@ -257,6 +258,7 @@ export function TeamScreen({ snapshot, copy }) {
           )}
         </div>
       </section>
+      <BuildTag />
     </main>
   );
 }
