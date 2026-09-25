@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T17:51:01Z
-updated_at: 2026-09-25T18:04:40Z
+updated_at: 2026-09-25T18:09:30Z
 created_by:
   id: agent:claude-code/t3code-55409a8b
   name: ""
@@ -83,3 +83,10 @@ Three schema-version pins moved 5 → 6 (test_health, test_regressions, test_dep
 **agent:claude-code/t3code-55409a8b** at 2026-09-25T18:04:40Z
 
 PR #71 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/71), branch t3code/mod-nickname, base main 457f0cb, head eb03699. Terva review requested as pr71-mod-nickname-1: the dispatch answered with the empty-JSON error the docs describe, and the run was created anyway as run 810 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/810). Quality CI is run 809.
+
+**agent:claude-code/t3code-55409a8b** at 2026-09-25T18:09:30Z
+
+Review pr71-mod-nickname-1. The first attempt (run 810, head eb03699) did not review: "Review superseded: the pull request moved during the run", because I pushed c4d8c5f (ticket-only) while it ran. It was re-requested under the same ID as delivery recovery: run 812 (id 11466), head c4d8c5f, base 457f0cb, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/71#issuecomment-13579. Quality CI run 811 passed on c4d8c5f.
+- finding-1 (medium): max_length=40 was checked on the raw value before the trim, so 40 characters plus padding got a 422. Accepted. NicknameBody now uses StringConstraints(strip_whitespace=True, max_length=40). A boundary test sends two spaces, 40 characters and a space; it was confirmed to fail without the fix.
+- finding-2 (low): my scripted insert split `.sev-green .verdict-headline` into `.sev-green .verdict-by`, leaving an unqualified green headline rule. Accepted. The selector is restored from main, and `.verdict-by` is its own rule.
+Gate passes (600 server, 272 web); game-loop e2e passes.

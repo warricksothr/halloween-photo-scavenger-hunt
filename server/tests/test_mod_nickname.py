@@ -46,6 +46,10 @@ class TestSettingIt:
         mod = _mod(client, p["mod_code"])
         assert _nick(mod, "x" * 40).status_code == 200
         assert _nick(mod, "x" * 41).status_code == 422
+        # The cap counts the trimmed value: padding is not a character.
+        resp = _nick(mod, "  " + "y" * 40 + " ")
+        assert resp.status_code == 200
+        assert resp.json() == {"nickname": "y" * 40}
 
     def test_moderators_only(self, admin, client):
         p = _multi_party(admin, client, ("Batman",))
