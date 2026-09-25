@@ -167,6 +167,10 @@ export const api = {
     request(`/api/mod/join/${encodeURIComponent(modCode)}`, { method: 'POST' }),
   modState: () => request('/api/mod/state'),
   modLogout: () => request('/api/mod/logout', { method: 'POST' }),
+  // The name players see on this moderator's verdicts (ADR 0045); an
+  // empty string clears it. Answers { nickname } with null for none.
+  modSetNickname: (nickname) =>
+    request('/api/mod/nickname', { method: 'PUT', body: { nickname } }),
   // Each claim's server-reported age becomes a time on this device's
   // clock (claimed_at_local), so claim freshness never compares the
   // server's clock with the phone's (ADR 0038).

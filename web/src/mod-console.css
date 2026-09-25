@@ -55,6 +55,30 @@
   color: var(--cyan);
 }
 
+/* The nickname players see (ADR 0045): folded away under the view switch,
+   since it is set once a night and the queue needs the room. */
+.mod-nickname summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.mod-nickname strong {
+  color: var(--cyan);
+}
+
+.mod-nickname form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.mod-nickname .field {
+  align-self: stretch;
+}
+
 /* ── Queue ───────────────────────────────────────────────────────── */
 
 .mod-queue {

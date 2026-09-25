@@ -242,7 +242,12 @@ body {
 .sev-red   .verdict-chip { background: var(--alert); color: var(--text); }
 .sev-cyan  .verdict-chip { background: var(--cyan); }
 
-.sev-green .verdict-headline { color: var(--green-bright); }
+.sev-green /* Who gave the verdict, when they chose a nickname (ADR 0045). */
+.verdict-by {
+  margin-top: 6px;
+}
+
+.verdict-headline { color: var(--green-bright); }
 .sev-amber .verdict-headline { color: var(--amber); }
 .sev-red   .verdict-headline { color: var(--alert); }
 .sev-cyan  .verdict-headline { color: var(--cyan-bright); }

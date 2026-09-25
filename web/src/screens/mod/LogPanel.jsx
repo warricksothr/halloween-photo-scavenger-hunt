@@ -19,6 +19,8 @@ export const MODERATION_ACTIONS = new Set([
   'duplicate_flag.resolved',
   'team.member_removed',
   'moderator.joined',
+  // The name players see on a moderator's verdicts (ADR 0045).
+  'moderator.nickname_set',
   'event.opened',
   'event.closed',
   'event.reopened',
@@ -86,6 +88,15 @@ export function logLine(row) {
       return { text: `${actor} removed ${a.player ?? 'a player'} from ${a.team ?? 'their team'}`, tone: 'alert' };
     case 'moderator.joined':
       return { text: `${a.moderator ?? actor} joined the console` };
+    case 'moderator.nickname_set':
+      // The actor already reads with today's nickname (ADR 0045), so the
+      // sentence carries the change itself, old and new.
+      if (!d.new_nickname) return { text: `${actor} cleared their nickname`, detail: d.old_nickname ? `was ${d.old_nickname}` : undefined };
+      return {
+        text: d.old_nickname
+          ? `${actor} changed their nickname from ${d.old_nickname} to ${d.new_nickname}`
+          : `${actor} set their nickname to ${d.new_nickname}`,
+      };
     case 'event.opened':
       return { text: `${actor} opened the round` };
     case 'event.closed':
