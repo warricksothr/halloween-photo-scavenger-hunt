@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3CN4T3VNNQ05ZCKPCZNDWPM
 title: Turn the GitHub Pages site into a project page with the mocks archived
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: low
 due_on: null
@@ -17,17 +17,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: null
-  worktree: /tmp/bf267378-tk
-  commit: b300116d6e224db1bc4ce31f3a287be5101d9311
-  session: null
-  claimed_at: 2026-09-25T16:07:32Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T16:07:31Z
-updated_at: 2026-09-25T16:16:34Z
+updated_at: 2026-09-25T17:13:28Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -53,7 +46,7 @@ Of the three options offered, Drew chose "Project page + mocks": a project page 
 - [x] The Pages root is a project page with current screenshots and links to the repo and deploy/README.md
 - [x] The mocks are published under /mocks/ and labelled as a design-phase archive
 - [x] The site's source and a build script live on main, with a written publish procedure
-- [ ] gh-pages is updated as a fast-forward commit, with no force-push
+- [x] gh-pages is updated as a fast-forward commit, with no force-push
 
 ## Implementation plan
 
@@ -79,3 +72,7 @@ Disposition of `pages-site-70-r1` / `-r2`:
 - **low ".tickets not in the PR": declined.** By project practice the ticket store is committed straight to main. TKT-01M3CN4T3VNNQ05ZCKPCZNDWPM is there.
 
 The publish procedure was dry-run against the real gh-pages branch (tip b93c62c) with the push left out. It produced one commit on top of b93c62c, a fast-forward. Not merged and not published: waiting for Drew.
+
+## Summary
+
+Merged as PR #70 (a0143f7) at the reviewed head 60b3b51, on Drew's go-ahead. GitHub main was fast-forwarded to a0143f7. Published by the docs/site/README.md procedure: gh-pages e8a7e2b, one commit on top of b93c62c, pushed as a fast-forward with no force. The Pages build for e8a7e2b reports built. The live site answers 200 for /, /mocks/, a screenshot and the mocks stylesheet, and /mocks/ carries the archive banner. The Terva medium about team invites was declined with evidence (phase 3 shipped invites), as recorded in the PR comment. The app is unchanged, so kobal needed no redeploy. To republish after changing the screenshots, the page or the mocks, rerun the procedure.
