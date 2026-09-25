@@ -3,130 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arkham Scavenger Hunt — UI Mocks</title>
+<title>Arkham Halloween Photo Scavenger Hunt</title>
+<meta name="description" content="A themed, self-hosted photo scavenger hunt for parties: players photograph riddle answers on their phones, moderators rule on each photo live.">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/arkham-mock.css">
+<link rel="stylesheet" href="mocks/assets/arkham-mock.css">
+<!-- The project's GitHub Pages root. Source: docs/site/index.html on main;
+     scripts/build-pages.sh assembles the site with docs/screenshots and the
+     design-phase mocks (docs/impl/mocks) under mocks/. See docs/site/README.md. -->
+<style>
+  .site { max-width: 1040px; margin: 0 auto; padding: 0 20px 48px; }
+  .site a:not(.btn) { color: var(--cyan-bright); }
+  .site section { margin-top: 40px; }
+  .site h2 { font-size: 1rem; margin-bottom: 14px; }
+  .site p, .site li { font-size: 1.02rem; }
+  .site ul { padding-left: 20px; }
+  .site li { margin: 6px 0; }
+  .hero { padding: 56px 0 8px; text-align: center; }
+  .hero h1 { font-size: 2rem; }
+  .hero p { max-width: 640px; margin: 12px auto 0; }
+  .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }
+  .actions .btn { width: auto; padding: 12px 22px; text-decoration: none; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .shots figure, .wide { margin: 0; }
+  .shots img, .wide img { width: 100%; height: auto; border: var(--rule); border-radius: var(--radius); display: block; }
+  figcaption { margin-top: 6px; text-align: center; }
+  .wide { margin-top: 16px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  footer { margin-top: 48px; text-align: center; }
+</style>
 </head>
 <body>
-<div class="frame">
+<div class="site">
 
-  <!-- Index page for the mock set. Lives in docs/impl/mocks/ on main and
-       is mirrored to the gh-pages branch as the Pages site root. -->
-
-  <header class="app-header">
-    <span class="event-name">Gotham Scavenger Protocol</span>
-    <span class="player-name">UI mocks</span>
+  <header class="hero">
+    <h1 class="headline">Arkham Halloween Photo Scavenger Hunt</h1>
+    <p>A themed photo scavenger hunt for parties. Players solve riddles by
+    photographing the answers around the venue on their phones, and
+    moderators rule on each photo live, with verdicts in the style of
+    Batman: Arkham: <b>RIDDLE SOLVED</b>, <b>SUBJECT OBSCURED</b>,
+    <b>SUBJECT TOO SMALL</b>, <b>MISALIGNED</b>, <b>SUBJECT NOT FOUND</b>.</p>
+    <div class="actions">
+      <a class="btn" href="https://github.com/warricksothr/halloween-photo-scavenger-hunt">Source on GitHub</a>
+      <a class="btn secondary" href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/blob/main/deploy/README.md">Run your own</a>
+    </div>
   </header>
 
-  <main style="flex: 1; padding: 24px 16px;">
-
-    <div style="text-align: center; margin-bottom: 24px;">
-      <div class="icon-chip" style="margin: 0 auto 14px; width: 52px; height: 52px; font-size: 1.4rem;">?</div>
-      <h1 class="headline" style="font-size: 1.3rem;">Interface Mock Archive</h1>
-      <p class="dim" style="margin-top: 8px;">Static HTML mockups of every screen in the
-      scavenger-hunt PWA. Design notes and the coverage matrix live in
-      <code>docs/impl/ui.md</code> in the repository.</p>
+  <section>
+    <h2 class="headline headline-rule">What it looks like</h2>
+    <div class="shots">
+      <figure><img src="screenshots/join.png" alt="The player join screen: enter a codename to join the hunt" loading="lazy"><figcaption class="dim">Join with a codename</figcaption></figure>
+      <figure><img src="screenshots/riddle-board.png" alt="The riddle board, a grid of riddle tiles" loading="lazy"><figcaption class="dim">Riddle board</figcaption></figure>
+      <figure><img src="screenshots/evidence-drawer.png" alt="The evidence drawer of the team's photos" loading="lazy"><figcaption class="dim">Evidence drawer</figcaption></figure>
+      <figure><img src="screenshots/standings.png" alt="The standings screen" loading="lazy"><figcaption class="dim">Standings</figcaption></figure>
     </div>
+    <figure class="wide">
+      <img src="screenshots/moderator-console.png" alt="The moderator console: the analysis queue, the submitted photo, and the verdict buttons" loading="lazy">
+      <figcaption class="dim">The moderator console, on a laptop or tablet</figcaption>
+    </figure>
+  </section>
 
-    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Player flow</h2>
-    <div class="panel" style="padding: 4px 16px; margin-bottom: 20px;">
-      <div class="list-row">
-        <span class="icon-chip">1</span>
-        <div style="flex: 1;">
-          <a href="landing.html" style="color: var(--cyan-bright); text-decoration: none;">Landing / Join</a>
-          <div class="dim" style="font-size: 0.8rem;">Callsign + device label; bad-code error variant</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">2</span>
-        <div style="flex: 1;">
-          <a href="lobby.html" style="color: var(--cyan-bright); text-decoration: none;">Lobby</a>
-          <div class="dim" style="font-size: 0.8rem;">Pre-round holding screen</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">3</span>
-        <div style="flex: 1;">
-          <a href="riddle-list.html" style="color: var(--cyan-bright); text-decoration: none;">Riddle Board</a>
-          <div class="dim" style="font-size: 0.8rem;">Batcomputer tile grid; solved / scanning / new states</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">4</span>
-        <div style="flex: 1;">
-          <a href="drawer.html" style="color: var(--cyan-bright); text-decoration: none;">Evidence Drawer</a>
-          <div class="dim" style="font-size: 0.8rem;">Team photo pool + upload-restricted variant</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">5</span>
-        <div style="flex: 1;">
-          <a href="submission.html" style="color: var(--cyan-bright); text-decoration: none;">Submission</a>
-          <div class="dim" style="font-size: 0.8rem;">Open / SCANNING… / verdict states of one route</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">6</span>
-        <div style="flex: 1;">
-          <a href="standings.html" style="color: var(--cyan-bright); text-decoration: none;">Standings &amp; Recap</a>
-          <div class="dim" style="font-size: 0.8rem;">Live board + closed-round intel trail</div>
-        </div>
-      </div>
+  <section class="cols">
+    <div class="panel">
+      <h2 class="headline headline-rule">For players</h2>
+      <ul>
+        <li>Scan the join QR, pick a codename, and play. No account.</li>
+        <li>An installable app, built for the phone camera.</li>
+        <li>Teams share an evidence drawer, and invite each other with a link.</li>
+        <li>Live standings, or a final reveal when the round closes, then a recap of the night.</li>
+      </ul>
     </div>
-
-    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Team &amp; conduct</h2>
-    <div class="panel" style="padding: 4px 16px; margin-bottom: 20px;">
-      <div class="list-row">
-        <span class="icon-chip">⬡</span>
-        <div style="flex: 1;">
-          <a href="team.html" style="color: var(--cyan-bright); text-decoration: none;">Team (stretch)</a>
-          <div class="dim" style="font-size: 0.8rem;">Roster, invite QR, switch-team warning</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">!</span>
-        <div style="flex: 1;">
-          <a href="strike-interstitial.html" style="color: var(--cyan-bright); text-decoration: none;">Strike Interstitial</a>
-          <div class="dim" style="font-size: 0.8rem;">Strike-1 warning — deliberately un-themed copy</div>
-        </div>
-      </div>
+    <div class="panel">
+      <h2 class="headline headline-rule">For hosts and moderators</h2>
+      <ul>
+        <li>A live queue: each photo gets a verdict, and players see it in seconds.</li>
+        <li>A conduct system with strikes, cooldowns and reversals, kept plain rather than themed.</li>
+        <li>Duplicate-photo detection, and a moderation log with the photo behind every call.</li>
+        <li>Print the join QR, replace a leaked code, reopen a round closed too early.</li>
+      </ul>
     </div>
+  </section>
 
-    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Moderator</h2>
-    <div class="panel" style="padding: 4px 16px; margin-bottom: 20px;">
-      <div class="list-row">
-        <span class="icon-chip">▸</span>
-        <div style="flex: 1;">
-          <a href="moderator.html" style="color: var(--cyan-bright); text-decoration: none;">Moderator Console</a>
-          <div class="dim" style="font-size: 0.8rem;">Queue, one-tap verdicts, conduct action, player history</div>
-        </div>
-      </div>
-    </div>
+  <section>
+    <h2 class="headline headline-rule">Run your own</h2>
+    <p>One process and one data directory: FastAPI and SQLite behind a
+    Preact PWA, with no other services to run. Deploy it as a container
+    on a laptop at the venue, as a container behind a TLS proxy, or as a
+    systemd service behind nginx. Single sign-on for moderators works with
+    any OIDC provider that sends group names.
+    <a href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/blob/main/deploy/README.md">deploy/README.md</a>
+    is the place to start.</p>
+  </section>
 
-    <h2 class="headline headline-rule" style="font-size: 0.9rem; margin-bottom: 8px;">Host / admin</h2>
-    <div class="panel" style="padding: 4px 16px;">
-      <div class="list-row">
-        <span class="icon-chip">＋</span>
-        <div style="flex: 1;">
-          <a href="admin-event-new.html" style="color: var(--cyan-bright); text-decoration: none;">New Event</a>
-          <div class="dim" style="font-size: 0.8rem;">Creation form + join/moderator code reveal</div>
-        </div>
-      </div>
-      <div class="list-row">
-        <span class="icon-chip">?</span>
-        <div style="flex: 1;">
-          <a href="admin-riddles.html" style="color: var(--cyan-bright); text-decoration: none;">Riddle Editor</a>
-          <div class="dim" style="font-size: 0.8rem;">Riddle CRUD, reordering, open-the-round action</div>
-        </div>
-      </div>
-    </div>
+  <section>
+    <h2 class="headline headline-rule">How it was designed</h2>
+    <p>This is a learning project, and its decisions are written down: the
+    <a href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/blob/main/docs/design.md">design spec</a>,
+    the <a href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/tree/main/docs/adr">architecture decision records</a>,
+    and the <a href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/tree/main/.tickets">ticket store</a>
+    that tracked the work.
+    The <a href="mocks/">design-phase mocks</a> are the static screens
+    drawn in August 2026, before any of the app existed. The screenshots
+    above show what it became.</p>
+  </section>
 
-    <p class="dim" style="margin-top: 24px; font-size: 0.75rem; text-align: center;">
-      Photo areas are placeholders — real player photos never enter the repository.<br>
-      Palette &amp; anatomy: <code>docs/reference/THEME-NOTES.md</code>.
-    </p>
-
-  </main>
+  <footer class="dim">
+    <p>Licensed under the <a href="https://github.com/warricksothr/halloween-photo-scavenger-hunt/blob/main/LICENSE">GNU AGPL-3.0</a>.
+    A fan project, not affiliated with Warner Bros. or DC.</p>
+  </footer>
 
 </div>
 </body>
