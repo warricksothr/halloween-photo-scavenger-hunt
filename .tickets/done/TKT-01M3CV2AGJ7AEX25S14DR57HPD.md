@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3CV2AGJ7AEX25S14DR57HPD
 title: Let moderators choose a nickname players see on verdicts
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-55409a8b
-  branch: t3code/mod-nickname
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-55409a8b
-  commit: 457f0cb2701033c046031ea358c5e749a798ad72
-  session: null
-  claimed_at: 2026-09-25T17:51:07Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T17:51:01Z
-updated_at: 2026-09-25T18:13:23Z
+updated_at: 2026-09-25T18:24:26Z
 created_by:
   id: agent:claude-code/t3code-55409a8b
   name: ""
@@ -94,3 +87,7 @@ Gate passes (600 server, 272 web); game-loop e2e passes.
 **agent:claude-code/t3code-55409a8b** at 2026-09-25T18:13:23Z
 
 Review pr71-mod-nickname-2 (run 814, id 11471, head 3d21804, base 457f0cb, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/71#issuecomment-13584): passed, no findings; it marks finding-1 and finding-2 from review 737 resolved. Quality CI run 813 passed on 3d21804. Waiting for the user to decide on merging. Commits after 3d21804 are ticket bookkeeping only.
+
+## Summary
+
+Merged in PR #71 (merge de7ea66). Moderators set a nickname in the console (migration 0006, PUT /api/mod/nickname, audited as moderator.nickname_set). Players see it on game verdicts as 'Analysis by NAME', never the sign-in name, and never on an INAPPROPRIATE call. The log and console header show 'Name (Nickname)' (ADR 0045). Deployed to scavenger.nulloctet.com at de7ea66 on 2026-09-25 (schema 6; pre-upgrade backup arkham-backup-20260925-132226-yV0xIX.tar.gz; kobal ledger b8414a1). Public GitHub mirror main fast-forwarded to this commit. The Pages site built from main was identical to gh-pages e8a7e2b, so there was nothing to publish.
