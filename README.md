@@ -2,18 +2,35 @@
 
 A themed, asynchronous photo scavenger hunt for parties. Players solve
 riddles by photographing subjects around the venue; moderators review
-submissions from a queue and issue Arkham-style verdicts — `SUBJECT
-VERIFIED`, `SUBJECT OBSCURED`, `SUBJECT NOT FOUND`, `MISALIGNED` — through
-a Batcomputer-flavored PWA.
+submissions from a queue and issue Arkham-style verdicts — `RIDDLE
+SOLVED`, `SUBJECT OBSCURED`, `SUBJECT NOT FOUND`, `SUBJECT TOO SMALL`,
+`MISALIGNED` — through a Batcomputer-flavored PWA.
 
 Built as a themeable core: Batman: Arkham Knight/City is the first theme
 pack, not a fork point.
 
 ## Status
 
-The MVP backend, PWA, moderation flow, team stretch, deployment recipe, and
-layered quality checks are implemented. The specification, build plan, and
-progress tracker live in [`docs/`](docs/).
+The game is complete and has run a live deployment: the backend, the
+installable PWA, moderation and conduct, teams, standings and the recap,
+the deployment recipes, and layered quality checks. The specification,
+build plan, and progress tracker live in [`docs/`](docs/).
+
+## Run your own
+
+Start with [`deploy/README.md`](deploy/README.md). It says what the app
+needs, and helps you choose between a container on a laptop at the venue,
+a container behind a TLS proxy, and a systemd service behind nginx. From
+there:
+
+- [`deploy/CONTAINER.md`](deploy/CONTAINER.md) and
+  [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md) — the recipes, and the
+  checklist to walk before every party
+- [`deploy/CONFIGURATION.md`](deploy/CONFIGURATION.md) — every setting
+- [`deploy/OPERATIONS.md`](deploy/OPERATIONS.md) — upgrades, restarts,
+  logs, backups, and rotating credentials
+
+## Design and development
 
 - [`docs/design.md`](docs/design.md) — the spec: game loop, verdict
   states, moderation & conduct systems, data model, flow diagrams
@@ -77,12 +94,14 @@ bash scripts/smoke-container.sh
 See [`docs/impl/testing.md`](docs/impl/testing.md) for the layer boundaries,
 required tools, and failure-artifact locations.
 
-## Planned stack
+## Stack
 
-- **Backend**: Python + FastAPI + SQLite
+- **Backend**: Python + FastAPI + SQLite, with Server-Sent Events for
+  live updates
 - **Frontend**: Preact + Vite PWA (installable, camera-first)
-- **Access**: QR-scannable join codes for players, admin login for hosts,
-  moderator codes for the review queue
+- **Access**: QR-scannable join codes for players, a password or single
+  sign-on for the host, and moderator links plus single sign-on for the
+  review queue
 
 ## License
 

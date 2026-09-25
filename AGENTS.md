@@ -22,6 +22,11 @@ specification of record — read it before changing behavior:
 - `docs/adr/` — architecture decision records, one per non-obvious
   decision. Add one whenever you make one.
 - `docs/pr-reviews.md` — how to request and read a Terva PR review.
+- `deploy/README.md` — the operator's entry point: the three deployment
+  recipes, `deploy/CONFIGURATION.md` (every environment variable), and
+  `deploy/OPERATIONS.md` (upgrades, restarts, logs, backups, rotation).
+  A change that adds a variable, a migration, or a restart-visible
+  behavior updates these too.
 
 ## Decisions already made (do not relitigate)
 

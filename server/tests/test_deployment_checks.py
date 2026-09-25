@@ -157,7 +157,7 @@ def test_nginx_https_block_sends_security_headers():
         "default-src 'self'; script-src 'self' 'unsafe-inline';"
         " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
         " font-src 'self' https://fonts.gstatic.com; img-src 'self';"
-        " connect-src 'self' https://glitchtip.nulloctet.com;"
+        " connect-src 'self';"
         " worker-src 'self'; manifest-src 'self';"
         " object-src 'none'; base-uri 'self'; form-action 'self';"
         " frame-ancestors 'none'"
@@ -184,20 +184,21 @@ def test_oidc_environment_file_examples_use_bare_assignments():
     systemd drops a line it cannot read as `NAME=value`, so an
     `export NAME=value` example silently leaves SSO off — the operator sees
     no error and the issue is invisible until a login is refused. The fenced
-    block under §6 that fills that file must therefore show bare
-    assignments. (The shell blocks elsewhere in the runbook export into the
-    running shell, which is a different reader.)
+    blocks under §6 and "Error reporting" fill that file, so they must show
+    bare assignments. (The backup block in §1 exports into the running
+    shell, which is a different reader.)
     """
-    section = RUNBOOK.read_text().split("## 6. Single sign-on", 1)[1]
-    section = section.split("\n## ", 1)[0]
-    for match in re.finditer(r"```sh\n(.*?)```", section, re.DOTALL):
-        for line in match.group(1).splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#") or not stripped:
-                continue
-            assert not stripped.startswith("export "), (
-                "EnvironmentFile example must not export: " + stripped
-            )
+    runbook = RUNBOOK.read_text()
+    for heading in ("## 6. Single sign-on", "## Error reporting"):
+        section = runbook.split(heading, 1)[1].split("\n## ", 1)[0]
+        for match in re.finditer(r"```sh\n(.*?)```", section, re.DOTALL):
+            for line in match.group(1).splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#") or not stripped:
+                    continue
+                assert not stripped.startswith("export "), (
+                    "EnvironmentFile example must not export: " + stripped
+                )
 
 
 def test_runbook_requests_the_groups_scope():

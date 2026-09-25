@@ -2,23 +2,62 @@
 
 One page. Run it **once, start to finish, on the real host** before the
 event (build-plan.md §10: the night itself is not the time to discover
-the deploy recipe missed a step). Everything below assumes the checkout
+the deploy recipe missed a step). §0 and §6 set up the systemd recipe.
+§1–5 apply to every recipe. Everything below assumes the checkout
 is at `~/arkham` and the service is `arkham-hunt`; §6 needs an Authentik
 application, which you set up once.
 
+On a container deploy ([CONTAINER.md](CONTAINER.md)), translate as you go:
+
+| This page says | On a container |
+| --- | --- |
+| `~/.config/arkham-hunt.env` | The `.env` beside your compose file |
+| `systemctl --user restart arkham-hunt` | `docker compose up -d` (or `podman-compose up -d`) |
+| `journalctl --user -u arkham-hunt` | `docker logs arkham-hunt` |
+| `~/arkham/data` | The volume or bind mount at `/srv/arkham/data` |
+| `~/arkham/deploy/backup.sh` | CONTAINER.md §4 |
+
+[README.md](README.md) compares the recipes, [CONFIGURATION.md](CONFIGURATION.md)
+lists every variable, and [OPERATIONS.md](OPERATIONS.md) covers upgrades,
+restarts and credential rotation.
+
 ## 0. Deploy (first time, or after pulling changes)
+
+The first time, set up the pieces around the checkout: the env file
+(`~/.config/arkham-hunt.env`, mode 0600; see CONFIGURATION.md for what
+goes in it and how to hash the password), the user unit (the install
+commands are at the top of `deploy/arkham-hunt.service`), and nginx with
+TLS (at the top of `deploy/nginx.conf`). Then, and after every pull:
 
 ```sh
 cd ~/arkham
+# Back up first: a new build may migrate the database, and only a restore
+# goes back (§1, OPERATIONS.md). Skip it on the very first deploy, when
+# there is no database yet.
+~/arkham/deploy/backup.sh
 git pull
-# Backend deps (once, or when server/pyproject.toml changes):
-uv venv server/.venv && uv pip install -p server/.venv -e "server[dev]"
-# Frontend build (web/dist is what uvicorn serves in production):
-cd web && npm install && npm run build && cd ..
+REL=$(git rev-parse --short HEAD)
+# Name the build for the server before it restarts, so the admin footer
+# agrees with the page. The env file needs an ARKHAM_RELEASE= line to edit:
+sed -i "s/^ARKHAM_RELEASE=.*/ARKHAM_RELEASE=$REL/" ~/.config/arkham-hunt.env
+# Backend deps (once, or when server/requirements.lock changes). The
+# lock pins the exact versions CI tests and the image ships (ADR 0012);
+# a plain `-e server` would resolve whatever is newest. The test tools
+# (`server[dev]`) are not needed to run it:
+uv venv --clear server/.venv    # --clear: uv refuses to overwrite an existing venv
+uv pip install -p server/.venv --require-hashes -r server/requirements.lock
+uv pip install -p server/.venv --no-deps -e server
+# Frontend build (web/dist is what uvicorn serves in production). Any
+# VITE_* settings go on this line (CONFIGURATION.md):
+cd web && npm ci && VITE_ERROR_RELEASE=$REL npm run build && cd ..
 systemctl --user restart arkham-hunt
 systemctl --user status arkham-hunt   # active (running)
 curl -s https://<host>/api/health     # {"status":"ok",...}
 ```
+
+Keep the archive from the first line until the new build has been used
+for real: if it has to be rolled back, that archive is the way back
+(OPERATIONS.md, "Roll back").
 
 When health is green but something feels off, log in and read the deeper
 probe — it reports writer access, disk free, photo count, and live SSE
@@ -33,7 +72,8 @@ curl -s -b admin.jar https://<host>/api/admin/readyz   # db_writable, disk, sse_
 A backup you have never restored is a rumor, not a backup.
 
 Point the script at a second disk first — an archive beside the data is not a
-backup. Export these (or put them in `~/.config/arkham-hunt.env`):
+backup. Export these in the shell that runs the script. The script does not
+read `~/.config/arkham-hunt.env`: only the service does.
 
 ```sh
 export ARKHAM_BACKUP_MIRROR=/mnt/usb/arkham   # another disk, not ~/arkham
@@ -71,6 +111,11 @@ directory (an unmounted mount point).
    moderators. The event's **Links & QR** shows them at any time; its
    **Print** button prints a one-page join sheet, and **SVG**/**PNG**
    save the join QR. The mod link stays hidden until you reveal it.
+   The mod link picks the event but lets no one in by itself: each
+   moderator also signs in through SSO with an account in the moderator
+   group (§6). Without SSO, only you can moderate, signed in as host.
+   Have each moderator follow the link and sign in once before the
+   night, so a group-membership mistake turns up now.
 5. Check free disk before opening: `df -h ~/arkham/data /tmp` and
    `du -sh ~/arkham/data/photos/originals`. Uploads refuse below 256 MiB
    free on the data volume **and** on the multipart spool filesystem
@@ -140,6 +185,20 @@ If all eight pass, the night is ready.
   prunes, so no manual cleanup is needed.
 - If a phone shows stale state: reload the page. The snapshot is the
   resync point; SSE reconnects refetch everything.
+- To see who did what, open the moderator console's **Log**: every
+  verdict, strike, removal and flag, newest first, with the photo behind
+  each. **Everything** adds joins, uploads and settings changes.
+- If a join QR ends up somewhere public, or a mod link reaches the wrong
+  person, open the event's **Links & QR** and press **New join code** or
+  **New moderator code**, then hand out the new one. Players and moderators already in stay in (ADR 0039).
+- A strike given in error is reversed from the admin console. The
+  player's restriction lifts on their next refresh.
+- If the round was closed too early, **Reopen the round** from the event
+  card puts it back in play. Scans that the close expired stay expired,
+  and players can submit those photos again (ADR 0042).
+- Avoid restarting the server mid-round. Players and moderators stay
+  signed in and their phones reconnect by themselves, but the host has to
+  sign in again (OPERATIONS.md, "What a restart does").
 
 ## 5. After the night
 
@@ -272,7 +331,7 @@ curl -s -H "Authorization: Bearer $ARKHAM_ADMIN_API_TOKEN" \
 
 | Symptom | Check |
 | --- | --- |
-| SSO button absent; `GET /api/auth/oidc/login` answers `503 oidc_disabled` | Issuer, client id, and secret are all set in `~/.config/arkham-hunt.env`, and the service was restarted after editing it |
+| **Sign in with Authentik** answers `503 oidc_disabled` | Issuer, client id, and secret are all set in `~/.config/arkham-hunt.env`, and the service was restarted after editing it |
 | `401 not_authorized` after a successful Authentik login | The account is in `arkham-admin` / `arkham-moderator`, and the `groups` scope mapping is attached to the provider and emits a `groups` claim |
 | `401 oidc_bad_token` in the redirect | Redirect URI in Authentik does not exactly match `https://<host>/api/auth/oidc/callback`; client secret is current; the issuer has its trailing slash |
 | `502 oidc_unavailable` | The app cannot reach Authentik's discovery or token endpoint — check DNS and TLS from the host: `curl -s $ARKHAM_OIDC_ISSUER.well-known/openid-configuration` |
@@ -289,7 +348,10 @@ curl -s -H "Authorization: Bearer $ARKHAM_ADMIN_API_TOKEN" \
 | 502 after reboot | `loginctl enable-linger "$USER"`; `systemctl --user status arkham-hunt` |
 | App up, site blank | `web/dist` exists and was rebuilt after the last `git pull` |
 | Nothing in GlitchTip | `ARKHAM_ERROR_DSN` / `VITE_ERROR_DSN` are set and the app was restarted/rebuilt; the CSP `connect-src` includes the GlitchTip origin |
-| No SSO button / `503 oidc_disabled` | See §6 — the issuer/client/secret trio is incomplete or the service was not restarted |
+| SSO sign-in answers `503 oidc_disabled` | See §6 — the issuer/client/secret trio is incomplete or the service was not restarted |
+| One busy player gets everyone rate-limited, or SSO sends an `http://` callback | The app is not trusting the proxy's headers: `--proxy-headers` with the proxy's address in `--forwarded-allow-ips` (the unit file carries both; a container needs CONTAINER.md §7) |
+| A moderator's sign-in comes back `not_authorized` | Their account is not in the moderator group, or the group name in the env differs from the `groups` claim (case and spaces count) |
+| The admin footer keeps saying the page is out of date | `ARKHAM_RELEASE` and the build's `VITE_ERROR_RELEASE` differ, or only one is set |
 | Script's `Authorization: Bearer` gets 401 | `ARKHAM_ADMIN_API_TOKEN` is set and the service was restarted after editing the env file; the header is exactly `Bearer <token>` |
 
 ## Error reporting (GlitchTip)
@@ -303,11 +365,16 @@ be in the build environment). They are ingest keys rather than hard secrets —
 the browser one ships in the bundle — but anyone holding one can post events
 to the project, so keep them out of the repo.
 
+The env file takes bare `NAME=value` lines, never `export` (§6), and does
+not run commands, so write the release out rather than a `$(git …)`:
+
 ```sh
-export ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/<project>
-export ARKHAM_TRACES_SAMPLE_RATE=0.1   # optional; 0 disables tracing
-export ARKHAM_ENVIRONMENT=production   # optional
-export ARKHAM_RELEASE=$(git -C ~/arkham rev-parse HEAD)  # optional
+ARKHAM_ERROR_DSN=https://<key>@<glitchtip-host>/<project>
+# Optional; 0 disables tracing:
+ARKHAM_TRACES_SAMPLE_RATE=0.1
+ARKHAM_ENVIRONMENT=production
+# The short commit you deployed (§0):
+ARKHAM_RELEASE=<commit>
 ```
 
 The browser DSN is compiled into the bundle, so it is a **build** input —
@@ -315,9 +382,13 @@ set it before `npm run build` (or pass it as a build arg to the container):
 
 ```sh
 cd ~/arkham/web
-VITE_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/<project> \
-VITE_TRACES_SAMPLE_RATE=0.1 npm run build
+VITE_ERROR_DSN=https://<key>@<glitchtip-host>/<project> \
+VITE_TRACES_SAMPLE_RATE=0.1 \
+VITE_ERROR_RELEASE=$(git rev-parse --short HEAD) npm run build
 ```
+
+Allow `https://<glitchtip-host>` in the CSP's `connect-src` in
+`deploy/nginx.conf`, or the browser blocks its own reports.
 
 Check it works: open the site and watch for a request in GlitchTip's Issues. A
 backend 500 — or any unhandled server error — arrives with a `request_id` tag
