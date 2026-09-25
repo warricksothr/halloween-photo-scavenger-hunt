@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3CHA8088PDS05GMVFVDJ8ZN
 title: "Document self-hosting: deploy shapes, configuration and operations"
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -18,17 +18,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: null
-  worktree: /tmp/bf267378-tk
-  commit: 5054d2fcd5678232801191d40e0230bac2f8b893
-  session: null
-  claimed_at: 2026-09-25T15:00:41Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T15:00:35Z
-updated_at: 2026-09-25T15:25:37Z
+updated_at: 2026-09-25T15:28:27Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -115,3 +108,7 @@ Terva review of PR #69:
 - **`ops-docs-69-r3`** (run 795, head 83e2da3, base 4c05d9a): **success**, no findings at the threshold. It marks both earlier mediums resolved and repeats only the declined ticket-store low. Quality gate green on 83e2da3.
 
 Not merged. Waiting for Drew.
+
+## Summary
+
+Merged as PR #69 (bb70925). deploy/README.md is the operator's start page, and the three recipes hang off it. deploy/CONFIGURATION.md lists every variable, and deploy/OPERATIONS.md covers upgrade, rollback, restarts, logs, backups and rotation. CONTAINER.md §7 is the container-behind-TLS recipe, taken from the live deployment, and §4 covers bind-mount backup and restore. The PR also fixed errors in the existing docs: the .env hash quoting, export in an EnvironmentFile, unpinned installs, uv venv failing on a rerun, the backup and release steps coming after the restart, and GlitchTip hosts specific to this deployment. The final Terva review (ops-docs-69-r3) was clean. Docs only, so nothing to deploy. Follow-ups: TKT-01M3CJ86PQ00ZG3FA55FADD3FQ and TKT-01M3CJ86SJSZN8ZM9W1E6KXS40, plus the FORWARDED_ALLOW_IPS note on TKT-01M3816ETRMEH0K7QARH78BR9Z.
