@@ -96,6 +96,27 @@ describe('the Log view', () => {
     expect(dialog.querySelector('img').getAttribute('src')).toBe('/api/mod/evidence/ev-3/photo');
   });
 
+  it('keeps the newest read when an older one answers last', async () => {
+    const resolvers = [];
+    mocks.api.modAudit.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)));
+    render(<ModConsoleScreen copy={{ verdicts: {} }} moderatorId="mod-me" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Log' }));
+    await waitFor(() => expect(resolvers).toHaveLength(1));
+    // A delta starts a second read before the first answers.
+    act(() => mocks.listeners.forEach((fn) => fn('queue_resolved', {})));
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    const newer = [...rows, {
+      id: 4, action: 'event.closed', actor_type: 'admin', actor_name: 'Host',
+      about: {}, details: { expired_pending: 0 }, created_at: T + 180,
+    }];
+    await act(async () => { resolvers[1](newer); });
+    expect(await screen.findByText('Host closed the round')).toBeTruthy();
+    // The first, older read answers last and must not win.
+    await act(async () => { resolvers[0](rows); });
+    expect(screen.getByText('Host closed the round')).toBeTruthy();
+  });
+
   it('reads the log again on a live delta while it is shown', async () => {
     await openLog();
     expect(mocks.api.modAudit).toHaveBeenCalledTimes(1);

@@ -14,7 +14,7 @@
 // other moderators, never a lock. Queue freshness comes from the
 // store's SSE stream: submission_new and queue_resolved deltas trigger
 // a refetch — no polling.
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import '../mod-console.css';
 import { api } from '../api';
@@ -77,6 +77,10 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
   // The moderation log (ADR 0044): null until first opened.
   const [log, setLog] = useState(null);
   const [logFilter, setLogFilter] = useState('moderation');
+  // Each log read is numbered; only the latest may land. Opening the view
+  // and live deltas can overlap, and an older response arriving last would
+  // otherwise put back a log missing the newest rows.
+  const logRequestRef = useRef(0);
   const [zoom, setZoom] = useState(null); // { src, label } of the full-size photo
   const closeZoom = useCallback(() => setZoom(null), []);
 
@@ -187,7 +191,9 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
   }
 
   async function loadLog() {
+    const request = ++logRequestRef.current;
     const result = await api.modAudit();
+    if (request !== logRequestRef.current) return; // A newer read superseded this one.
     if (result.error) setError(result.message);
     else setLog(result);
   }
