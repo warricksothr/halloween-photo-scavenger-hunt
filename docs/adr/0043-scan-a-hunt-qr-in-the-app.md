@@ -33,13 +33,15 @@ scan the same QR again.
   has no `BarcodeDetector`. The image is read with `createImageBitmap`,
   because an `<img>` from a `blob:` URL would break the CSP's
   `img-src 'self'`. It is scanned at 1024, 1600 and 640 pixels on the long
-  edge, since a phone photo is far larger than a QR needs.
+  edge, capped at the photo's own size and without repeats, since a phone
+  photo is far larger than a QR needs.
 - **What a QR may open:** only this origin's `/j/<code>`, `/t/<code>`
   and `/m/<code>`, with nothing after the path. Anything else is refused
   with "That QR code is not a link for this hunt" and never navigated to:
   another origin, another path, a query string or a fragment. Nothing is
   trimmed to make a QR fit, because the host's own QRs never carry
-  anything extra. A match is opened with a full navigation, exactly as
+  anything extra. Spaces or a newline around the whole text are not part
+  of the link: the URL parser drops them before anything is checked. A match is opened with a full navigation, exactly as
   following the link would; the shell already routes those paths on load,
   and same-origin navigation stays inside the installed app.
 - **Install suggestion:** a join link (`/j/<code>`) or an invite link

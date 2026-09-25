@@ -22,7 +22,10 @@ const HUNT_PATH = /^\/([jtm])\/([A-Za-z0-9]{4,32})\/?$/;
 export function scanTarget(text, origin = window.location.origin) {
   let url;
   try {
-    url = new URL(String(text).trim());
+    // The URL parser itself drops spaces and control characters around the
+    // text (WHATWG URL, "strip leading and trailing C0 control or space"),
+    // so a decoder's trailing newline is not part of what is checked.
+    url = new URL(String(text));
   } catch {
     return null;
   }
@@ -36,6 +39,18 @@ export function scanTarget(text, origin = window.location.origin) {
 // frame reads better larger, one that fills it reads fine small.
 const SCAN_EDGES = [1024, 1600, 640];
 
+// The widths to scan an image at: each of SCAN_EDGES, capped at the
+// image's own size, without repeats. A small photo is tried at full size
+// and then at 640, rather than at full size three times.
+export function scanWidths(width, height) {
+  const longEdge = Math.max(width, height);
+  const scales = SCAN_EDGES.map((edge) => Math.min(1, edge / longEdge));
+  return [...new Set(scales)].map((scale) => ({
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }));
+}
+
 // The text of the first QR code found in an image file, or null. jsQR is
 // pure JavaScript (no WebAssembly, which the site's CSP does not allow) and
 // is loaded only when a player actually scans.
@@ -46,10 +61,7 @@ export async function decodeQrFromFile(file) {
   // photo's EXIF orientation, though a QR reads at any rotation anyway.
   const bitmap = await createImageBitmap(file);
   try {
-    for (const edge of SCAN_EDGES) {
-      const scale = Math.min(1, edge / Math.max(bitmap.width, bitmap.height));
-      const width = Math.max(1, Math.round(bitmap.width * scale));
-      const height = Math.max(1, Math.round(bitmap.height * scale));
+    for (const { width, height } of scanWidths(bitmap.width, bitmap.height)) {
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -58,7 +70,6 @@ export async function decodeQrFromFile(file) {
       const { data } = ctx.getImageData(0, 0, width, height);
       const found = jsQR(data, width, height, { inversionAttempts: 'attemptBoth' });
       if (found?.data) return found.data;
-      if (scale === 1) break; // Already full size; larger tries are the same.
     }
     return null;
   } finally {

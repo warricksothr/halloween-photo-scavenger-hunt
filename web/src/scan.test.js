@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { scanTarget } from './scan';
+import { scanTarget, scanWidths } from './scan';
 
 const ORIGIN = 'https://scavenger.example';
 
@@ -29,5 +29,28 @@ describe('scanTarget (ADR 0043)', () => {
     expect(scanTarget('ABCD234567', ORIGIN)).toBeNull();
     expect(scanTarget('javascript:alert(1)', ORIGIN)).toBeNull();
     expect(scanTarget('', ORIGIN)).toBeNull();
+  });
+});
+
+describe('scanWidths', () => {
+  it('scans a phone photo at 1024, 1600 and 640 on the long edge', () => {
+    expect(scanWidths(4032, 3024)).toEqual([
+      { width: 1024, height: 768 },
+      { width: 1600, height: 1200 },
+      { width: 640, height: 480 },
+    ]);
+  });
+
+  it('still tries 640 when the photo is smaller than the larger passes', () => {
+    expect(scanWidths(1200, 900)).toEqual([
+      { width: 1024, height: 768 },
+      { width: 1200, height: 900 },
+      { width: 640, height: 480 },
+    ]);
+    expect(scanWidths(800, 600)).toEqual([
+      { width: 800, height: 600 },
+      { width: 640, height: 480 },
+    ]);
+    expect(scanWidths(500, 500)).toEqual([{ width: 500, height: 500 }]);
   });
 });
