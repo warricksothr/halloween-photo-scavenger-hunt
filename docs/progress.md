@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The app scans hunt QRs.** TKT-01M3B0R3QPF5X2QJV0M2174JCW.
+  A QR or link never opens the installed app on an iPhone, so the join
+  screen has Scan QR code: a still photo, decoded on the device with jsQR
+  (loaded on first use), opening only this site's /j/, /t/ or /m/ link.
+  Join and invite links bring back the install suggestion, which now says
+  to scan the QR again in the app (ADR 0043).
+
 - **2026-09-24 — The host can reopen a closed event.**
   TKT-01M3B121VJKP0T5Y4EN03F6Q27. Drew closed the example event by
   accident, with one click. A closed event now has Reopen (closed → open,

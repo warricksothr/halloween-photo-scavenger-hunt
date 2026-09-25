@@ -172,12 +172,17 @@ strike interstitial, and the drawer restricted variant.
   the Team tab, asks first and then forgets the game on this device
   (ADR 0033).
 - **The join screen suggests installing first** — on an iPhone, a
-  dismissible panel above the form says how to add the app to the home
-  screen and names the join code to use there, since the installed app
-  does not share Safari's sign-in. Chrome's install prompt, where the
-  browser offers one, becomes an Install button; the installed app shows
-  nothing (ADR 0037; `web/src/install.js`,
+  dismissible panel explains Add to Home Screen, then says to open the
+  app, tap Scan QR code and scan the QR again, or enter the join code,
+  since the installed app does not share Safari's sign-in. A join or
+  invite link shows it even after an earlier "Not now". Chrome's install
+  prompt, where the browser offers one, becomes an Install button; the
+  installed app shows nothing (ADR 0037, ADR 0043; `web/src/install.js`,
   `web/src/components/InstallHint.jsx`).
+- **The app scans hunt QRs from a photo** — the join screen, without a
+  code in the URL, has Scan QR code. It takes a still photo, decodes it
+  on the device and opens only this site's join, invite or moderator
+  link (ADR 0043; `web/src/scan.js`, `web/src/components/ScanQr.jsx`).
 - **The join screen lists the games to go back to** — above the form,
   each live game this device joined, with the codename used there. One
   tap rejoins as the same player; a refusal says why and drops the game

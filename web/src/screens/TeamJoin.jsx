@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { api } from '../api';
+import { InstallHint } from '../components/InstallHint';
 import { DEFAULT_THEME, loadTheme } from '../theme';
 import { refresh } from '../store';
 
@@ -97,6 +98,12 @@ export function TeamJoinScreen({ token, copy: copyProp }) {
   return (
     <div class="frame">
       <main style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24 }}>
+        {/* An invite link opens in Safari on an iPhone; installing first
+            and scanning the invite QR in the app keeps the player's
+            session in the app (ADR 0043). */}
+        <div style={{ maxWidth: 340, width: '100%' }}>
+          <InstallHint copy={copy} fromLink />
+        </div>
         <div class="panel" style={{ maxWidth: 340, width: '100%' }}>
           {loadError ? (
             <>

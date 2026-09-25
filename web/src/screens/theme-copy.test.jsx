@@ -33,6 +33,13 @@ const mocks = vi.hoisted(() => ({
         resumeHeading: 'JOIN_RESUME_HEADING',
         resumeAs: (name) => `JOIN_RESUME_AS(${name})`,
         resumeOr: 'JOIN_RESUME_OR',
+        scan: {
+          button: 'JOIN_SCAN_BUTTON',
+          reading: 'JOIN_SCAN_READING',
+          hint: 'JOIN_SCAN_HINT',
+          notFound: 'JOIN_SCAN_NOT_FOUND',
+          notOurs: 'JOIN_SCAN_NOT_OURS',
+        },
       },
       teamJoin: {
         headline: 'TEAMJOIN_HEADLINE',
@@ -121,6 +128,9 @@ describe('game-facing copy comes from the theme pack', () => {
     expect(await screen.findByLabelText('JOIN_CODE_LABEL')).toBeTruthy();
     expect(screen.getByPlaceholderText('JOIN_CODE_PH')).toBeTruthy();
     expect(screen.getByPlaceholderText('JOIN_DEVICE_PH')).toBeTruthy();
+    // The scanner (ADR 0043) takes its words from the pack too.
+    expect(screen.getByRole('button', { name: 'JOIN_SCAN_BUTTON' })).toBeTruthy();
+    expect(screen.getByText('JOIN_SCAN_HINT')).toBeTruthy();
   });
 
   it('renders the rejoin list from copy', async () => {

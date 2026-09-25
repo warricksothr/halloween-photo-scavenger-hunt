@@ -66,18 +66,27 @@ export default {
       resumeAs: (name) => `Return as ${name}`,
       resumeOr: 'Or join another hunt:',
       // The install suggestion (TKT-01M390Y0VQ). On an iPhone the app keeps
-      // its own sign-in apart from Safari, so it asks to install first and
-      // names the code to join with in the app.
+      // its own sign-in apart from Safari, so it asks to install first, then
+      // to scan the same QR again from the app (ADR 0043).
       install: {
         headline: 'Install the Batcomputer',
         iosSteps: 'Tap Share (the square with the arrow), then Add to Home Screen.',
         iosThen: (code) =>
           code
-            ? `Then open Arkham Hunt from your home screen and join there with code ${code}. The app keeps its own sign-in, apart from Safari.`
-            : 'Then open Arkham Hunt from your home screen and join there. The app keeps its own sign-in, apart from Safari.',
+            ? `Then open Arkham Hunt from your home screen, tap Scan QR code and scan the QR again, or enter code ${code}. The app keeps its own sign-in, apart from Safari.`
+            : 'Then open Arkham Hunt from your home screen, tap Scan QR code and scan the QR again. The app keeps its own sign-in, apart from Safari.',
         promptBody: 'Add it to your home screen for a full-screen view.',
         install: 'Install',
         dismiss: 'Not now',
+      },
+      // Scanning a hunt QR from a photo (ADR 0043), for the installed app,
+      // which a QR or a link never opens by itself.
+      scan: {
+        button: 'Scan QR code',
+        reading: 'Reading the code…',
+        hint: 'Take a photo of the QR at the door or on a teammate\'s phone.',
+        notFound: 'No QR code found in that photo. Fill the frame with the code and try again.',
+        notOurs: 'That QR code is not a link for this hunt.',
       },
     },
     // The header's Switch Case control (ADR 0033): back to Open Cases,
