@@ -361,6 +361,9 @@ class ModeratorContext:
     moderator_id: str
     event_id: str
     label: str
+    # The name players see on this moderator's verdicts (ADR 0045), or
+    # None. ``label`` is the SSO name and never leaves the console.
+    nickname: str | None = None
 
 
 def issue_moderator_session(
@@ -392,7 +395,7 @@ def current_moderator(request: Request) -> ModeratorContext | None:
     ttl = request.app.state.session_ttl
     row = conn.execute(
         "SELECT s.id AS session_id, s.created_at, s.last_seen_at, s.revoked_at,"
-        "       m.id AS moderator_id, m.event_id, m.label"
+        "       m.id AS moderator_id, m.event_id, m.label, m.nickname"
         " FROM moderator_session s"
         " JOIN moderator m ON m.id = s.moderator_id"
         " WHERE s.token_hash = ?",
@@ -418,6 +421,7 @@ def current_moderator(request: Request) -> ModeratorContext | None:
         moderator_id=row["moderator_id"],
         event_id=row["event_id"],
         label=row["label"],
+        nickname=row["nickname"],
     )
 
 

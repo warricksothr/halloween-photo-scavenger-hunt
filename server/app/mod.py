@@ -206,12 +206,59 @@ def mod_state(
         "moderator": {
             "id": ctx.moderator_id,
             "label": ctx.label,
+            # The name players see on this moderator's verdicts (ADR 0045).
+            "nickname": ctx.nickname,
             # This browser is also signed in to the host console, so the
             # console can offer a link back to it (TKT-01M391CVK8). A
             # hint for a link only: /api/admin still checks every call.
             "host": auth.current_admin(request) is not None,
         },
     }
+
+
+class NicknameBody(BaseModel):
+    # The same cap as a codename or a team name: the nickname sits in the
+    # same places on a player's screen. Empty clears it.
+    nickname: str = Field(max_length=40)
+
+
+@router.put("/nickname")
+def set_nickname(
+    body: NicknameBody,
+    request: Request,
+    ctx: auth.ModeratorContext = Depends(auth.require_moderator),
+):
+    """Set the name players see on this moderator's verdicts (ADR 0045).
+
+    ``label`` is the SSO name or email and stays in the console; the
+    nickname is the only moderator name a player is ever sent. It lives on
+    the moderator row, one per person per event, so it holds across
+    rejoins. Blank or whitespace clears it, and players then see no name."""
+    nickname = body.nickname.strip() or None
+    with locked_transaction(request) as writer:
+        # Read the current value on the writer (ADR 0013), as rename_team
+        # does: both the no-op and the audit's old value come from this
+        # transaction.
+        old = writer.execute(
+            "SELECT nickname FROM moderator WHERE id = ?", (ctx.moderator_id,)
+        ).fetchone()["nickname"]
+        if nickname == old:
+            return {"nickname": old}
+        writer.execute(
+            "UPDATE moderator SET nickname = ? WHERE id = ?",
+            (nickname, ctx.moderator_id),
+        )
+        log_action(
+            writer,
+            event_id=ctx.event_id,
+            actor_type=ActorType.MODERATOR,
+            actor_id=ctx.moderator_id,
+            action=Action.MODERATOR_NICKNAME_SET,
+            entity_type="moderator",
+            entity_id=ctx.moderator_id,
+            details={"old_nickname": old, "new_nickname": nickname},
+        )
+    return {"nickname": nickname}
 
 
 # Verdicts a moderator may issue here. INAPPROPRIATE is deliberately
@@ -425,6 +472,9 @@ def verdict(
             "riddle_id": sub["riddle_id"],
             "status": body.verdict,
             "flavor": body.flavor_text,
+            # Who judged it, as players know them (ADR 0045); None when
+            # the moderator has no nickname.
+            "moderator": ctx.nickname,
         },
         to="team",
         team_id=sub["team_id"],

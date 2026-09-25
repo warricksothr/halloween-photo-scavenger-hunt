@@ -800,7 +800,7 @@ def test_migrated_database_preserves_rows_and_constraints(tmp_path):
     """A copied database can rerun migrations without losing its schema."""
     source_path = tmp_path / "source.db"
     source = db_module.connect(source_path)
-    assert db_module.apply_migrations(source) == [1, 2, 3, 4, 5]
+    assert db_module.apply_migrations(source) == [1, 2, 3, 4, 5, 6]
     source.execute(
         "INSERT INTO event (id, name, join_code, mod_code, created_at)"
         " VALUES ('event-1', 'Persisted Party', 'JOIN1', 'MOD1', 1)"

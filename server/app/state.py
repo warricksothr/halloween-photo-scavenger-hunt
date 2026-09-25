@@ -80,9 +80,10 @@ def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
 
     sub_rows = conn.execute(
         "SELECT s.id, s.riddle_id, s.evidence_item_id, s.status, s.created_at,"
-        "       v.flavor_text AS verdict_flavor"
+        "       v.flavor_text AS verdict_flavor, m.nickname AS verdict_by"
         " FROM submission s"
         " LEFT JOIN verdict v ON v.submission_id = s.id"
+        " LEFT JOIN moderator m ON m.id = v.moderator_id"
         " WHERE s.team_id = ?"
         " ORDER BY s.created_at DESC",
         (ctx.team_id,),
@@ -96,6 +97,12 @@ def state(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
             "evidence_item_id": s["evidence_item_id"],
             "status": s["status"],
             "verdict_flavor": s["verdict_flavor"],
+            # The judging moderator's nickname, read now so a changed
+            # nickname shows everywhere (ADR 0045). Never the label, which
+            # is the SSO name. An INAPPROPRIATE call is a conduct action and
+            # is never put on a person for players (design.md sends them to
+            # the host), so it carries none.
+            "verdict_by": (s["verdict_by"] if s["status"] != "inappropriate" else None),
             "created_at": s["created_at"],
         }
         for s in sub_rows
