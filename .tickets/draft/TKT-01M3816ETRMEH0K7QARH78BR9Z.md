@@ -21,12 +21,12 @@ references: []
 claim: null
 archive: null
 created_at: 2026-09-23T21:01:56Z
-updated_at: 2026-09-23T21:01:56Z
+updated_at: 2026-09-25T15:16:44Z
 created_by:
   id: agent:opencode/t3code-0691bbb1
   name: ""
 updated_by:
-  id: agent:opencode/t3code-0691bbb1
+  id: agent:claude-code/t3code-bf267378
   name: ""
 extensions: {}
 ---
@@ -82,3 +82,11 @@ not mention proxy headers at all; a proxy-fronted container is a supported-looki
 case it silently gets wrong. `deploy/arkham-hunt.service` already carries the flags
 for the systemd path, so the two paths have converged on the same need without the
 container path stating it.
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T15:16:44Z
+
+Docs half done in PR #69 (TKT-01M3CHA8088PDS05GMVFVDJ8ZN, Document self-hosting): CONTAINER.md §7 documents the `command` override with a pinned subnet, taken from the live deployment.
+
+For the image half, there is a simpler option than editing the CMD. uvicorn 0.52.4 (the locked version) defaults `proxy_headers` to True, and reads `forwarded_allow_ips` from the `FORWARDED_ALLOW_IPS` environment variable, falling back to 127.0.0.1 (checked with `inspect.signature(uvicorn.config.Config)` in the server venv). A proxy deploy could then set `FORWARDED_ALLOW_IPS=<gateway>` in its environment and keep the image's CMD. Not yet tried against a live proxy; do that before the docs recommend it.

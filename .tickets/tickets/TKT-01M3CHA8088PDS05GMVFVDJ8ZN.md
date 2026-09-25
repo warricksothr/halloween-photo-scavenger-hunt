@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T15:00:35Z
-updated_at: 2026-09-25T15:01:57Z
+updated_at: 2026-09-25T15:16:44Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -54,12 +54,12 @@ Drew (2026-09-25): the project is ready for someone else to self-host and run, s
 
 ## Acceptance criteria
 
-- [ ] An operator can choose a deployment shape from one start-here page that says what each needs and costs
-- [ ] Every environment variable the server or web build reads is in one reference, with its default and when it is read
-- [ ] The container-behind-a-TLS-proxy recipe is documented from the production deploy, including proxy headers and cookies
-- [ ] Upgrading, rollback, restarts, logs, backups and credential rotation have an operations page
-- [ ] Known errors in the existing deploy docs are fixed (.env quoting, export in an EnvironmentFile, dev extras, a deployment-specific GlitchTip host)
-- [ ] The README describes the built system and points operators at the guide
+- [x] An operator can choose a deployment shape from one start-here page that says what each needs and costs
+- [x] Every environment variable the server or web build reads is in one reference, with its default and when it is read
+- [x] The container-behind-a-TLS-proxy recipe is documented from the production deploy, including proxy headers and cookies
+- [x] Upgrading, rollback, restarts, logs, backups and credential rotation have an operations page
+- [x] Known errors in the existing deploy docs are fixed (.env quoting, export in an EnvironmentFile, dev extras, a deployment-specific GlitchTip host)
+- [x] The README describes the built system and points operators at the guide
 
 ## Implementation plan
 
@@ -80,3 +80,23 @@ Docs only, on branch `t3code/ops-docs`. No code, image or config behaviour chang
 - `AGENTS.md` and `docs/progress.md`: point to the new pages.
 
 Commands in ops docs must have been run (AGENTS.md). Their sources are the production deploy (compose, logs, health, OIDC redirect check), the existing verified recipes, and local runs in this session (stdin password hash, image build).
+
+## Notes
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T15:16:44Z
+
+PR #69 opened: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/69 (branch `t3code/ops-docs`, head 61f51a0, base b7e6cc6). Terva review requested as `ops-docs-69-r1`, run https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/790. `bash scripts/check-quality.sh` passes.
+
+### Verified while writing
+- Local podman 5.4.2, a throwaway container on a bind mount:
+  - After a restart, a signed-in host's readyz answers 401 and a joined player's `/api/state` answers 200.
+  - `backup.sh` fails as the host user with "attempt to write a readonly database". Under `podman unshare` it succeeds. Restoring into a fresh directory needs `chown -R 1000:1000`; after that, health is OK and the player session survives.
+  - `podman restart` failed to rebind its pasta port; stop and then start works.
+- Hashing from stdin works both from the venv and inside the image, and the result verifies.
+- An install from `requirements.lock` gets uvicorn 0.52.4. A plain `-e server` resolved 0.54.0. uv 0.12.13 refuses `uv venv` over an existing venv unless given `--clear`.
+- Read-only on the live host: its compose file and nginx vhost, which §7 generalizes. The data directory is uid 1000 with mode 750, so `backup.sh` there runs as root.
+
+### Rejected alternatives
+- **Fix the image instead of documenting the `command` override** (TKT-01M3816ETRMEH0K7QARH78BR9Z): that is a code change, and this pass is docs only.
+- **Ship `deploy/compose.proxy.yml`:** a snippet in CONTAINER.md §7 keeps one copy. The operator's file lives outside the checkout anyway, so a pull cannot overwrite it.
+- **A cron line for backups:** no scheduled backup has been run on a real host, so the docs say that nothing schedules it rather than show an unverified command.
