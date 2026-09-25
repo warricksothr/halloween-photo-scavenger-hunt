@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The host can reopen a closed event.**
+  TKT-01M3B121VJKP0T5Y4EN03F6Q27. Drew closed the example event by
+  accident, with one click. A closed event now has Reopen (closed → open,
+  `event.reopened`), and both Close and Reopen ask first. Expired scans
+  stay expired and players resubmit them; the recap shows the reopen
+  (ADR 0042).
+
 - **2026-09-24 — The frontend names its build.** TKT-01M3B0EWQAPS240GZX1TJF348G.
   The join screen, the Case screen and the moderator console end with
   `Build <id>`, the release baked into the bundle (`dev` locally). The

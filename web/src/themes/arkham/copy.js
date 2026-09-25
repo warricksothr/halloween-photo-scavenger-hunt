@@ -245,6 +245,7 @@ export default {
       n > 0
         ? `The window closed. Intel expired on ${n} pending scan${n === 1 ? '' : 's'}.`
         : 'The window closed — every scan reviewed.',
+    reopened: () => 'The host reopened the hunt — back in play',
     firstSolve: (e) =>
       `${e.team} drew first blood — Riddle #${e.riddle_sort} verified`,
     solve: (e) =>

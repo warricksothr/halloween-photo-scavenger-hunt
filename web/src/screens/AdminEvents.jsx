@@ -32,6 +32,10 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
   const [showCreate, setShowCreate] = useState(false);
   const [created, setCreated] = useState(null); // event plus its codes
   const [purgeFor, setPurgeFor] = useState(null); // event awaiting confirm
+  // { id, action: 'close' | 'reopen' } awaiting the host's second click
+  // (ADR 0042): a close used to be one click, and is how an event ended
+  // by accident.
+  const [lifecycleFor, setLifecycleFor] = useState(null);
   const [confirmName, setConfirmName] = useState('');
   // One event's links open at a time: its codes, fetched on demand.
   const [linksFor, setLinksFor] = useState(null); // { id, codes }
@@ -55,6 +59,7 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
       setEvents([]);
       setCreated(null);
       setPurgeFor(null);
+      setLifecycleFor(null);
       closeLinks();
       setError(null);
       onSessionExpired?.();
@@ -240,11 +245,16 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
                   )}
                   {item.status === 'open' && (
                     <button class="admin-btn secondary" disabled={busy}
-                            onClick={() =>
-                              mutate(() => api.adminCloseEvent(item.id), {
-                                refetch: true,
-                              })}>
+                            aria-expanded={lifecycleFor?.id === item.id}
+                            onClick={() => setLifecycleFor({ id: item.id, action: 'close' })}>
                       Close
+                    </button>
+                  )}
+                  {item.status === 'closed' && (
+                    <button class="admin-btn secondary" disabled={busy}
+                            aria-expanded={lifecycleFor?.id === item.id}
+                            onClick={() => setLifecycleFor({ id: item.id, action: 'reopen' })}>
+                      Reopen
                     </button>
                   )}
                   {item.status === 'closed' && (
@@ -262,6 +272,22 @@ export function AdminEvents({ initialEvents, onSessionExpired }) {
                   codes={linksFor.codes}
                   busy={busy}
                   onRotate={(kind) => onRotate(item, kind)}
+                />
+              )}
+
+              {lifecycleFor?.id === item.id && (
+                <LifecycleConfirm
+                  event={item}
+                  action={lifecycleFor.action}
+                  busy={busy}
+                  onConfirm={async () => {
+                    const call = lifecycleFor.action === 'close'
+                      ? api.adminCloseEvent
+                      : api.adminReopenEvent;
+                    await mutate(() => call(item.id), { refetch: true });
+                    setLifecycleFor(null);
+                  }}
+                  onCancel={() => setLifecycleFor(null)}
                 />
               )}
 
@@ -506,6 +532,39 @@ function CodeCard({ title, url, note, actions }) {
       )}
       {actions && <div class="admin-code-actions">{actions}</div>}
       <p class="admin-note">{note}</p>
+    </div>
+  );
+}
+
+// The second click for a close or a reopen (ADR 0042). Each says what it
+// does to the players, since both are visible to the whole party at once.
+function LifecycleConfirm({ event, action, busy, onConfirm, onCancel }) {
+  const closing = action === 'close';
+  return (
+    <div class="admin-lifecycle" role="group" aria-label={closing ? 'Confirm close' : 'Confirm reopen'}>
+      <p>
+        {closing ? (
+          <>
+            Closing <b>{event.name}</b> ends the round: scans still waiting
+            for a moderator expire, and every player sees the final
+            standings. You can reopen it afterwards.
+          </>
+        ) : (
+          <>
+            Reopening <b>{event.name}</b> puts the round back in play.
+            Players can submit and join again. Scans that expired at the
+            close stay expired, and players resubmit them.
+          </>
+        )}
+      </p>
+      <div class="admin-actions">
+        <button class="admin-btn" disabled={busy} onClick={onConfirm}>
+          {closing ? 'Close the round' : 'Reopen the round'}
+        </button>
+        <button class="admin-btn secondary" disabled={busy} onClick={onCancel}>
+          {closing ? 'Keep it open' : 'Leave it closed'}
+        </button>
+      </div>
     </div>
   );
 }

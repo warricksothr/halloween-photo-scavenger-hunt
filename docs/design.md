@@ -195,6 +195,7 @@ stateDiagram-v2
     [*] --> LOBBY : admin creates event
     LOBBY --> OPEN : host starts the round
     OPEN --> CLOSED : host ends the round
+    CLOSED --> OPEN : host reopens (ADR 0042)
     CLOSED --> [*] : data retained, then purged
 
     note right of LOBBY
@@ -217,6 +218,11 @@ closure loses cleanly, because verdicts are conditional writes
 (`WHERE status = 'PENDING'` — see Moderator experience): the moderator
 gets "already resolved", the submission stays `EXPIRED`, and no point
 can appear after the final standings.
+
+The host can **reopen** a closed round (ADR 0042), for a close made by
+mistake. It moves the event back to `OPEN` and nothing else: expired
+submissions stay `EXPIRED`, and players submit those photos again. Both
+Close and Reopen ask for confirmation in the host console.
 
 ### Team invite flow (stretch)
 
