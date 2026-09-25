@@ -721,3 +721,38 @@ def test_backup_fails_when_retention_cannot_delete_an_archive(tmp_path):
         result = _run_backup(destination, env)
     assert result.returncode != 0
     assert "simulated failure" in result.stderr
+
+
+def test_build_pages_assembles_the_site_and_refuses_a_used_directory(tmp_path):
+    """scripts/build-pages.sh (docs/site/README.md) publishes three trees
+    from main. Check each lands where the project page links to it, and
+    that a non-empty output directory is refused: the publish step replaces
+    the whole gh-pages tree with it, so a stray file would go public."""
+    script = REPO_ROOT / "scripts" / "build-pages.sh"
+    out = tmp_path / "site"
+    run = subprocess.run(
+        ["bash", str(script), str(out)], capture_output=True, text=True
+    )
+    assert run.returncode == 0, run.stderr
+
+    assert (out / "index.html").read_bytes() == (
+        REPO_ROOT / "docs" / "site" / "index.html"
+    ).read_bytes()
+    assert (out / ".nojekyll").is_file()
+    shots = sorted(p.name for p in (REPO_ROOT / "docs" / "screenshots").glob("*.png"))
+    assert shots and sorted(p.name for p in (out / "screenshots").iterdir()) == shots
+    mocks = REPO_ROOT / "docs" / "impl" / "mocks"
+    for source in mocks.rglob("*"):
+        if source.is_file():
+            copied = out / "mocks" / source.relative_to(mocks)
+            assert copied.read_bytes() == source.read_bytes(), copied
+    # Every local reference on the project page resolves inside the build.
+    page = (out / "index.html").read_text()
+    for ref in re.findall(r'(?:src|href)="(?!https?:|#)([^"]+)"', page):
+        assert (out / ref).exists(), f"index.html links to missing {ref}"
+
+    again = subprocess.run(
+        ["bash", str(script), str(out)], capture_output=True, text=True
+    )
+    assert again.returncode != 0
+    assert "non-empty" in again.stderr
