@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T17:51:01Z
-updated_at: 2026-09-25T18:04:05Z
+updated_at: 2026-09-25T18:04:40Z
 created_by:
   id: agent:claude-code/t3code-55409a8b
   name: ""
@@ -79,3 +79,7 @@ Verification: `bash scripts/check-quality.sh` exits 0 (server 600 passed, 96% br
 Decisions made without asking, each easy to reverse and recorded in ADR 0045: no nickname means players see no name (not "A moderator", not the label); an INAPPROPRIATE call carries no moderator for players; nicknames are read at request time, so a rename shows on past verdicts; the log sentence for moderator.nickname_set sits in the Moderation filter.
 
 Three schema-version pins moved 5 → 6 (test_health, test_regressions, test_deployment_checks), as 0005 did. In the first gate run test_regressions::test_mod_join_after_the_event_is_purged_is_not_a_500 failed once; it passed alone and in two further full runs, so it looks like a pre-existing flake in that interleaving test. No change was made for it.
+
+**agent:claude-code/t3code-55409a8b** at 2026-09-25T18:04:40Z
+
+PR #71 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/71), branch t3code/mod-nickname, base main 457f0cb, head eb03699. Terva review requested as pr71-mod-nickname-1: the dispatch answered with the empty-JSON error the docs describe, and the run was created anyway as run 810 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/actions/runs/810). Quality CI is run 809.
