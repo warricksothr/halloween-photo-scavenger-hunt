@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T17:51:01Z
-updated_at: 2026-09-25T17:51:17Z
+updated_at: 2026-09-25T18:04:05Z
 created_by:
   id: agent:claude-code/t3code-55409a8b
   name: ""
@@ -46,15 +46,15 @@ Today players never see who judged a photo. A moderator's `label` is their SSO d
 
 ## Acceptance criteria
 
-- [ ] A moderator can set, change and clear a nickname from the console; it is trimmed, capped at 32 characters, kept per event across rejoins, and each change is audited.
-- [ ] Players see the nickname of the moderator who issued a game verdict on that verdict; with no nickname set they see no moderator name, and the SSO label never reaches a player.
-- [ ] The INAPPROPRIATE conduct action is not attributed to a moderator on any player surface.
-- [ ] The moderation log shows the moderator's name with the nickname in parentheses, for actions and for rows about a moderator.
-- [ ] Server and UI tests cover it; schema.md, api.md, audit-actions.md, ui.md, progress.md and an ADR record it.
+- [x] Players see the nickname of the moderator who issued a game verdict on that verdict; with no nickname set they see no moderator name, and the SSO label never reaches a player.
+- [x] The INAPPROPRIATE conduct action is not attributed to a moderator on any player surface.
+- [x] The moderation log shows the moderator's name with the nickname in parentheses, for actions and for rows about a moderator.
+- [x] Server and UI tests cover it; schema.md, api.md, audit-actions.md, ui.md, progress.md and an ADR record it.
+- [x] A moderator can set, change and clear a nickname from the console; it is trimmed, capped at 40 characters like a codename or team name, kept per event across rejoins, and each change is audited.
 
 ## Implementation plan
 
-Server: migration 0006 adds a nullable `moderator.nickname`. The row is one per person per event (0002), so a rejoin keeps it; join refreshes `label` only. `PUT /api/mod/nickname {nickname}` trims, caps at 32, and treats empty as clear (NULL); audited as `moderator.nickname_set` with before/after. `GET /api/mod/state` returns it. `ModeratorContext` carries it.
+Server: migration 0006 adds a nullable `moderator.nickname`. The row is one per person per event (0002), so a rejoin keeps it; join refreshes `label` only. `PUT /api/mod/nickname {nickname}` trims, caps at 40, and treats empty as clear (NULL); audited as `moderator.nickname_set` with before/after. `GET /api/mod/state` returns it. `ModeratorContext` carries it.
 
 Players: `/api/state` submissions gain `verdict_by`, the judging moderator's nickname, resolved at read time through verdict.moderator_id, and null for an inappropriate verdict or no nickname. The `verdict` SSE delta carries `moderator` too, so a delta is self-describing, but the client already refetches the snapshot on a verdict. RiddleDetail shows "Reviewed by NICK" under the banner. The copy stays in the theme pack, since it is a game-verdict surface.
 
@@ -63,3 +63,19 @@ Ledger: `_Names` formats a moderator as `label (nickname)` when one is set, for 
 Console: a small nickname form in the rail, seeded from `state.moderator.nickname`; the header shows the nickname beside the label.
 
 Alternatives, in the ADR: snapshot the nickname on the verdict row (stale-proof but a column per verdict and a rename would not reach old verdicts; read-time matches ADR 0044); fall back to the label for players (leaks an SSO name/email); attribute inappropriate verdicts (points players at a person over a conduct call, where design.md sends them to the host).
+
+## Notes
+
+**agent:claude-code/t3code-55409a8b** at 2026-09-25T17:51:45Z
+
+Cap moved from 32 to 40 characters before any code landed, to match player codenames and team names (players.py JoinBody, teams.py RenameBody): the nickname sits in the same places on screen. The criterion was re-added at the end, so the list order changed.
+
+**agent:claude-code/t3code-55409a8b** at 2026-09-25T18:04:05Z
+
+Built on t3code/mod-nickname: a87e0e7 (server), b08b4ec (console, banner, log, e2e), b7df7ab (ADR 0045 and docs).
+
+Verification: `bash scripts/check-quality.sh` exits 0 (server 600 passed, 96% branch coverage, Ruff clean; web 272 vitest; build). `web/e2e/game-loop.spec.js` passes against the built app: the moderator saves "Oracle", the header reads "Browser Test Moderator (Oracle)", the player's banner reads "Analysis by Oracle", and the log row reads "... (Oracle) marked Batman's photo ...". Screenshots were checked by eye; the byline font was changed from Orbitron to the body font afterwards.
+
+Decisions made without asking, each easy to reverse and recorded in ADR 0045: no nickname means players see no name (not "A moderator", not the label); an INAPPROPRIATE call carries no moderator for players; nicknames are read at request time, so a rename shows on past verdicts; the log sentence for moderator.nickname_set sits in the Moderation filter.
+
+Three schema-version pins moved 5 → 6 (test_health, test_regressions, test_deployment_checks), as 0005 did. In the first gate run test_regressions::test_mod_join_after_the_event_is_purged_is_not_a_500 failed once; it passed alone and in two further full runs, so it looks like a pre-existing flake in that interleaving test. No change was made for it.
