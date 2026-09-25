@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3B8C2403X03ZESG74BCK66X
 title: Show the moderation log in the moderator console
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -15,17 +15,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: null
-  worktree: /tmp/bf267378-tk
-  commit: f6de965d877b2fb0112766789aea349a9ac2b988
-  session: null
-  claimed_at: 2026-09-25T03:05:03Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T03:05:03Z
-updated_at: 2026-09-25T03:30:41Z
+updated_at: 2026-09-25T03:39:25Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -62,3 +55,7 @@ PR #68 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 - pr68-mod-log-2 (run 779, head e9ea6ff): medium, 'no duplicate-flag branch'. The reviewer lacked the context: both duplicate_flag actions are logged with entity_type evidence_item (evidence.py:296, mod.py:684), which the resolver handles. 2347641 adds a real raised-and-cleared flag test that passes with no code change.
 - pr68-mod-log-3 (run 781, head 2347641, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/68#issuecomment-13017): passed; only the .tickets finding remains, declined as on every PR. CI quality gate passed.
 Gate passes; e2e 18/18, including game-loop opening the Log and a verdict's photo.
+
+## Summary
+
+Merged in PR #68 (merge 0994fd1) and deployed to scavenger.nulloctet.com at 0994fd1 on 2026-09-24. GET /api/mod/audit now names each row's actor and subject. The moderator console has a Log view: newest first, plain sentences, Moderation and Everything filters, the photo behind a row, and live refresh with superseded reads dropped (ADR 0044).
