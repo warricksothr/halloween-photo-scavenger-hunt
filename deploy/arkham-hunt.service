@@ -24,7 +24,7 @@
 #     ARKHAM_OIDC_CLIENT_ID=<client id>
 #     ARKHAM_OIDC_CLIENT_SECRET=<client secret>
 #     ARKHAM_ADMIN_API_TOKEN=<random secret; scripted admin access>
-#     ARKHAM_ERROR_DSN=https://<key>@glitchtip.nulloctet.com/1
+#     ARKHAM_ERROR_DSN=https://<key>@<glitchtip-host>/<project>
 #     ARKHAM_TRACES_SAMPLE_RATE=0.1
 #     ARKHAM_ENVIRONMENT=production
 #     ARKHAM_RELEASE=<git revision>

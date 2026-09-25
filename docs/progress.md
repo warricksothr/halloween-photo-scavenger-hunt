@@ -46,6 +46,15 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-25 — Operator documentation for self-hosting.**
+  TKT-01M3CHA8088PDS05GMVFVDJ8ZN. `deploy/README.md` is the start page:
+  what the app needs and the three recipes. The container behind a TLS
+  proxy is now CONTAINER.md §7, taken from the live deployment.
+  `CONFIGURATION.md` lists every variable, and `OPERATIONS.md` covers
+  upgrade, rollback, restarts, logs, backups and rotation. Fixed along the
+  way: CONTAINER.md's `.env` recipe mangled the password hash, and the
+  RUNBOOK's GlitchTip block used `export` in an EnvironmentFile.
+
 - **2026-09-24 — Moderators can read the moderation log.**
   TKT-01M3B8C2403X03ZESG74BCK66X. The console's Log view lists the event's
   audit trail newest first in plain sentences: who marked which photo

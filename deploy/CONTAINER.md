@@ -1,9 +1,12 @@
-# Container runbook — local podman or docker
+# Container runbook — podman or docker
 
-One page. This is the **local / LAN-party** deployment: one container
-holds the whole app (web build + FastAPI server + SQLite), with no
-nginx and no TLS. For the TLS-terminated VPS path, see
-`deploy/RUNBOOK.md` (systemd + nginx) instead.
+One container holds the whole app (web build + FastAPI server + SQLite).
+§1–6 run it on its own over plain HTTP: the **local / LAN-party**
+deployment, with no proxy and no TLS. §7 puts the same image behind a TLS
+reverse proxy for a standing deployment. For the systemd path with no
+container, see `deploy/RUNBOOK.md`. [`README.md`](README.md) compares
+the three, and [`CONFIGURATION.md`](CONFIGURATION.md) lists every
+variable.
 
 The easy path is **compose** — one command up, one command down
 (§1). The raw `podman run` recipe stays in §2 for hosts without a
@@ -14,22 +17,26 @@ of `podman-compose`, `podman compose`, or `docker compose` works — the
 
 ## When to use this vs. the systemd path
 
-|                        | Container (this doc)              | systemd + nginx (RUNBOOK.md)        |
-| ---------------------- | --------------------------------- | ----------------------------------- |
-| TLS / public hostname  | no — plain HTTP on a LAN port     | yes — nginx terminates TLS          |
-| Host needs Python/Node | no — both live in the image       | yes                                 |
-| Best for               | party-night on a laptop/LAN, evals | the standing VPS deployment         |
+|                        | LAN container (§1–6)               | Container behind a proxy (§7)   | systemd + nginx (RUNBOOK.md)     |
+| ---------------------- | ---------------------------------- | ------------------------------- | -------------------------------- |
+| TLS / public hostname  | no — plain HTTP on a LAN port      | yes — the proxy terminates TLS  | yes — nginx terminates TLS       |
+| Host needs Python/Node | no — both live in the image        | no                              | yes                              |
+| Best for               | party-night on a laptop/LAN, evals | a standing deployment           | a host with no container runtime |
 
 ## 1. One command: compose
 
 ```sh
-# Credentials go in a gitignored .env beside compose.yml (or export
-# them in the shell). Generate the hash with any checkout's venv:
-server/.venv/bin/python -m app.security 'your-password'
-cat > .env <<EOF
-ARKHAM_ADMIN_USERNAME=admin
-ARKHAM_ADMIN_PASSWORD_HASH=<hash from above>
-EOF
+# Credentials go in a gitignored .env beside compose.yml. Hash the
+# password from the terminal, so it stays out of shell history
+# (CONFIGURATION.md, "The admin password", has a no-Python variant):
+read -rsp 'Admin password: ' PW; echo
+HASH=$(printf '%s' "$PW" | server/.venv/bin/python -c \
+  'import sys; from app.security import hash_password; print(hash_password(sys.stdin.read()))')
+unset PW
+# Single quotes, written by printf: compose expands every unquoted `$`
+# in the hash, and a heredoc would expand them before compose saw them.
+printf "ARKHAM_ADMIN_USERNAME=admin\nARKHAM_ADMIN_PASSWORD_HASH='%s'\n" "$HASH" > .env
+chmod 600 .env
 
 podman-compose up -d        # builds the image on first run, then starts
 ```
@@ -68,16 +75,14 @@ volume must cover.
 Then run it:
 
 ```sh
-# Generate the admin password hash once (any checkout with the server
-# venv works; or `podman run --rm --entrypoint python arkham-hunt:local
-# -m app.security 'your-password'`):
-server/.venv/bin/python -m app.security 'your-password'
-
+# Hash the admin password into $HASH first (CONFIGURATION.md, "The admin
+# password"; the image itself can do it). "$HASH" passes it through
+# whole: the shell does not re-expand the `$`s inside a variable's value.
 podman volume create arkham-data
 podman run -d --name arkham-hunt \
   -p 127.0.0.1:8080:8000 \
   -e ARKHAM_ADMIN_USERNAME=admin \
-  -e ARKHAM_ADMIN_PASSWORD_HASH='<hash from above>' \
+  -e ARKHAM_ADMIN_PASSWORD_HASH="$HASH" \
   -e ARKHAM_COOKIE_SECURE=false \
   -v arkham-data:/srv/arkham/data \
   arkham-hunt:local
@@ -184,7 +189,50 @@ Copy each archive to a second disk and keep only a bounded number of them
 and `ARKHAM_BACKUP_KEEP`); an archive left beside the volume is on the same
 disk as the data it protects.
 
+### With a bind mount: `deploy/backup.sh`
+
+When the data is a host directory rather than a named volume (§7 uses
+one), run the same script the systemd path uses, from a checkout, with
+`ARKHAM_DATA_DIR` pointing at it. It takes the online snapshot while the
+game runs, archives the photos with it, and mirrors and prunes as
+`CONFIGURATION.md` describes.
+
+The files belong to the container's user (uid 1000), and SQLite needs to
+write beside a WAL database even to read it, so run the script as that
+owner. As yourself it fails with `attempt to write a readonly database`.
+
+```sh
+# Rootless podman: `podman unshare` runs it as the owner of the mapped files.
+podman unshare env ARKHAM_DATA_DIR=/path/to/data \
+  sh deploy/backup.sh /path/to/backups
+# Rootful docker: the files are uid 1000 on the host too.
+sudo env ARKHAM_DATA_DIR=/path/to/data sh deploy/backup.sh /path/to/backups
+```
+
+Restore into a bind mount: stop the container, move the old directory
+aside, extract the archive into a fresh one, give it back to uid 1000,
+and start. The archive holds `arkham.db` and `photos/` at its root, so
+extract into the data directory itself:
+
+```sh
+podman stop arkham-hunt
+podman unshare mv /path/to/data /path/to/data.saved
+mkdir -p /path/to/data
+ARCHIVE=$(ls -1t /path/to/backups/arkham-backup-*.tar.gz | head -n 1)
+podman unshare tar -xzf "$ARCHIVE" -C /path/to/data
+podman unshare chown -R 1000:1000 /path/to/data
+podman start arkham-hunt
+curl -s http://127.0.0.1:8080/api/health    # ok, and the same schema_version
+```
+
+With rootful docker, drop `podman unshare` and run those lines with
+`sudo`. Skip the `chown` and the app cannot write its own database.
+
 ## 5. Update to a new build
+
+Back up first (§4): a new build migrates the database when it starts,
+and an older build cannot use the migrated file. `OPERATIONS.md` covers
+upgrades and rolling back.
 
 ```sh
 git pull
@@ -203,11 +251,173 @@ podman rmi arkham-hunt:local  # image too, if reclaiming space
 # (raw path: podman rm -f arkham-hunt && podman volume rm arkham-data)
 ```
 
+## 7. Behind a TLS reverse proxy
+
+The standing deployment: the same image, published on loopback only, with
+nginx (or any reverse proxy) in front terminating TLS on the public name.
+This is how the reference deployment has run since 2026-09-23, under
+docker compose. The files below are its own, with the host's names taken
+out.
+
+Don't reuse the repository's `compose.yml` for this. It is the LAN recipe
+and gets three things wrong behind a proxy:
+
+1. **Proxy headers are off.** The image starts uvicorn without
+   `--proxy-headers`, so behind a proxy every request seems to come from
+   the proxy's address. Every player then shares one rate-limit bucket
+   (ADR 0015), so one noisy phone throttles the party. And the app
+   builds its SSO callback as `http://`, which a strict identity
+   provider rejects. The compose file below overrides the command to trust
+   `X-Forwarded-*` from the proxy, and only from the proxy
+   (TKT-01M3816ETRMEH0K7QARH78BR9Z tracks fixing the image).
+2. **It turns secure cookies off.** Right on plain HTTP, and wrong behind
+   TLS, where it would let a session cookie travel in the clear. Leave
+   `ARKHAM_COOKIE_SECURE` unset here.
+3. **It keeps the data in a named volume.** A bind mount puts the data
+   where your host's backups can see it.
+
+### The compose file
+
+Keep it in a directory of its own with its `.env`, outside the checkout,
+so a `git pull` never touches it. `<checkout>` is a clone of this
+repository, and `<data>` is the data directory. Create `<data>` owned by
+uid 1000 before the first start, since the container runs as that user:
+`sudo install -d -o 1000 -g 1000 -m 750 <data>`.
+
+```yaml
+services:
+  arkham:
+    build:
+      context: <checkout>
+      dockerfile: Containerfile
+      args:
+        # Compiled into the web app: change these, then build again.
+        VITE_ERROR_DSN: ${VITE_ERROR_DSN:-}
+        VITE_TRACES_SAMPLE_RATE: ${VITE_TRACES_SAMPLE_RATE:-0.1}
+        VITE_ERROR_ENVIRONMENT: ${ARKHAM_ENVIRONMENT:-production}
+        VITE_ERROR_RELEASE: ${ARKHAM_RELEASE:-}
+    image: localhost/arkham-hunt:prod
+    container_name: arkham-hunt
+    restart: unless-stopped
+    ports:
+      # Loopback only. Docker's port publishing bypasses a host firewall
+      # such as ufw, so "8456:8000" would be public whatever ufw says.
+      - "127.0.0.1:8456:8000"
+    # The image's command plus --proxy-headers, trusting X-Forwarded-* only
+    # from the network's gateway: the address every request from the host's
+    # proxy arrives from. The subnet is pinned below so it cannot drift.
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app.main:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips=172.30.0.1
+    environment:
+      ARKHAM_ADMIN_USERNAME: ${ARKHAM_ADMIN_USERNAME:-admin}
+      ARKHAM_ADMIN_PASSWORD_HASH: ${ARKHAM_ADMIN_PASSWORD_HASH:?set in .env, single-quoted}
+      ARKHAM_ADMIN_API_TOKEN: ${ARKHAM_ADMIN_API_TOKEN:-}
+      ARKHAM_OIDC_ISSUER: ${ARKHAM_OIDC_ISSUER:-}
+      ARKHAM_OIDC_CLIENT_ID: ${ARKHAM_OIDC_CLIENT_ID:-}
+      ARKHAM_OIDC_CLIENT_SECRET: ${ARKHAM_OIDC_CLIENT_SECRET:-}
+      ARKHAM_OIDC_SCOPES: ${ARKHAM_OIDC_SCOPES:-openid profile email groups}
+      ARKHAM_OIDC_ADMIN_GROUP: ${ARKHAM_OIDC_ADMIN_GROUP:-arkham-admin}
+      ARKHAM_OIDC_MODERATOR_GROUP: ${ARKHAM_OIDC_MODERATOR_GROUP:-arkham-moderator}
+      ARKHAM_ERROR_DSN: ${ARKHAM_ERROR_DSN:-}
+      ARKHAM_TRACES_SAMPLE_RATE: ${ARKHAM_TRACES_SAMPLE_RATE:-0.1}
+      ARKHAM_ENVIRONMENT: ${ARKHAM_ENVIRONMENT:-production}
+      ARKHAM_RELEASE: ${ARKHAM_RELEASE:-}
+    volumes:
+      - <data>:/srv/arkham/data
+    networks:
+      - hunt
+
+networks:
+  hunt:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
+```
+
+Pick a free loopback port and a subnet no other network on the host uses,
+and change `--forwarded-allow-ips` to match the gateway. `.env` holds
+the variables ([CONFIGURATION.md](CONFIGURATION.md)). Single-quote the
+password hash and any group name with a space in it.
+
+Build and start, and set `ARKHAM_RELEASE` to the commit on each deploy,
+so the admin console, the readiness probe and error reports name the
+build:
+
+```sh
+sed -i "s/^ARKHAM_RELEASE=.*/ARKHAM_RELEASE=$(git -C <checkout> rev-parse --short HEAD)/" .env
+docker compose build && docker compose up -d
+docker compose ps                        # Up … (healthy)
+curl -s http://127.0.0.1:8456/api/health # {"status":"ok","schema_version":N}
+```
+
+The `sed` edits an existing `ARKHAM_RELEASE=` line, so add one to `.env`
+the first time.
+
+### The proxy
+
+Start from `deploy/nginx.conf`, pointed at `127.0.0.1:8456`. What
+matters, and why:
+
+- **`proxy_buffering off` on `/api/events/stream`**, with a read timeout
+  above the app's 15-second heartbeat. Without it the queue and the
+  players' tiles stop updating live.
+- **`X-Forwarded-Proto https`**, so the app builds `https://` links and
+  its SSO callback.
+- **`X-Forwarded-For`**, for the rate limiter. The reference deployment
+  sets it to `$remote_addr` rather than appending, because nginx is the
+  edge and nothing a client sends in that header should reach the app.
+- **`client_max_body_size 16m`**, above the app's 15 MB cap, so an
+  oversized photo gets the app's own error instead of nginx's HTML page.
+- **The security headers and CSP.** The app sends none of its own. Put
+  your GlitchTip origin in `connect-src` if you report browser errors.
+
+Check what the app derives, through the proxy's headers, without a
+browser. The `redirect_uri` in the answer must match the one registered
+with your identity provider exactly:
+
+```sh
+curl -s -o /dev/null -w '%{redirect_url}\n' -H 'Host: <your host>' \
+  -H 'X-Forwarded-Proto: https' http://127.0.0.1:8456/api/auth/oidc/login
+```
+
+A request that skips the proxy still gets an `http://` callback, which is
+the trust list doing its job.
+
+### Running it
+
+| Task | Command |
+| --- | --- |
+| Apply a changed `.env` | `docker compose up -d` |
+| Apply a changed `VITE_*`, or a new commit | `docker compose build && docker compose up -d` |
+| State and health | `docker compose ps` |
+| Logs | `docker logs -f --since 10m arkham-hunt` |
+| What the container really got | `docker exec arkham-hunt printenv NAME` |
+| A shell inside it | `docker exec -it arkham-hunt sh` |
+| Back up and restore | §4, "With a bind mount" |
+
+[OPERATIONS.md](OPERATIONS.md) covers upgrades, restarts and credential
+rotation for every recipe.
+
 ## Gotchas verified on the first pass
 
 - **Port already in use**: if `podman run` fails with
   `rootlessport ... bind: address already in use`, another service owns
   the port (dev servers love 8000/8080) — pick another host port.
+- **`podman restart` fails to bind its own port** (podman 5 with the
+  `pasta` network): `Failed to bind port ... (Address already in use)`,
+  and the container stays down. `podman stop arkham-hunt && podman start
+  arkham-hunt` works.
 - **Healthcheck missing**: you built without `--format docker`. The app
   runs fine; you just lose `podman inspect`'s health status.
 - **Logins bounce**: missing `ARKHAM_COOKIE_SECURE=false` (see §1).
