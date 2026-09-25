@@ -25,7 +25,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T00:51:49Z
-updated_at: 2026-09-25T01:16:42Z
+updated_at: 2026-09-25T01:37:52Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -60,11 +60,23 @@ Drew, 2026-09-24: a join QR or a texted link always opens in the browser, never 
 
 ## Acceptance criteria
 
-- [ ] The join screen has a Scan QR code button that takes or picks a photo (no live camera view) and decodes the QR on the device with a pure-JS decoder, loaded only when used.
-- [ ] Only this site's /j/<code>, /t/<token> and /m/<code> links are followed, exactly as opening the link would; anything else is refused with a message and never navigated to. A photo without a readable QR says so.
+- [x] The join screen has a Scan QR code button that takes or picks a photo (no live camera view) and decodes the QR on the device with a pure-JS decoder, loaded only when used.
+- [x] Only this site's /j/<code>, /t/<token> and /m/<code> links are followed, exactly as opening the link would; anything else is refused with a message and never navigated to. A photo without a readable QR says so.
 - [ ] Landing from a link with a code (/j/, /t/, /m/) shows the install suggestion even if it was dismissed before, and its iPhone steps say to open the app and scan the QR again.
-- [ ] No CSP, nginx or kobal change is needed.
-- [ ] Unit tests cover link parsing and the button's states; an e2e test scans a generated QR image and lands on the join screen for that code; an ADR records the decision.
+- [x] No CSP, nginx or kobal change is needed.
+- [x] Unit tests cover link parsing and the button's states; an e2e test scans a generated QR image and lands on the join screen for that code; an ADR records the decision.
+
+## Implementation plan
+
+web/src/scan.js:
+- scanTarget(text, origin) accepts only this origin's /j|t|m/<code> with no query or fragment, and returns the path.
+- scanWidths caps 1024/1600/640 at the photo's own size, without repeats.
+- decodeQrFromFile uses createImageBitmap (the CSP blocks blob: img), a canvas, and jsQR loaded by dynamic import. jsQR is pure JS; the CSP allows no wasm, and WebKit has no BarcodeDetector.
+components/ScanQr.jsx: a Scan QR code button driving a hidden <input type=file accept=image/* capture=environment>, the drawer's primitive. It navigates with location.assign, so the shell routes the path as the link would. Otherwise it shows notFound or notOurs.
+Join.jsx shows ScanQr when the URL carries no code (the installed app opens at /) and passes fromLink to InstallHint on /j/. TeamJoin.jsx adds InstallHint fromLink.
+InstallHint: fromLink ignores the stored dismissal, and 'Not now' then hides it for the page. The iOS copy says to scan the QR again in the app, or enter the code.
+Mod link pages get no hint, because ModJoin starts SSO on load.
+ADR 0043; ui.md; progress.md.
 
 ## Notes
 
@@ -73,3 +85,16 @@ Drew, 2026-09-24: a join QR or a texted link always opens in the browser, never 
 Drew picked this up on 2026-09-24 and decided the open questions:
 - A 'Scan QR code' button that takes a still photo, not a live viewfinder.
 - The install suggestion must show on the page a player lands on from a link that already carries a code, so they install, open the app and scan the QR again.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T01:37:52Z
+
+AC3 is left unticked on purpose. The suggestion shows on join (/j/) and invite (/t/) links, but not on mod links (/m/): ModJoinScreen starts the SSO sign-in as soon as it loads, so a hint would vanish at once. Moderators mostly work from a laptop, and the scanner still accepts mod QRs. ADR 0043 records this. If Drew wants it on /m/ too, the mod page would need to wait for a tap before signing in on an iPhone.
+
+PR #67 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/67), branch t3code/scan-qr, base main.
+- pr67-scan-qr-1 (run 762, head 8858f27): medium, scanTarget trimmed a query string while ADR 0043 says it is refused. Accepted; 1039e63 refuses a query or fragment.
+- pr67-scan-qr-2 (run 763, head 1039e63):
+  - medium, trim() contradicted 'nothing is trimmed'. Partly declined, with evidence: the WHATWG URL parser strips surrounding C0 controls and spaces itself (checked with node), so the trim was redundant. aabba43 removes it and the ADR says so; surrounding whitespace is still accepted.
+  - low, the loop's early break skipped the 640px pass. Accepted; scanWidths dedupes sizes, with tests.
+- pr67-scan-qr-3 (run 765, head aabba43): passed, both resolved. It suggested an invite-page hint test (low). Accepted; 25146ee adds an iPhone e2e for /t/.
+- pr67-scan-qr-4 (run 767, head 25146ee, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/67#issuecomment-12884): passed; only the .tickets finding remains, declined as on every PR. CI quality gate passed.
+The gate passes and e2e is 17/17. Still needs a real iPhone: install, open the app, tap Scan QR code and photograph a printed join QR.
