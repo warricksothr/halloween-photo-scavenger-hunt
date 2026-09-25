@@ -2,9 +2,10 @@
 //
 // Safari never offers to install a web app, and the installed app keeps its
 // own storage apart from Safari's, so a player who installs after joining
-// has to join again. The join screen therefore suggests installing first
-// and names the join code to use in the app. This runs the join screen as
-// an iPhone, and checks the icons iOS and Android install from are served.
+// has to join again. The join screen therefore suggests installing first,
+// then scanning the QR again in the app, or entering the join code (ADR
+// 0043). This runs the join screen as an iPhone, and checks the icons iOS
+// and Android install from are served.
 import { expect, test } from '@playwright/test';
 
 import { adminApi, loginAdmin } from './support';
@@ -37,14 +38,19 @@ test.describe('on an iPhone', () => {
     await page.goto(`/j/${event.join_code}`);
     const hint = page.getByRole('region', { name: 'Install the Batcomputer' });
     await expect(hint).toContainText('Add to Home Screen');
-    await expect(hint).toContainText(`join there with code ${event.join_code}`);
+    await expect(hint).toContainText('tap Scan QR code and scan the QR again');
+    await expect(hint).toContainText(`or enter code ${event.join_code}`);
 
-    // Not now hides it, and it stays hidden on the next visit.
+    // Not now hides it on this page. The plain join page keeps it hidden,
+    // but a link with a code brings it back: joining in Safari there
+    // would strand the player outside the app (ADR 0043).
     await hint.getByRole('button', { name: 'Not now' }).click();
     await expect(hint).toHaveCount(0);
-    await page.reload();
+    await page.goto('/');
     await expect(page.getByLabel('Codename')).toBeVisible();
     await expect(hint).toHaveCount(0);
+    await page.goto(`/j/${event.join_code}`);
+    await expect(hint).toBeVisible();
   });
 });
 

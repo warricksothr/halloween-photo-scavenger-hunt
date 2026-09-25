@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The app scans hunt QRs.** TKT-01M3B0R3QPF5X2QJV0M2174JCW.
+  A QR or link never opens the installed app on an iPhone, so the join
+  screen has Scan QR code: a still photo, decoded on the device with jsQR
+  (loaded on first use), opening only this site's /j/, /t/ or /m/ link.
+  Join and invite links bring back the install suggestion, which now says
+  to scan the QR again in the app (ADR 0043).
+
 - **2026-09-24 — The join screen suggests installing the app, and the
   icons are real.** TKT-01M390Y0VQ. On an iPhone, a dismissible panel says
   how to add the app to the home screen before joining and names the join

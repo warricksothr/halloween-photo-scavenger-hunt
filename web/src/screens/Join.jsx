@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { InstallHint } from '../components/InstallHint';
+import { ScanQr } from '../components/ScanQr';
 import { join, resumableGames, resume } from '../store';
 import { DEFAULT_THEME, loadTheme } from '../theme';
 
@@ -73,7 +74,15 @@ export function JoinScreen() {
 
         {/* Before joining on purpose: an iPhone's installed app does not
             share Safari's storage, so install first, then join there. */}
-        <InstallHint copy={copy} joinCode={joinCode} />
+        <InstallHint copy={copy} joinCode={joinCode} fromLink={Boolean(joinCode)} />
+
+        {/* Without a code in the URL, this is where the installed app
+            opens; scanning the QR is how a player gets one (ADR 0043). */}
+        {!joinCode && (
+          <section style={{ marginBottom: 24 }}>
+            <ScanQr copy={copy} />
+          </section>
+        )}
 
         {games.length > 0 && (
           <section aria-labelledby="resume-heading" style={{ marginBottom: 24 }}>

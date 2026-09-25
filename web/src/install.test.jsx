@@ -67,6 +67,21 @@ describe('install suggestion (TKT-01M390Y0VQ)', () => {
     expect(screen.queryByRole('heading', { name: 'Install' })).toBeNull();
   });
 
+  it('comes back on a page opened from a link with a code (ADR 0043)', () => {
+    setUserAgent(IPHONE);
+    const first = render(<InstallHint copy={copy} joinCode={null} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    first.unmount();
+    // A join or invite link: joining in Safari now would strand the
+    // player outside the app, so the earlier "Not now" does not hold.
+    const linked = render(<InstallHint copy={copy} joinCode="ABCD2345" fromLink />);
+    expect(screen.getByText('Join in the app with ABCD2345.')).toBeTruthy();
+    // "Not now" still hides it on this page.
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('heading', { name: 'Install' })).toBeNull();
+    linked.unmount();
+  });
+
   it("offers Chrome's install prompt when the browser makes one available", async () => {
     render(<InstallHint copy={copy} joinCode={null} />);
     expect(screen.queryByRole('heading', { name: 'Install' })).toBeNull();

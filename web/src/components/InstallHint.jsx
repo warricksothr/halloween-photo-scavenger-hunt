@@ -1,6 +1,10 @@
-// The join screen's suggestion to install the app (TKT-01M390Y0VQ).
-// install.js decides whether one applies; this renders it, once, until
-// the player dismisses it.
+// The suggestion to install the app (TKT-01M390Y0VQ). install.js decides
+// whether one applies; this renders it until the player dismisses it.
+//
+// A page reached from a link that carries a code (a join or invite QR)
+// shows it even after an earlier "Not now" (ADR 0043): that is the moment
+// joining in Safari would strand the player outside the app, and the
+// hint's answer is to install, open the app and scan the same QR again.
 import { useEffect, useState } from 'preact/hooks';
 
 import {
@@ -11,9 +15,9 @@ import {
   promptInstall,
 } from '../install';
 
-export function InstallHint({ copy, joinCode }) {
+export function InstallHint({ copy, joinCode, fromLink = false }) {
   const [mode, setMode] = useState(() => installMode());
-  const [hidden, setHidden] = useState(() => hintDismissed());
+  const [hidden, setHidden] = useState(() => !fromLink && hintDismissed());
 
   // Chrome may offer the prompt after the screen has rendered.
   useEffect(() => onInstallAvailabilityChange(() => setMode(installMode())), []);
