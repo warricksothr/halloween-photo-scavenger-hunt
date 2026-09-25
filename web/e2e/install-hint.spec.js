@@ -52,6 +52,40 @@ test.describe('on an iPhone', () => {
     await page.goto(`/j/${event.join_code}`);
     await expect(hint).toBeVisible();
   });
+
+  test('an invite link brings the suggestion back too (ADR 0043)', async ({ page, playwright }) => {
+    // A team with room for two, and an invite minted by its first member.
+    const teamEvent = await (await admin.post('/api/admin/events', {
+      data: { name: 'Invite Install Hunt', team_size_limit: 4 },
+    })).json();
+    await admin.post(`/api/admin/events/${teamEvent.id}/riddles`, {
+      data: { text: 'Find the team', sort_order: 1 },
+    });
+    expect((await admin.post(`/api/admin/events/${teamEvent.id}/open`)).ok()).toBeTruthy();
+    const inviter = await adminApi(playwright);
+    try {
+      const joined = await inviter.post(`/api/join/${teamEvent.join_code}`, {
+        data: { display_name: 'Inviter' },
+      });
+      expect(joined.status()).toBe(201);
+      const invite = await (await inviter.post('/api/team/invites')).json();
+
+      // Dismissed earlier on the plain join page...
+      await page.goto('/');
+      const hint = page.getByRole('region', { name: 'Install the Batcomputer' });
+      await hint.getByRole('button', { name: 'Not now' }).click();
+      await expect(hint).toHaveCount(0);
+
+      // ...and shown again on the invite page, where "Not now" hides it
+      // for that page.
+      await page.goto(invite.invite_url);
+      await expect(hint).toContainText('tap Scan QR code and scan the QR again');
+      await hint.getByRole('button', { name: 'Not now' }).click();
+      await expect(hint).toHaveCount(0);
+    } finally {
+      await inviter.dispose();
+    }
+  });
 });
 
 test('a desktop browser without an install prompt sees no hint', async ({ page }) => {
