@@ -343,7 +343,10 @@ GET    /api/leaderboard                 → standings; honors visibility toggle
                                           and event not closed)
 GET    /api/recap                       → timeline from audit_event, themed
                                           strings; players only after close
-GET    /api/mod/audit                   full forensic timeline, moderator+
+GET    /api/mod/audit                   full forensic timeline, moderator+;
+                                          each row adds actor_name and
+                                          about {player, team, riddle,
+                                          evidence_id, moderator} (ADR 0044)
 ```
 
 ## The state snapshot (ADR 0003)

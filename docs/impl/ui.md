@@ -42,9 +42,10 @@ console stacks each row instead: content first, its controls on the line
 below, and pickers at full width, so a host can run it from a phone
 (`web/src/admin.css`). A codename two players share is labelled with when
 each joined and its device (`playerLabels` in `web/src/screens/AdminHost.jsx`). Not mocked
-(deliberately): admin login (a bare form) and a standalone moderator
-audit page, which reuses the moderator console's history panel styling
-against `GET /api/mod/audit`.
+(deliberately): admin login (a bare form). The moderator audit page this
+note once planned became the console's Log view (ADR 0044): newest first,
+one plain sentence a row, Moderation and Everything filters, and the
+photo behind a row in the lightbox (`web/src/screens/mod/LogPanel.jsx`).
 
 ## Coverage matrix
 

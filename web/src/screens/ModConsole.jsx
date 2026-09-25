@@ -14,7 +14,7 @@
 // other moderators, never a lock. Queue freshness comes from the
 // store's SSE stream: submission_new and queue_resolved deltas trigger
 // a refetch — no polling.
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import '../mod-console.css';
 import { api } from '../api';
@@ -24,6 +24,7 @@ import { ConductPanel } from './mod/ConductPanel';
 import { DecisionPanel } from './mod/DecisionPanel';
 import { HistoryPanel } from './mod/HistoryPanel';
 import { Lightbox } from './mod/Lightbox';
+import { LogPanel } from './mod/LogPanel';
 import { claimState } from './mod/claims';
 import { QueueList } from './mod/QueueList';
 import { ReviewPane } from './mod/ReviewPane';
@@ -73,6 +74,13 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
   // The rail shows the queue or the team rosters; on a wide screen the
   // rosters take the main area, so the two never compete for space.
   const [view, setView] = useState('queue');
+  // The moderation log (ADR 0044): null until first opened.
+  const [log, setLog] = useState(null);
+  const [logFilter, setLogFilter] = useState('moderation');
+  // Each log read is numbered; only the latest may land. Opening the view
+  // and live deltas can overlap, and an older response arriving last would
+  // otherwise put back a log missing the newest rows.
+  const logRequestRef = useRef(0);
   const [zoom, setZoom] = useState(null); // { src, label } of the full-size photo
   const closeZoom = useCallback(() => setZoom(null), []);
 
@@ -182,13 +190,30 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
     else setTeams(result.teams);
   }
 
+  async function loadLog() {
+    const request = ++logRequestRef.current;
+    const result = await api.modAudit();
+    if (request !== logRequestRef.current) return; // A newer read superseded this one.
+    if (result.error) setError(result.message);
+    else setLog(result);
+  }
+
   function showView(next) {
     setView(next);
     setConfirmRemove(null);
     // Load on open only — membership changes are deliberate moderator
     // acts, not a stream; there is no SSE delta for them.
     if (next === 'teams' && teams === null) loadTeams();
+    // The log is read fresh each time it is opened.
+    if (next === 'log') loadLog();
   }
+
+  // While the log is shown, any live delta (a submission, a verdict, a
+  // round change) may have added a row, so it is read again.
+  useEffect(() => {
+    if (view !== 'log') return undefined;
+    return subscribeDeltas(() => loadLog());
+  }, [view]);
 
   async function removeMember() {
     if (busy || !confirmRemove) return;
@@ -225,6 +250,10 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
                   aria-pressed={view === 'teams'} onClick={() => showView('teams')}>
             Teams
           </button>
+          <button type="button" class="btn secondary mod-btn-small"
+                  aria-pressed={view === 'log'} onClick={() => showView('log')}>
+            Log
+          </button>
         </div>
         {error && (
           <div class="verdict-banner sev-red">
@@ -236,7 +265,11 @@ export function ModConsoleScreen({ copy, moderatorId = null }) {
         <BuildTag />
       </aside>
 
-      {view === 'teams' ? (
+      {view === 'log' ? (
+        <section class="mod-main" aria-label="Moderation log">
+          <LogPanel rows={log} filter={logFilter} setFilter={setLogFilter} onZoom={setZoom} />
+        </section>
+      ) : view === 'teams' ? (
         <section class="mod-main" aria-label="Team rosters">
           <TeamsPanel
             teams={teams}

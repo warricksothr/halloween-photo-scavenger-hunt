@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — Moderators can read the moderation log.**
+  TKT-01M3B8C2403X03ZESG74BCK66X. The console's Log view lists the event's
+  audit trail newest first in plain sentences: who marked which photo
+  what, strikes, removals, flags and the round's open and close, with
+  Everything for player traffic too. A row about a photo opens it. The
+  server now names each row's actor and subject (ADR 0044).
+
 - **2026-09-24 — The app scans hunt QRs.** TKT-01M3B0R3QPF5X2QJV0M2174JCW.
   A QR or link never opens the installed app on an iPhone, so the join
   screen has Scan QR code: a still photo, decoded on the device with jsQR
