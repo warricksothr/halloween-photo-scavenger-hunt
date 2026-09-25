@@ -28,7 +28,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T15:00:35Z
-updated_at: 2026-09-25T15:16:44Z
+updated_at: 2026-09-25T15:25:37Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -100,3 +100,18 @@ PR #69 opened: https://git.local.sothr.com/warricksothr/arkham-halloween-photo-s
 - **Fix the image instead of documenting the `command` override** (TKT-01M3816ETRMEH0K7QARH78BR9Z): that is a code change, and this pass is docs only.
 - **Ship `deploy/compose.proxy.yml`:** a snippet in CONTAINER.md §7 keeps one copy. The operator's file lives outside the checkout anyway, so a pull cannot overwrite it.
 - **A cron line for backups:** no scheduled backup has been run on a real host, so the docs say that nothing schedules it rather than show an unverified command.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T15:25:37Z
+
+Terva review of PR #69:
+
+- **`ops-docs-69-r1`:**
+  - Run 790 was superseded when a ticket commit moved main. The same request ID was re-run as run 792 on head 61f51a0, as delivery recovery.
+  - **Medium, accepted:** the §7 compose file derives the browser environment from `ARKHAM_ENVIRONMENT`, which contradicts CONFIGURATION.md. The derivation is the live deployment's own and keeps the release check in agreement, so it stays and both pages now say so (32aa7a5). The suggested test on the compose mapping in the markdown was not added: the mapping lives in a doc snippet, not in a file anything loads.
+  - **Low, declined:** ".tickets not in the PR". The store is committed straight to main by project practice.
+- **`ops-docs-69-r2`** (run 793, head 32aa7a5), a fresh review after a substantive fix:
+  - **Medium, accepted:** RUNBOOK §0 told the operator to back up and set `ARKHAM_RELEASE` only after the restart. Both are now steps before it, and CONTAINER.md §7 says to back up before its pull (83e2da3).
+  - **Low:** the same ticket-store finding, declined again.
+- **`ops-docs-69-r3`** (run 795, head 83e2da3, base 4c05d9a): **success**, no findings at the threshold. It marks both earlier mediums resolved and repeats only the declined ticket-store low. Quality gate green on 83e2da3.
+
+Not merged. Waiting for Drew.
