@@ -74,6 +74,12 @@ build argument on the container recipes, and an environment variable for
 `npm run build` on the systemd recipe. Changing one without rebuilding
 changes nothing. Every one is optional.
 
+The proxy recipe's compose file (CONTAINER.md §7) does not read
+`VITE_ERROR_ENVIRONMENT` or `VITE_ERROR_RELEASE` from `.env`. It builds
+them from `ARKHAM_ENVIRONMENT` and `ARKHAM_RELEASE`, so setting the server
+values sets both. The LAN `compose.yml` passes each `VITE_*` through
+under its own name.
+
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `VITE_ERROR_DSN` | off | The browser project's DSN. It ships inside the JavaScript, so it is public by design. Allow its origin in the CSP's `connect-src` (`deploy/nginx.conf`), or the browser blocks the reports. |

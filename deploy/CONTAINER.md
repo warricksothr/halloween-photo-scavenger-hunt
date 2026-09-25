@@ -291,7 +291,10 @@ services:
       context: <checkout>
       dockerfile: Containerfile
       args:
-        # Compiled into the web app: change these, then build again.
+        # Compiled into the web app: change these, then build again. The
+        # browser's environment and release are taken from the server's
+        # ARKHAM_ENVIRONMENT and ARKHAM_RELEASE, so one value sets both
+        # sides and the admin footer's release check always agrees.
         VITE_ERROR_DSN: ${VITE_ERROR_DSN:-}
         VITE_TRACES_SAMPLE_RATE: ${VITE_TRACES_SAMPLE_RATE:-0.1}
         VITE_ERROR_ENVIRONMENT: ${ARKHAM_ENVIRONMENT:-production}
