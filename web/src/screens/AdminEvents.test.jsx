@@ -102,6 +102,7 @@ describe('admin event management', () => {
     // A closed event can go back to open, also after a second click.
     mocks.api.adminEvents.mockResolvedValue([{ ...lobby, status: 'open' }]);
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(mocks.api.adminReopenEvent).not.toHaveBeenCalled();
     expect(screen.getByText(/Scans that expired at the close stay expired/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Reopen the round' }));
     expect(mocks.api.adminReopenEvent).toHaveBeenCalledWith('ev-1');
@@ -115,6 +116,14 @@ describe('admin event management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Keep it open' }));
     expect(mocks.api.adminCloseEvent).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Close the round' })).toBeNull();
+  });
+
+  it('keeps an event closed when the host backs out of reopening it', () => {
+    render(<AdminEvents initialEvents={[{ ...lobby, status: 'closed' }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave it closed' }));
+    expect(mocks.api.adminReopenEvent).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Reopen the round' })).toBeNull();
   });
 
   it('keeps the guard until the refetch lands so a stale second click cannot fire', async () => {
