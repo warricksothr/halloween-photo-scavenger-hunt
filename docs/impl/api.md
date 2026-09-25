@@ -283,7 +283,9 @@ POST   /api/mod/logout                  leave the console on this browser
                                         session and SSO identity stay | 401
                                         without a moderator session
 GET    /api/mod/state                   the console's boot probe → { event,
-                                        moderator: { id, label, host } }.
+                                        moderator: { id, label, nickname,
+                                        host } }. nickname is null when
+                                        none is set (ADR 0045).
                                         host: this browser also holds a host
                                         sign-in, so the console links back
                                         to /admin (a hint; /api/admin still
@@ -303,6 +305,15 @@ GET    /api/mod/queue                   → pending subs, oldest first, with
                                           { id, label, claimed_at,
                                           claim_age } (ADR 0038; the age
                                           spares the client a clock sync)
+PUT    /api/mod/nickname                { nickname } → { nickname }: the
+                                        name players see on this
+                                        moderator's game verdicts (ADR
+                                        0045). Trimmed, ≤40 characters
+                                        (422 over), blank clears it (null).
+                                        Kept on the moderator row, so a
+                                        rejoin keeps it. Logs
+                                        moderator.nickname_set on a change
+                                        only | 401
 POST   /api/mod/queue/{sub_id}/claim    soft claim (advisory; ADR 0002)
 POST   /api/mod/queue/{sub_id}/verdict  { verdict, flavor_text? }
                                         conditional UPDATE WHERE status =
@@ -346,7 +357,10 @@ GET    /api/recap                       → timeline from audit_event, themed
 GET    /api/mod/audit                   full forensic timeline, moderator+;
                                           each row adds actor_name and
                                           about {player, team, riddle,
-                                          evidence_id, moderator} (ADR 0044)
+                                          evidence_id, moderator} (ADR 0044).
+                                          A moderator reads as "label
+                                          (nickname)" when they set one
+                                          (ADR 0045)
 ```
 
 ## The state snapshot (ADR 0003)
@@ -376,6 +390,7 @@ GET    /api/mod/audit                   full forensic timeline, moderator+;
   "submissions": [
     { "id": "…", "riddle_id": "…", "evidence_item_id": "…",
       "status": "obscured", "verdict_flavor": "…",
+      "verdict_by": "Oracle",    // judging moderator's nickname, or null
       "created_at": 1700000000 }
   ],
   "leaderboard": null            // null when hidden; else [ { team, score } ]
@@ -390,6 +405,11 @@ Design notes:
   it once, then `POST /api/me/notice-ack` clears it (a mutation; logged).
 - Riddle `state` collapses submission history to what the tile grid
   needs; full history is in `submissions` for the detail view.
+- **`verdict_by`** is the nickname of the moderator who gave a game
+  verdict, read at request time, so a changed nickname shows on every
+  verdict (ADR 0045). It is null while pending, when the moderator set
+  none, and always for `inappropriate`: a conduct call is never put on a
+  person for players. The moderator's `label` is never sent to a player.
 - The moderator variant replaces `me`/`riddles` with queue depth and
   flag counts; moderators get queue detail from `/api/mod/queue`.
 
@@ -403,7 +423,7 @@ moderator cookie wins (ADR 0028). Event names and payloads:
 
 | SSE event          | Sent to            | Payload                                    |
 | ------------------ | ------------------ | ------------------------------------------ |
-| `verdict`          | owning team        | `{ submission_id, riddle_id, status, flavor }` |
+| `verdict`          | owning team        | `{ submission_id, riddle_id, status, flavor, moderator }` (`moderator`: nickname or null, ADR 0045) |
 | `submission_new`   | moderators         | `{ submission_id }` (queue refetches)      |
 | `queue_resolved`   | moderators         | `{ submission_id, status }` (another mod beat you) |
 | `event_status`     | everyone           | `{ status }` (opened/closed → client refetches snapshot) |

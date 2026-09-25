@@ -46,6 +46,10 @@ each joined and its device (`playerLabels` in `web/src/screens/AdminHost.jsx`). 
 note once planned became the console's Log view (ADR 0044): newest first,
 one plain sentence a row, Moderation and Everything filters, and the
 photo behind a row in the lightbox (`web/src/screens/mod/LogPanel.jsx`).
+A moderator names themselves to players in a folded Nickname form in the
+console rail (`web/src/screens/mod/NicknameForm.jsx`, ADR 0045); the
+header and the log show "label (nickname)", and the player's verdict
+banner adds the theme pack's `detail.verdictBy` line when one is set.
 
 ## Coverage matrix
 

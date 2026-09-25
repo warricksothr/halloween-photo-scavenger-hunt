@@ -46,6 +46,14 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-25 — Moderators choose the name players see.**
+  TKT-01M3CV2AGJ7AEX25S14DR57HPD. A moderator sets a nickname in the
+  console (migration 0006, `PUT /api/mod/nickname`), and the player's
+  verdict banner says who judged it by that name. With none set, players
+  see no name, and never the sign-in name. An INAPPROPRIATE call names
+  nobody. The console header and the moderation log show "name
+  (nickname)" (ADR 0045).
+
 - **2026-09-25 — The GitHub Pages site becomes a project page.**
   TKT-01M3CN4T3VNNQ05ZCKPCZNDWPM. The Pages root was the August design
   mocks. It is now a project page (`docs/site/index.html`) with the current

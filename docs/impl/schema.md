@@ -13,6 +13,10 @@ Later migrations are additive and stay close to their code:
   visits are one person, and a rejoin reuses the row instead of minting
   a second moderator. The index is partial because identities minted
   before S9CW (or by a test) have no subject and must not collide.
+- `0006_moderator_nickname.sql` (ADR 0045) adds a nullable
+  `moderator.nickname`, the name players see on that moderator's game
+  verdicts. `label` stays the SSO name and never reaches a player. NULL
+  means no nickname, and players then see no moderator name.
 
 Conventions used throughout:
 
