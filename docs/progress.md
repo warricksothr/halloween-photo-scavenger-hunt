@@ -46,6 +46,14 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-25 — The GitHub Pages site becomes a project page.**
+  TKT-01M3CN4T3VNNQ05ZCKPCZNDWPM. The Pages root was the August design
+  mocks. It is now a project page (`docs/site/index.html`) with the current
+  screenshots and links to the source and the self-hosting docs, and the
+  mocks moved to `/mocks/` behind an archive banner.
+  `scripts/build-pages.sh` assembles the site, and `docs/site/README.md`
+  is the publish procedure.
+
 - **2026-09-25 — Operator documentation for self-hosting.**
   TKT-01M3CHA8088PDS05GMVFVDJ8ZN. `deploy/README.md` is the start page:
   what the app needs and the three recipes. The container behind a TLS

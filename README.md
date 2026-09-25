@@ -9,6 +9,9 @@ SOLVED`, `SUBJECT OBSCURED`, `SUBJECT NOT FOUND`, `SUBJECT TOO SMALL`,
 Built as a themeable core: Batman: Arkham Knight/City is the first theme
 pack, not a fork point.
 
+Project page: <https://warricksothr.github.io/halloween-photo-scavenger-hunt/>
+(source in [`docs/site/`](docs/site/)).
+
 ## Status
 
 The game is complete and has run a live deployment: the backend, the

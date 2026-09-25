@@ -11,5 +11,5 @@ if [[ ! -x "$python" ]]; then
 fi
 
 cd "$repo_root"
-bash -n deploy/backup.sh scripts/check-deploy.sh scripts/smoke-container.sh
+bash -n deploy/backup.sh scripts/build-pages.sh scripts/check-deploy.sh scripts/smoke-container.sh
 "$python" -m pytest server/tests/test_deployment_checks.py -q
