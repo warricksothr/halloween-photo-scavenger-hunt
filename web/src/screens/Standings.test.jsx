@@ -75,6 +75,27 @@ describe('closed standings', () => {
 
     expect(await screen.findByText('EMPTY_BOARD')).toBeTruthy();
   });
+
+  it('tells a reopened round in the timeline (ADR 0042)', async () => {
+    mocks.api.recap.mockResolvedValue({
+      standings: [],
+      total_riddles: 1,
+      timeline: [
+        { kind: 'closed', at: 100, expired_pending: 0 },
+        { kind: 'reopened', at: 200 },
+        { kind: 'closed', at: 300, expired_pending: 0 },
+      ],
+    });
+    const withRecap = {
+      ...copy,
+      recap: { closed: () => 'CLOSED_LINE', reopened: () => 'REOPENED_LINE' },
+    };
+
+    render(<StandingsScreen snapshot={closed()} copy={withRecap} />);
+
+    expect(await screen.findByText('REOPENED_LINE')).toBeTruthy();
+    expect(screen.getAllByText('CLOSED_LINE')).toHaveLength(2);
+  });
 });
 
 describe('live standings', () => {

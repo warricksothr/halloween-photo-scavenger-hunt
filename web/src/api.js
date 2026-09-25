@@ -225,6 +225,8 @@ export const api = {
     request(`/api/admin/events/${eventId}/open`, { method: 'POST' }),
   adminCloseEvent: (eventId) =>
     request(`/api/admin/events/${eventId}/close`, { method: 'POST' }),
+  adminReopenEvent: (eventId) =>
+    request(`/api/admin/events/${eventId}/reopen`, { method: 'POST' }),
   // The server wants the event NAME re-typed as the confirmation
   // (events.py), so the caller passes it through rather than an id.
   adminPurgeEvent: (eventId, confirm) =>

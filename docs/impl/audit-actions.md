@@ -21,6 +21,7 @@ Rules repeated from ADR 0004 so this file stands alone:
 | `event.created`          | admin      | event        | `{ name, theme, leaderboard_visibility, team_size_limit }` | 2 |
 | `event.opened`           | admin      | event        | `{}`                                            | 2 |
 | `event.closed`           | admin      | event        | `{ expired_pending: <count> }`                  | 2 |
+| `event.reopened`         | admin      | event        | `{}`                                            | ADR 0042 |
 | `event.updated`          | admin      | event        | `{ old: {...}, new: {...} }` (changed fields)   | RFWM |
 | `event.code_rotated`     | admin      | event        | `{ code: "join" \| "mod" }` (never the codes)    | ADR 0039 |
 | `event.purged`           | admin      | event        | `{ submissions: n, evidence: n }` (pre-delete)  | 10 |
@@ -54,7 +55,7 @@ Stretch (written only once the teams increment exists):
 ## What the recap query uses (increment 9)
 
 The player-facing recap timeline (`GET /api/recap`) selects the
-party-safe subset: `event.opened`, `event.closed`, `verdict.issued`
+party-safe subset: `event.opened`, `event.closed`, `event.reopened`, `verdict.issued`
 (where verdict = verified), `player.joined`. It **never** surfaces
 conduct rows (`strike.*`, `evidence.quarantined`, `duplicate_flag.*`) —
 conduct stays between player, mods, and host (spec). The moderator

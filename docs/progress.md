@@ -46,6 +46,13 @@ when the increment runs and its tests pass.
 
 ## Notes / blockers
 
+- **2026-09-24 — The host can reopen a closed event.**
+  TKT-01M3B121VJKP0T5Y4EN03F6Q27. Drew closed the example event by
+  accident, with one click. A closed event now has Reopen (closed → open,
+  `event.reopened`), and both Close and Reopen ask first. Expired scans
+  stay expired and players resubmit them; the recap shows the reopen
+  (ADR 0042).
+
 - **2026-09-24 — The join screen suggests installing the app, and the
   icons are real.** TKT-01M390Y0VQ. On an iPhone, a dismissible panel says
   how to add the app to the home screen before joining and names the join

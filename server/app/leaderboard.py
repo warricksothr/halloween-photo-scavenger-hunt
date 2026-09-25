@@ -148,7 +148,13 @@ def publish_leaderboard(
 # Party-safe actions only (audit-actions.md): conduct rows
 # (strike.*, evidence.quarantined, duplicate_flag.*) are excluded at
 # the query, structurally — the recap cannot leak them.
-_RECAP_ACTIONS = ("event.opened", "event.closed", "player.joined", "verdict.issued")
+_RECAP_ACTIONS = (
+    "event.opened",
+    "event.closed",
+    "event.reopened",
+    "player.joined",
+    "verdict.issued",
+)
 
 
 def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
@@ -221,6 +227,10 @@ def _recap_timeline(conn: sqlite3.Connection, event_id: str) -> list[dict]:
                     "expired_pending": details.get("expired_pending", 0),
                 }
             )
+        elif r["action"] == "event.reopened":
+            # A reopened round (ADR 0042): the recap shows the close that
+            # was undone and the reopen, so the timeline stays honest.
+            timeline.append({"kind": "reopened", "at": at})
         elif r["action"] == "verdict.issued":
             if details.get("verdict") != "verified":
                 continue

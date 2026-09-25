@@ -25,6 +25,7 @@ class Action(StrEnum):
     EVENT_CREATED = "event.created"
     EVENT_OPENED = "event.opened"
     EVENT_CLOSED = "event.closed"
+    EVENT_REOPENED = "event.reopened"
     EVENT_PURGED = "event.purged"
     EVENT_UPDATED = "event.updated"
     EVENT_CODE_ROTATED = "event.code_rotated"

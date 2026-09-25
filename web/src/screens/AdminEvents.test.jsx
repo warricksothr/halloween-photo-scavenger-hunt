@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     adminCreateEvent: vi.fn(),
     adminOpenEvent: vi.fn(),
     adminCloseEvent: vi.fn(),
+    adminReopenEvent: vi.fn(),
     adminPurgeEvent: vi.fn(),
     adminEventCodes: vi.fn(),
     adminRotateCode: vi.fn(),
@@ -25,6 +26,7 @@ describe('admin event management', () => {
     mocks.api.adminCreateEvent.mockResolvedValue({});
     mocks.api.adminOpenEvent.mockResolvedValue({});
     mocks.api.adminCloseEvent.mockResolvedValue({});
+    mocks.api.adminReopenEvent.mockResolvedValue({});
     mocks.api.adminPurgeEvent.mockResolvedValue({});
     mocks.api.adminEventCodes.mockResolvedValue({
       join_code: 'JOIN123',
@@ -89,10 +91,30 @@ describe('admin event management', () => {
 
     mocks.api.adminEvents.mockResolvedValue([{ ...lobby, status: 'closed' }]);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // Closing asks first (ADR 0042); the first click alone changes nothing.
+    expect(mocks.api.adminCloseEvent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close the round' }));
 
     expect(mocks.api.adminCloseEvent).toHaveBeenCalledWith('ev-1');
     expect(await screen.findByRole('button', { name: 'Purge' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+
+    // A closed event can go back to open, also after a second click.
+    mocks.api.adminEvents.mockResolvedValue([{ ...lobby, status: 'open' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(screen.getByText(/Scans that expired at the close stay expired/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen the round' }));
+    expect(mocks.api.adminReopenEvent).toHaveBeenCalledWith('ev-1');
+    expect(await screen.findByRole('button', { name: 'Close' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  });
+
+  it('keeps an event open when the host backs out of closing it', () => {
+    render(<AdminEvents initialEvents={[{ ...lobby, status: 'open' }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep it open' }));
+    expect(mocks.api.adminCloseEvent).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Close the round' })).toBeNull();
   });
 
   it('keeps the guard until the refetch lands so a stale second click cannot fire', async () => {

@@ -93,6 +93,9 @@ POST   /api/admin/events/{id}/open      lobby → open (409 unless lobby)
 POST   /api/admin/events/{id}/close     open → closed; single transaction:
                                         flip status, expire pending subs,
                                         log event.closed (ADR 0002/0004)
+POST   /api/admin/events/{id}/reopen    closed → open (409 unless closed);
+                                        clears closed_at, log event.reopened;
+                                        expired subs stay expired (ADR 0042)
 POST   /api/admin/events/{id}/purge     delete event + photos (confirm param)
 GET    /api/admin/events/{id}/riddles
 POST   /api/admin/events/{id}/riddles   { text, sort_order, hints? }
@@ -104,7 +107,7 @@ DELETE /api/admin/events/{id}/riddles/{rid}   (409 if submissions reference it)
 characters. `POST` omitting it makes a riddle with none; on `PATCH`, omitting
 it leaves the ladder alone, `[]` clears it, and a list replaces it whole.
 
-Lifecycle transitions log `event.opened` / `event.closed`; event edits log
+Lifecycle transitions log `event.opened` / `event.closed` / `event.reopened`; event edits log
 `event.updated` and riddle edits log `riddle.edited`, both with before/after
 values in `details`.
 
