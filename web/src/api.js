@@ -186,6 +186,8 @@ export const api = {
   modPlayerHistory: (playerId) => request(`/api/mod/players/${playerId}`),
   // ── Team management (stretch) ──
   modTeams: () => request('/api/mod/teams'),
+  // The event's audit trail with names resolved (ADR 0044), oldest first.
+  modAudit: () => request('/api/mod/audit'),
   modRemoveMember: (teamId, playerId) =>
     request(`/api/mod/teams/${encodeURIComponent(teamId)}/remove/${encodeURIComponent(playerId)}`,
             { method: 'POST' }),

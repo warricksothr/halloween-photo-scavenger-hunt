@@ -318,6 +318,125 @@ def recap(request: Request, ctx: auth.PlayerContext = Depends(auth.require_playe
     }
 
 
+class _Names:
+    """Everything an event's audit rows point at, loaded once per read so
+    the log can say who and what in words (ADR 0044). The audit table keeps
+    only ids by design (ADR 0004); names are resolved at read time, so a
+    renamed team reads under its current name, as it does everywhere else
+    in the console."""
+
+    def __init__(self, conn: sqlite3.Connection, event_id: str):
+        def by_id(sql: str) -> dict[str, sqlite3.Row]:
+            return {r["id"]: r for r in conn.execute(sql, (event_id,))}
+
+        self.players = by_id(
+            "SELECT p.id, p.display_name, p.team_id FROM player p"
+            " JOIN team t ON t.id = p.team_id WHERE t.event_id = ?"
+        )
+        # A team's label is its name, or its first member for an unnamed
+        # team of one, as the roster shows it.
+        self.teams = {
+            r["id"]: r["name"] or r["first_member"]
+            for r in conn.execute(
+                "SELECT t.id, t.name,"
+                "       (SELECT display_name FROM player WHERE team_id = t.id"
+                "        ORDER BY created_at, id LIMIT 1) AS first_member"
+                " FROM team t WHERE t.event_id = ?",
+                (event_id,),
+            )
+        }
+        self.riddles = by_id("SELECT id, sort_order FROM riddle WHERE event_id = ?")
+        self.moderators = by_id("SELECT id, label FROM moderator WHERE event_id = ?")
+        self.submissions = by_id(
+            "SELECT s.id, s.riddle_id, s.team_id, s.submitted_by, s.evidence_item_id"
+            " FROM submission s JOIN riddle r ON r.id = s.riddle_id"
+            " WHERE r.event_id = ?"
+        )
+        self.evidence = by_id(
+            "SELECT e.id, e.team_id, e.uploaded_by FROM evidence_item e"
+            " JOIN team t ON t.id = e.team_id WHERE t.event_id = ?"
+        )
+        self.strikes = by_id(
+            "SELECT id, player_id, submission_id FROM strike WHERE event_id = ?"
+        )
+        self.sessions = by_id(
+            "SELECT s.id, s.player_id FROM session s JOIN player p ON p.id = s.player_id"
+            " JOIN team t ON t.id = p.team_id WHERE t.event_id = ?"
+        )
+        self.invites = by_id(
+            "SELECT i.token AS id, i.team_id FROM team_invite i"
+            " JOIN team t ON t.id = i.team_id WHERE t.event_id = ?"
+        )
+
+    def actor(self, actor_type: str, actor_id: str | None) -> str:
+        if actor_type == "moderator":
+            row = self.moderators.get(actor_id)
+            return row["label"] if row else "A moderator"
+        if actor_type == "player":
+            row = self.players.get(actor_id)
+            return row["display_name"] if row else "A player"
+        if actor_type == "admin":
+            return "Host"
+        return "System"
+
+    def _player(self, about: dict, player_id: str | None) -> None:
+        row = self.players.get(player_id)
+        if row is not None:
+            about["player"] = row["display_name"]
+            about.setdefault("team", self.teams.get(row["team_id"]))
+
+    def _submission(self, about: dict, submission_id: str | None) -> None:
+        row = self.submissions.get(submission_id)
+        if row is None:
+            return
+        riddle = self.riddles.get(row["riddle_id"])
+        about["riddle"] = riddle["sort_order"] if riddle else None
+        about["team"] = self.teams.get(row["team_id"])
+        about["evidence_id"] = row["evidence_item_id"]
+        self._player(about, row["submitted_by"])
+
+    def about(self, entity_type: str, entity_id: str, details: dict) -> dict:
+        """What a row is about, as the console names it: any of player,
+        team, riddle (its number) and evidence_id (for the photo)."""
+        about: dict = {}
+        if entity_type == "submission":
+            self._submission(about, entity_id)
+        elif entity_type == "strike":
+            row = self.strikes.get(entity_id)
+            if row is not None:
+                self._submission(about, row["submission_id"])
+                self._player(about, row["player_id"])
+        elif entity_type == "evidence_item":
+            row = self.evidence.get(entity_id)
+            if row is not None:
+                about["evidence_id"] = entity_id
+                about["team"] = self.teams.get(row["team_id"])
+                self._player(about, row["uploaded_by"])
+        elif entity_type == "player":
+            self._player(about, entity_id)
+        elif entity_type == "session":
+            row = self.sessions.get(entity_id)
+            if row is not None:
+                self._player(about, row["player_id"])
+        elif entity_type == "team":
+            about["team"] = self.teams.get(entity_id)
+            # team.member_removed names the member in its details.
+            self._player(about, details.get("player_id"))
+        elif entity_type == "team_invite":
+            row = self.invites.get(entity_id)
+            if row is not None:
+                about["team"] = self.teams.get(row["team_id"])
+        elif entity_type == "riddle":
+            row = self.riddles.get(entity_id)
+            if row is not None:
+                about["riddle"] = row["sort_order"]
+        elif entity_type == "moderator":
+            row = self.moderators.get(entity_id)
+            if row is not None:
+                about["moderator"] = row["label"]
+        return {k: v for k, v in about.items() if v is not None}
+
+
 @router.get("/mod/audit")
 def mod_audit(
     request: Request, ctx: auth.ModeratorContext = Depends(auth.require_moderator)
@@ -325,7 +444,11 @@ def mod_audit(
     """The full forensic timeline (audit-actions.md): every row, conduct
     included. This is the moderators' side of the conduct wall — the
     player recap is a strict subset. Read-only; reads are never
-    audited (ADR 0004)."""
+    audited (ADR 0004).
+
+    Each row also carries ``actor_name`` and ``about`` (ADR 0044): who
+    acted and what the row concerns, in the words the console shows, so
+    the moderation log can be read without a second lookup per row."""
     conn = reader(request)
     rows = conn.execute(
         "SELECT id, actor_type, actor_id, action, entity_type,"
@@ -333,16 +456,22 @@ def mod_audit(
         " FROM audit_event WHERE event_id = ? ORDER BY id ASC",
         (ctx.event_id,),
     ).fetchall()
-    return [
-        {
-            "id": r["id"],
-            "actor_type": r["actor_type"],
-            "actor_id": r["actor_id"],
-            "action": r["action"],
-            "entity_type": r["entity_type"],
-            "entity_id": r["entity_id"],
-            "details": json.loads(r["details"]),
-            "created_at": r["created_at"],
-        }
-        for r in rows
-    ]
+    names = _Names(conn, ctx.event_id)
+    out = []
+    for r in rows:
+        details = json.loads(r["details"])
+        out.append(
+            {
+                "id": r["id"],
+                "actor_type": r["actor_type"],
+                "actor_id": r["actor_id"],
+                "actor_name": names.actor(r["actor_type"], r["actor_id"]),
+                "action": r["action"],
+                "entity_type": r["entity_type"],
+                "entity_id": r["entity_id"],
+                "about": names.about(r["entity_type"], r["entity_id"], details),
+                "details": details,
+                "created_at": r["created_at"],
+            }
+        )
+    return out

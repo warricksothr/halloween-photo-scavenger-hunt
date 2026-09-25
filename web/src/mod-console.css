@@ -374,3 +374,46 @@
     max-height: calc(100dvh - 260px);
   }
 }
+
+/* ── Moderation log (ADR 0044) ───────────────────────────────────── */
+
+.mod-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-log-list {
+  list-style: none;
+  margin: 0;
+}
+
+.mod-log-row {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.mod-log-mark {
+  border-radius: 50%;
+  flex: none;
+  height: 8px;
+  margin-top: 6px;
+  width: 8px;
+}
+
+.mod-log-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mod-log-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mod-log-detail {
+  font-size: 0.72rem;
+  margin-top: 2px;
+}

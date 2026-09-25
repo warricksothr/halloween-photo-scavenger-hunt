@@ -99,6 +99,18 @@ test('player and moderator complete the built game loop', async ({ browser }) =>
       moderator.getByText('Queue is clear. Nothing awaiting review.'),
     ).toBeVisible();
 
+    // The Log view (ADR 0044) names the call just made, with its photo.
+    await moderator.getByRole('button', { name: 'Log', exact: true }).click();
+    const log = moderator.getByRole('list', { name: 'Moderation log' });
+    const verdictRow = log.getByRole('listitem').filter({ hasText: 'marked Batman' });
+    await expect(verdictRow).toContainText("photo for Riddle #1 solved");
+    await verdictRow.getByRole('button', { name: 'Photo' }).click();
+    const lightbox = moderator.getByRole('dialog');
+    await expect(lightbox).toBeVisible();
+    await lightbox.getByRole('button', { name: 'Close' }).click();
+    await expect(lightbox).toHaveCount(0);
+    await moderator.getByRole('button', { name: 'Queue', exact: true }).click();
+
     await expect(player.getByText('RIDDLE SOLVED.')).toBeVisible();
     await player.getByRole('button', { name: '← Back to the board' }).click();
     await expect(player.getByText('1/1', { exact: true })).toBeVisible();
