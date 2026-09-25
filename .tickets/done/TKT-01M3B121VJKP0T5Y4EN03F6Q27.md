@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3B121VJKP0T5Y4EN03F6Q27
 title: Let the host reopen a closed event, and confirm before closing
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: high
 due_on: null
@@ -15,17 +15,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: null
-  worktree: /tmp/bf267378-tk
-  commit: 69e3876e53ed15e6cbaccbc54b347d90a9ae183d
-  session: null
-  claimed_at: 2026-09-25T00:57:15Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T00:57:15Z
-updated_at: 2026-09-25T01:11:45Z
+updated_at: 2026-09-25T02:09:29Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -64,3 +57,7 @@ PR #66 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 - pr66-reopen-event-2 (run 755, head 41e9c28): new low finding that the writer-side recheck was untested. Accepted; a1a666b stubs the first lookup stale, so only the writer's read can refuse (409 already reopened, 404 purged, no audit row).
 - pr66-reopen-event-3 (run 757, head a1a666b, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/66#issuecomment-12847): all resolved except the declined .tickets finding. CI quality gate passed.
 Once deployed, Drew can reopen the example event from its card. Cloning a closed event into a new one was raised and is not part of this ticket.
+
+## Summary
+
+Merged in PR #66 (merge 488b2e8). POST /api/admin/events/{id}/reopen moves a closed event back to open and logs event.reopened. Expired scans stay expired. Close and Reopen both ask first, and the recap shows the reopen (ADR 0042). Deployed to scavenger.nulloctet.com at ef654d9 on 2026-09-24. Drew can now reopen the example event from its card.

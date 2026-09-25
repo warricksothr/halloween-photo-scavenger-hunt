@@ -3,7 +3,7 @@ schema: 3
 id: TKT-01M3B0EWQAPS240GZX1TJF348G
 title: Show the running build in the frontend
 type: task
-status: in-progress
+status: done
 status_reason: null
 priority: normal
 due_on: null
@@ -15,17 +15,10 @@ origin: null
 dependencies: []
 blocks_on: none
 references: []
-claim:
-  actor: agent:claude-code/t3code-bf267378
-  branch: t3code/version-info
-  worktree: /home/sothr/.t3/worktrees/arkham-halloween-photo-scavenger-hunt/t3code-bf267378
-  commit: 4c6ff5eabff2a1f9532ad1e25e529f7cf366e59b
-  session: null
-  claimed_at: 2026-09-25T00:46:58Z
-  expires_at: null
+claim: null
 archive: null
 created_at: 2026-09-25T00:46:47Z
-updated_at: 2026-09-25T00:57:15Z
+updated_at: 2026-09-25T02:09:29Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -62,3 +55,7 @@ Client: web/src/version.js exports WEB_BUILD from import.meta.env.VITE_ERROR_REL
 PR #65 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/65), branch t3code/version-info, base main.
 - pr65-version-info-1 (run 748, head 5f2b38f): two low findings. (1) No .tickets change in the PR: declined as on every PR, because ticket commits go to main. (2) The dev-fallback test never unset the variable: accepted. 793a93a stubs VITE_ERROR_RELEASE and imports a fresh module for both the set and unset cases.
 - pr65-version-info-2 (run 750, head 793a93a, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/65#issuecomment-12826): passed, with (2) resolved and only (1) remaining. CI quality gate passed. Awaiting Drew's merge.
+
+## Summary
+
+Merged in PR #65 (merge a7bbd21). The join, Case and moderator screens show 'Build <id>' from VITE_ERROR_RELEASE. The host console's footer compares the web build with readyz's release and schema and offers Reload when they differ. The server's release stays admin-only (ADR 0041). Deployed to scavenger.nulloctet.com at ef654d9 on 2026-09-24.

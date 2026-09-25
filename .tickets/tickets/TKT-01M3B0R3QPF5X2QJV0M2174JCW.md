@@ -25,7 +25,7 @@ claim:
   expires_at: null
 archive: null
 created_at: 2026-09-25T00:51:49Z
-updated_at: 2026-09-25T01:37:52Z
+updated_at: 2026-09-25T02:09:29Z
 created_by:
   id: agent:claude-code/t3code-bf267378
   name: ""
@@ -98,3 +98,7 @@ PR #67 (https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenge
 - pr67-scan-qr-3 (run 765, head aabba43): passed, both resolved. It suggested an invite-page hint test (low). Accepted; 25146ee adds an iPhone e2e for /t/.
 - pr67-scan-qr-4 (run 767, head 25146ee, https://git.local.sothr.com/warricksothr/arkham-halloween-photo-scavenger-hunt/pulls/67#issuecomment-12884): passed; only the .tickets finding remains, declined as on every PR. CI quality gate passed.
 The gate passes and e2e is 17/17. Still needs a real iPhone: install, open the app, tap Scan QR code and photograph a printed join QR.
+
+**agent:claude-code/t3code-bf267378** at 2026-09-25T02:09:29Z
+
+Merged in PR #67 (merge ef654d9), after merging main into the branch to resolve progress.md. Deployed to scavenger.nulloctet.com at ef654d9 on 2026-09-24. Left in progress: AC3's mod-link exception awaits Drew's view, and the scan still needs a real iPhone check.
