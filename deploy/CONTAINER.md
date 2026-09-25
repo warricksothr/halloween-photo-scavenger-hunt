@@ -355,9 +355,12 @@ password hash and any group name with a space in it.
 
 Build and start, and set `ARKHAM_RELEASE` to the commit on each deploy,
 so the admin console, the readiness probe and error reports name the
-build:
+build. On every deploy after the first, back up before the pull (§4,
+"With a bind mount"): the new build may migrate the database when it
+starts, and a restore is the only way back.
 
 ```sh
+git -C <checkout> pull --ff-only
 sed -i "s/^ARKHAM_RELEASE=.*/ARKHAM_RELEASE=$(git -C <checkout> rev-parse --short HEAD)/" .env
 docker compose build && docker compose up -d
 docker compose ps                        # Up … (healthy)

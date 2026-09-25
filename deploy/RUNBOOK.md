@@ -31,7 +31,15 @@ TLS (at the top of `deploy/nginx.conf`). Then, and after every pull:
 
 ```sh
 cd ~/arkham
+# Back up first: a new build may migrate the database, and only a restore
+# goes back (§1, OPERATIONS.md). Skip it on the very first deploy, when
+# there is no database yet.
+~/arkham/deploy/backup.sh
 git pull
+REL=$(git rev-parse --short HEAD)
+# Name the build for the server before it restarts, so the admin footer
+# agrees with the page. The env file needs an ARKHAM_RELEASE= line to edit:
+sed -i "s/^ARKHAM_RELEASE=.*/ARKHAM_RELEASE=$REL/" ~/.config/arkham-hunt.env
 # Backend deps (once, or when server/requirements.lock changes). The
 # lock pins the exact versions CI tests and the image ships (ADR 0012);
 # a plain `-e server` would resolve whatever is newest. The test tools
@@ -41,16 +49,15 @@ uv pip install -p server/.venv --require-hashes -r server/requirements.lock
 uv pip install -p server/.venv --no-deps -e server
 # Frontend build (web/dist is what uvicorn serves in production). Any
 # VITE_* settings go on this line (CONFIGURATION.md):
-cd web && npm ci && VITE_ERROR_RELEASE=$(git rev-parse --short HEAD) npm run build && cd ..
+cd web && npm ci && VITE_ERROR_RELEASE=$REL npm run build && cd ..
 systemctl --user restart arkham-hunt
 systemctl --user status arkham-hunt   # active (running)
 curl -s https://<host>/api/health     # {"status":"ok",...}
 ```
 
-Set `ARKHAM_RELEASE` in the env file to the same short commit before the
-restart, so the admin console's version footer agrees with the page.
-Back up before pulling a new build: it migrates the database when it
-starts, and there is no way back but a restore (OPERATIONS.md).
+Keep the archive from the first line until the new build has been used
+for real: if it has to be rolled back, that archive is the way back
+(OPERATIONS.md, "Roll back").
 
 When health is green but something feels off, log in and read the deeper
 probe — it reports writer access, disk free, photo count, and live SSE
